@@ -1,0 +1,21 @@
+# Vercel CLI deploys upload the whole working dir (it does NOT read .gitignore).
+# Exclude the same heavy/local things git ignores so uploads stay small.
+
+# raw 4K hero source footage (175 MB) — only compressed encodes in /public ship
+Asset videos/
+
+# raw case-study source material (screens/videos)
+case-study-assets/
+
+# local logs
+dev.log
+build.log
+
+# local tooling / machine scripts
+move-pagefile-to-E.ps1
+
+# build output (Vercel builds fresh in the cloud)
+.next/
+
+# deps (Vercel installs fresh)
+node_modules/
