@@ -160,6 +160,19 @@ const GROUPS: { title: string; controls: Ctrl[] }[] = [
       s("fragments", "tumble", "Tumble", 0, 5, 0.02),
     ],
   },
+  {
+    title: "Footer Glow",
+    controls: [
+      s("footer", "particleCount", "Particles", 0, 600, 5, true),
+      s("footer", "nodeCount", "Nodes", 0, 60, 1, true),
+      s("footer", "spawnMin", "Spawn bot", -20, -6, 0.5, true),
+      s("footer", "spawnMax", "Spawn top", -16, -2, 0.5, true),
+      s("footer", "riseMin", "Rise min", 0, 20, 0.5, true),
+      s("footer", "riseMax", "Rise max", 0, 24, 0.5, true),
+      s("footer", "lifeMin", "Life min", 2, 20, 0.5, true),
+      s("footer", "lifeMax", "Life max", 2, 28, 0.5, true),
+    ],
+  },
 ];
 
 function readValue(ctrl: Ctrl): number | string {

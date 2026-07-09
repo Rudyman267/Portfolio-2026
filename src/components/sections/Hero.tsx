@@ -459,9 +459,9 @@ export function Hero() {
       <HeroCanvas />
 
       {/*
-        DEV-ONLY hero scene tweak panel is UNMOUNTED (preset locked 2026-07-09).
-        The panel + store are kept for future tweaks — to bring the floating
-        control bar back, re-add the dynamic import and mount <HeroControls/>:
+        DEV-ONLY hero scene tweak panel is UNMOUNTED (preset locked). The panel +
+        store (incl. the "Footer Glow" group) are kept for future tweaks — to bring
+        the floating control bar back, re-add the dynamic import and mount <HeroControls/>:
           const HeroControls = process.env.NODE_ENV === "development"
             ? dynamic(() => import("@/components/hero3d/HeroControls")
                 .then((m) => m.HeroControls), { ssr: false })

@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowUp } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { scrollToTop } from "@/components/motion/lenisBridge";
 import { DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
+
+// Ambient particle/energy-blob glow behind the footer — a whisper of the hero
+// ecosystem (same palette/shapes/motion). Client-only; skips itself on
+// reduced-motion / touch / no-WebGL2, so ssr:false is safe here.
+const FooterGlow = dynamic(
+  () => import("@/components/hero3d/FooterGlow").then((m) => m.FooterGlow),
+  { ssr: false },
+);
 
 export type SocialLink = { label: string; href: string };
 
@@ -137,14 +146,17 @@ export function Footer({
       data-header-dark
       className="hero-dark relative flex min-h-dvh flex-col overflow-hidden"
     >
+      {/* ambient hero-DNA particles rising from below the fold, behind ALL text */}
+      <FooterGlow />
+
       {/* top row — bookends the hero's labels */}
-      <div className="flex items-start justify-between px-[var(--gutter)] pt-24 text-[13px] font-medium tracking-wide text-fg/60">
+      <div className="relative z-[1] flex items-start justify-between px-[var(--gutter)] pt-24 text-[13px] font-medium tracking-wide text-fg/60">
         <span data-footer-item>( Contact )</span>
         <span data-footer-item>18.5544° N , 73.7759°</span>
       </div>
 
       {/* middle — the ask + the channels */}
-      <div className="flex flex-1 flex-col justify-center gap-14 px-[var(--gutter)] py-16 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+      <div className="relative z-[1] flex flex-1 flex-col justify-center gap-14 px-[var(--gutter)] py-16 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
         <div className="max-w-3xl">
           <h2
             data-footer-item
@@ -234,7 +246,7 @@ export function Footer({
       </div>
 
       {/* meta row — © / local time / back to top */}
-      <div className="flex items-center justify-between px-[var(--gutter)] pb-6 text-[13px] font-medium text-fg/50">
+      <div className="relative z-[1] flex items-center justify-between px-[var(--gutter)] pb-6 text-[13px] font-medium text-fg/50">
         <span data-footer-item>
           © {year} {brand}. All rights reserved.
         </span>
@@ -258,7 +270,7 @@ export function Footer({
       {/* THE wordmark — full bleed, edge to edge, baseline cropped by the fold */}
       <div
         aria-hidden="true"
-        className="flex select-none justify-between px-[2vw] leading-[0.76] tracking-[-0.03em]"
+        className="relative z-[1] flex select-none justify-between px-[2vw] leading-[0.76] tracking-[-0.03em]"
       >
         {WORDMARK.split("").map((letter, i) => (
           <span

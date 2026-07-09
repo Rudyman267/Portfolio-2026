@@ -96,12 +96,23 @@ export type HeroTweakConfig = {
     alpha: number;
     tumble: number; // rotation speed multiplier (live uniform)
   };
+  footer: {
+    particleCount: number; // footer-glow mote count (rebuild-class)
+    nodeCount: number; // footer-glow energy-node count (rebuild-class)
+    spawnMin: number; // spawn band bottom Y (rebuild-class)
+    spawnMax: number; // spawn band top Y (rebuild-class)
+    riseMin: number; // min rise height (rebuild-class)
+    riseMax: number; // max rise height (rebuild-class)
+    lifeMin: number; // min per-instance lifetime, s (rebuild-class)
+    lifeMax: number; // max per-instance lifetime, s (rebuild-class)
+  };
 };
 
 /**
  * Locked preset — tuned on the user's real GPU via the (now-removed) dev tweak
- * panel and baked in on 2026-07-09. The scene reads `tweak` (a clone of these
- * defaults) every frame, so these ARE the shipped values.
+ * panel. Baked 2026-07-09, re-tuned 2026-07-10 (red/black/white palette). The
+ * scene reads `tweak` (a clone of these defaults) every frame, so these ARE the
+ * shipped values.
  */
 export const DEFAULT_TWEAK: HeroTweakConfig = {
   scene: {
@@ -125,14 +136,14 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
   },
   grade: {
     vignetteOffset: 0,
-    vignetteDarkness: 1.03,
+    vignetteDarkness: 1.27,
     noiseOpacity: 0.59,
-    chromaticAberration: 0.001,
+    chromaticAberration: 0.006,
   },
   palette: {
-    colorA: "#811aff",
-    colorB: "#004cff",
-    colorHot: "#f93ed7",
+    colorA: "#0011ff", // blue
+    colorB: "#575260", // gray-mauve
+    colorHot: "#ff57ca", // pink highlight
   },
   path: {
     f1: 0.155,
@@ -157,7 +168,7 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     breathe: 0.12,
   },
   particles: {
-    count: 300,
+    count: 700,
     alpha: 1,
     sizeMin: 1.2,
     sizeMax: 4.2,
@@ -174,6 +185,16 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     count: 152,
     alpha: 1,
     tumble: 1,
+  },
+  footer: {
+    particleCount: 310,
+    nodeCount: 22,
+    spawnMin: -11,
+    spawnMax: -10,
+    riseMin: 8,
+    riseMax: 19.5,
+    lifeMin: 12.5,
+    lifeMax: 22,
   },
 };
 

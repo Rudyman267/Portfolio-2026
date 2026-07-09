@@ -32,8 +32,9 @@ case studies.
 | Theme | **Single theme** for v1 (token system ready for dark mode later) |
 | Contact | **Email + socials** only (no backend form) |
 | Draft preview | **Yes** — Sanity Presentation/draft mode (`defineLive`) |
-| Domain | Ship on free **`*.vercel.app`** first; custom domain later |
+| Domain | Ship on free **`*.vercel.app`** first; custom domain later. **DEPLOYED (Session 8):** live at **https://portfolio-2026-psi-flax.vercel.app** (also `-portfolio-27.vercel.app`). GitHub-connected → auto-deploy on push to `main`. |
 | Sanity account | **Personal account** |
+| Hosting/Git | **GitHub:** `Rudyman267/Portfolio-2026` (private). **Vercel:** personal account **`riddhimandeb12-1923`** (email riddhimandeb12@gmail.com), team **`portfolio-27`**, project `prj_LyJsSNYxQCqJu9xpZXEIfnG2s9oE`, GitHub App linked (auto-deploy). Commit author = `Rudyman267 <riddhimandeb12@gmail.com>` (email MUST stay verified on GitHub or Vercel blocks the build). |
 | Figma | Dev Mode MCP registered (`figma-dev-mode`, `http://127.0.0.1:3845/mcp`). File: Portfolio Website 2026 (AI Builder), frames **66:2 / 66:3** to read as a **LOOSE taste guide** (not pixel-match). Build uses neutral placeholder tokens until then. |
 
 ---
@@ -85,6 +86,34 @@ case studies.
       `next build` once on its own servers and visitors hit pre-compiled output — no compiler
       runs for users. Recommended deploy path: **Vercel** (builds in their cloud, laptop never
       does the heavy compile). Reassure the user of this if they worry the live site will crash.
+    - **`next build` uses TURBOPACK (default) and does NOT crash** — the crash was Turbopack
+      *dev* only. Verified Session 8: local `npm run build` compiled clean in 30.6s (log said
+      `(Turbopack)`). A local build test is safe if wanted; only `dev` must stay `--webpack`.
+
+### Deploy gotchas (Session 8 — Vercel)
+- **Working style locked:** iterate LOCALLY first (typecheck + headless-Chrome screenshots;
+  dev server only when the user must *feel* GPU/motion), then **`git push` → Vercel
+  auto-deploys.** Batch changes into meaningful commits, don't push every tweak.
+- **Auth logins can't run in the SDK shell** (`gh auth login`, `vercel login` are interactive
+  browser handshakes → hang). Use **tokens**: `gh auth login --with-token` (pipe the PAT);
+  `vercel --token=<vcp_...>` / REST `Authorization: Bearer`. Vercel scope: `--scope <slug>`
+  or `?teamId=<id>`.
+- **GitHub fine-grained tokens are finicky** — need **Contents: Read & write** AND the repo in
+  scope; the repo API's `permissions.push:true` can lie. A **classic token with top-level
+  `repo`** is the reliable path (probe: `gh api repos/<o>/<r>/git/refs`; 403 = no write).
+- **Vercel CLI uploads the whole cwd, ignores `.gitignore`** → 100 MB limit hit on
+  `Asset videos/`. Fixed via committed **`.vercelignore`** (excludes Asset videos,
+  case-study-assets, logs, node_modules, .next).
+- **Framework not auto-detected on CLI create** → build looked for `dist` and failed. Fixed
+  via committed **`vercel.json` `{ "framework": "nextjs" }`**.
+- **New Vercel projects have SSO Deployment Protection ON** (302 → `/sso-api`; only owner can
+  view). Disable: `PATCH /v9/projects/<id>?teamId=<t>` body `{"ssoProtection": null}`.
+- **GitHub-integration deploys BLOCK if the commit author email isn't verified on the GitHub
+  account** ("commit email could not be matched" → `readyState: BLOCKED`).
+  `riddhimandeb12@gmail.com` IS verified on `Rudyman267`, so it passes.
+- **Deploy from GitHub via API:** `POST /v13/deployments` with
+  `gitSource:{type:"github", repoId:<num>, ref:"main"}` (needs **repoId** from
+  `project.link.repoId`, not the name); poll `GET /v13/deployments/<id>` for `readyState`.
 
 ---
 
@@ -174,13 +203,89 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 7)
+## 6. Current State (as of Session 9)
 
-**Status: full home experience built end-to-end — dark hero → white "MY WORKS."
-horizontal gallery → dark footer finale. Session 7 added a DEV-ONLY live hero-shader
-tweak panel (🎛 FAB) so the user can dial the 3D scene in on a real GPU and hand back
-presets. Case-study structure planned (brief written), asset folders scaffolded.
-typecheck clean throughout. No CMS content yet; not deployed; still no git commits.**
+**Status (as of Session 9): SITE IS LIVE + DEPLOYED. Full home experience — frying-pan
+loader → dark 3D hero → white "MY WORKS." gallery → dark footer finale (with an ambient
+particle glow, now denser). Session 9 RE-TUNED the hero-shader theme on the user's GPU
+(blue/mauve/pink palette + more particles), ADDED live "Footer Glow" controls to the dev panel,
+and SHIPPED (footer glow + new theme pushed to GitHub → Vercel auto-deploy). typecheck clean;
+build clean. Still no CMS content (placeholders).**
+
+### Hero shader theme + footer controls — Session 9
+User brought the (Session-8-deprecated) shader control FAB back to re-tune the scene, then
+shipped. Two things happened:
+1. **New theme baked into `DEFAULT_TWEAK`** (`tweakConfig.ts`). Many palette iterations across the
+   session (purple/blue/pink → silver → red/black → charcoal → teal → …); **FINAL shipped preset:**
+   - **Palette:** `colorA` **`#0011ff`** (blue) / `colorB` **`#575260`** (gray-mauve) /
+        `colorHot` **`#ff57ca`** (pink highlight). FooterGlow inherits it live via shared `tweak`.
+   - **`grade.chromaticAberration`** `0.001` → **`0.006`** (max); **`grade.vignetteDarkness`**
+        `1.03` → **`1.27`**; **hero `particles.count`** `300` → **`700`**. Everything else = Session-8
+        preset (intensity 1.68, scrollTravel 159, path, bloom, etc.).
+2. **Live "Footer Glow" controls added.** FooterGlow's density/motion were hardcoded constants; now
+   they're a **`footer` group in `tweakConfig`** (`particleCount`, `nodeCount`, `spawnMin/Max`,
+   `riseMin/Max`, `lifeMin/Max`) exposed as a rebuild-class slider group in `HeroControls.tsx`.
+   `FooterGlow.tsx` reads `tweak.footer` and rebuilds its meshes on `getGeneration()` via
+   `useSyncExternalStore` (mirrors the hero's worldObjects pattern) + disposes old geometry/material
+   on swap so live count tuning doesn't leak GPU buffers. **Shipped footer values:** particleCount
+   **310**, nodeCount **22**, spawn **[-11,-10]**, rise **[8, 19.5]**, life **[12.5, 22]** (denser,
+   rises higher, lingers longer than the original 140/11/…).
+**FAB UNMOUNTED again before shipping** (restored the "kept for future tweaks" comment in Hero.tsx,
+now noting the Footer Glow group) — production stays clean. Panel + store kept on disk.
+
+### Frying-pan loader (Session 8 — replaced the door)
+`src/components/motion/Loader.tsx` fully rewritten from the door intro to the Figma 124:80
+frying-pan concept. **The 3D hero-readiness gating + `LOADER_DONE_EVENT` handoff are unchanged.**
+- **Loading state:** black void, white line-art pan (Figma SVG inlined as `PanArt`), *cooking*
+     label in **EB Garamond Medium Italic** (font added to `layout.tsx` as `--font-eb-garamond`),
+     huge bold counter bottom-left. Counter still reflects real load (→90, holds for
+     `whenHeroVideoReady`, →100 → "click to enter").
+- **Tossing loop — physics-driven pancake flip** (heavily iterated with the user). The final
+     mechanic: a **DIP-DOWN then WHIP-UP** flip — pan sinks (bowl tips DOWN via `rotation: -6`,
+     pivot at handle `transformOrigin:"90% 10%"`), pancake rides down glued, pan whips up fast
+     (`power3.in`); the pancake **launches from BELOW on the up-stroke** as the pan passes rest
+     level, arcs a real gravity parabola (rise `power2.out` / fall `power2.in`, matched halves),
+     drifts sideways + does ONE flip, then the pan **catches** it with an elastic settle. Pancake
+     rests LOW inside the bowl (`top:40%`). Constants: `DIP_DEPTH/DIP_AT/LAUNCH_AT/AIR/APEX`.
+     Key fixes the user drove: pan must NOT reverse the instant the pancake lifts; pancake sticks
+     with the pan briefly before flying; launch reads as coming from the down-then-up whip.
+- **Exit — shape reveal, NO white flash:** on click, one hard flick throws the pancake off-screen
+     (`-85vh`), then a **circular hole** (animated CSS `mask` radial-gradient, `--hole` var 0→165
+     vmax at 50% 46%) opens from the pan's spot and grows until the hero fills the viewport — the
+     site emerges from behind the pan. `LOADER_DONE_EVENT` fires as the hole opens (headline rises
+     mid-reveal). Reduced-motion skips it; keyboard works.
+
+### Footer ambient glow (Session 8 — ⚠️ committed to disk, NOT pushed)
+`src/components/hero3d/FooterGlow.tsx` — a whisper of the hero ecosystem behind the footer.
+- **ONLY particles (square pixel motes, count 96) + energy nodes (fresnel rounded cubes, count
+     11)** — NO fibers/lines, NO fragments. **Identical hero visual DNA:** reads palette/intensity/
+     drift/breathe/sizes/scales **live from the same `tweak` config** the hero uses, plus the exact
+     hero particle+node fragment shaders and fbm drift/twinkle verbatim.
+- **Footer-specific motion:** each instance loops its own life — emerges from BELOW the fold,
+     rises into the lower third, dissolves; seeds randomise the order (continuous, never synced);
+     grows-in on emergence (the "pop"). Deliberately sparse; concentrated at the viewport bottom.
+- **Behind all text:** canvas `z-0`, all footer content lifted to `z-[1]`. Cheap (one `uTime`
+     uniform/frame), renders only while footer on-screen (IntersectionObserver→frameloop), skips
+     on reduced-motion/touch/no-WebGL2 (dynamic `ssr:false` + error boundary). Dials at top of
+     file: `PARTICLE_COUNT`/`NODE_COUNT`, `SPAWN_Y`/`RISE`/`LIFE`, emergence envelope.
+- ⚠️ **NOT pushed to Vercel** — session ended right after the user approved it locally. The LIVE
+     site still shows the pre-glow footer. First action next session (if wanted): `git push`.
+
+### Hero shader preset — BAKED (Session 8)
+User tuned the scene on their GPU (purple/blue/pink palette `#811aff`/`#004cff`/`#f93ed7`,
+100 fibers, 136 nodes, bloom 2.23, etc.) and handed back the JSON. **Baked verbatim into
+`DEFAULT_TWEAK` in `tweakConfig.ts`** (the scene reads `tweak` = clone of defaults, so this IS
+the shipped look). **Unmounted `<HeroControls/>` from `Hero.tsx`** (the 🎛 FAB is gone) but
+**KEPT `HeroControls.tsx` + `tweakConfig.ts` on disk** per the user — a comment in Hero.tsx
+shows exactly how to re-mount the panel for future tweaks. Also: phrase-transition crossfade
+added to Hero (outgoing/incoming lines fade opacity during the yPercent swap so the two phrases
+don't overlap illegibly over the busy 3D bg).
+
+### Hero shader tweak panel (Session 7 — dev tooling)
+A live control surface for tuning the hero 3D scene on the real GPU, then baking a
+chosen preset back into source. **DEV-ONLY** — dynamically imported + gated behind
+`process.env.NODE_ENV === "development"`, so it's tree-shaken out of production.
+**⚠️ Session 8 UNMOUNTED it (preset baked) but kept the code — see above.**
 
 ### Hero shader tweak panel (Session 7 — dev tooling)
 A live control surface for tuning the hero 3D scene on the real GPU, then baking a
@@ -335,11 +440,22 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ### Open items
 - ⛔ **No content in Sanity yet** (gallery uses `placeholderProjects.ts`; footer uses placeholder
-     socials + hardcoded email fallback in `(site)/layout.tsx`).
-- ⛔ **No git commits yet.** Untracked: `.agents/`, `.claude/`, `skills-lock.json`, all session source,
-     `public/videos/*`, `case-study-assets/*/README.md`, `docs/`. **`Asset videos/` (159 MB source mp4)
-     already in `.gitignore`?** — verify before first commit; only ship the compressed `public/videos/`.
-- ⛔ Not deployed. `SANITY_API_READ_TOKEN` not set (draft preview inactive).
+     socials + hardcoded email fallback in `(site)/layout.tsx`). LIVE site shows placeholders.
+- ✅ **Git initialized + on GitHub** (Session 8): `Rudyman267/Portfolio-2026` (private), 3 commits on
+     `main`. `Asset videos/` + logs + `.vercel` gitignored; `.vercelignore` mirrors it for CLI uploads.
+- ✅ **DEPLOYED to Vercel** (Session 8): live at **https://portfolio-2026-psi-flax.vercel.app**,
+     GitHub-connected (auto-deploy on push). SSO protection disabled (public). See §2 + §3 deploy notes.
+- ⚠️ **Footer glow committed to disk but NOT pushed** — LIVE site is one commit behind (pre-glow footer).
+     `git push` next session to deploy it.
+- ⚠️ **Sanity CORS not added for the Vercel origin** — embedded Studio (`/studio`) + live content won't
+     connect on the deployed site until `https://portfolio-2026-psi-flax.vercel.app` is added at
+     sanity.io/manage/project/4bo3ynjd/api. Public site still works (placeholders).
+- ⚠️ **Tokens pasted in chat this session** (GitHub PATs + Vercel `vcp_` tokens) — user should REVOKE
+     them (github.com/settings/tokens, vercel.com/account/tokens). Also the old Claude-Desktop
+     `ghp_315k...` from the Session-8 lovable-mcp cleanup. Old blocked Vercel project on the
+     `juniorscrolls2017-8889` account can be deleted.
+- ⛔ `SANITY_API_READ_TOKEN` / `SANITY_REVALIDATE_SECRET` not set on Vercel (draft preview + webhook
+     revalidation inactive — optional, public site fine without).
 - ⚠️ **`ContactCTA.tsx` now unused on the home flow** but still imported by `work/[slug]/page.tsx`
      (case-study page) — that page is pre-redesign and needs the footer swap. Don't delete ContactCTA
      until that page is redone (or it'll break the build).
@@ -359,11 +475,18 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0. **User judges the full home flow on real GPU** (door → hero recession → circle → gallery assembly
-   → footer) and reports feel/FPS. Dials listed in Open items. **NEW: use the 🎛 dev tweak panel
-   (bottom-right) to tune the hero scene live**, then **Copy config** and paste the JSON back so we
-   bake the preset in and delete the panel (`HeroControls.tsx` + `tweakConfig.ts` + Hero.tsx mount).
-1. **CASE STUDIES — the current focus** (brief in `docs/case-study-brief.md`, confirmed):
+0. **`git push` to deploy the pending look** — TWO things are committed/edited on disk but NOT
+   pushed: the Session-8 **footer glow** (`FooterGlow.tsx`, untracked) and the Session-9 **new
+   hero theme** (silver/dark-teal/deep-red in `tweakConfig.ts`). The LIVE site still shows the OLD
+   purple/blue/pink hero + pre-glow footer. Commit + push auto-deploys both via Vercel. (First
+   thing if the user wants the new look live.) New hero palette = red/black/white
+   (`#ff4747`/`#000000`/`#ffffff`). Note: Hero.tsx is currently modified only by the
+   FAB unmount round-trip — net diff should be ~none; verify before committing.
+1. **Housekeeping (security):** user should REVOKE the tokens pasted in Session 8 (GitHub PATs +
+   Vercel `vcp_` tokens + old Claude-Desktop `ghp_315k...`); delete the old blocked Vercel project on
+   the `juniorscrolls2017-8889` account. **Add Sanity CORS** for `portfolio-2026-psi-flax.vercel.app`
+   (sanity.io/manage/project/4bo3ynjd/api) so `/studio` + live content work on the deployed site.
+2. **CASE STUDIES — the main remaining feature** (brief in `docs/case-study-brief.md`, confirmed):
    a. **User picks the flagship** + gives real project names (rename `case-study-assets/*` slugs).
    b. **User drops assets + rough story** into the flagship's `case-study-assets/<slug>/` folder
       (screens/videos + Problem→Approach→Build→Result→Tradeoffs in the README).
@@ -371,15 +494,13 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    d. **Build the flagship case-study page** against real content — redesign `work/[slug]/page.tsx`
       to the cinematic direction, swap orphaned `ContactCTA` → footer, scrubbed section reveals,
       stage wayfinding. Then derive the thinner studies. Must name employer (Flytbase/ORO/self).
-2. **First git commit** — verify `Asset videos/` gitignored; track all session source, `public/videos/*`,
-   `case-study-assets/**/README.md`, `docs/`; keep `.claude/settings.local.json` ignored. Branch off `main`.
-3. **Add content in the Studio** (`localhost:3000/studio`) — Site Settings (email/socials/résumé so
-   footer + gallery stop using placeholders), Profile, the 5 Projects. Wire `FEATURED_PROJECTS_QUERY`
-   result into `WorkGallery` (replace `placeholderProjects`). Add CORS origin if prompted.
+3. **Add content in the Studio** (`localhost:3000/studio` or live once CORS added) — Site Settings
+   (email/socials/résumé so footer + gallery stop using placeholders), Profile, the 5 Projects. Wire
+   `FEATURED_PROJECTS_QUERY` result into `WorkGallery` (replace `placeholderProjects`).
 4. **Build remaining nav destinations** — `#me` (About), maybe `#play`. `#work`/`#contact` resolve.
-5. **Set `SANITY_API_READ_TOKEN`** for draft preview; **deploy to Vercel** (env vars, prod CORS, webhook
-   → `/api/revalidate`, update `NEXT_PUBLIC_SITE_URL`).
-6. Optional later: custom domain, per-case-study OG images, real profile URLs, Rive.
+5. **Optional:** set `SANITY_API_READ_TOKEN` + `SANITY_REVALIDATE_SECRET` on Vercel (draft preview +
+   webhook revalidation → `/api/revalidate`); update `NEXT_PUBLIC_SITE_URL` env to the vercel.app URL;
+   custom domain; per-case-study OG images; real profile URLs; Rive.
 
 ---
 
@@ -555,3 +676,66 @@ in on their real GPU (headless can't render WebGL) and hand back a preset to bak
 - **Ended at:** panel ready. Next session: **user tunes on GPU → Copy config → paste JSON → we bake
   the preset into defaults and DELETE the panel + store + mount.** Then back to the case-study track.
   Still no git commits.
+
+### Session 8 — 2026-07-09 (later same day)
+Big session — new loader, preset baked, phrase crossfade, footer glow, and **first-ever git commits +
+LIVE Vercel deploy.**
+- **Baked the hero-shader preset** the user tuned on their GPU (purple/blue/pink palette, 100 fibers,
+  136 nodes, bloom 2.23, dip/whip constants) → verbatim into `DEFAULT_TWEAK` in `tweakConfig.ts`.
+  **Unmounted `<HeroControls/>`** from Hero.tsx (🎛 FAB gone) but **KEPT the panel + store code** on
+  disk per the user, with a comment showing how to re-mount. Also killed a stray `lovable-mcp-server`
+  (unrelated project) permanently — removed it from Claude Desktop's `claude_desktop_config.json`
+  (flagged a plaintext GitHub token in there to revoke).
+- **Phrase-transition crossfade** in Hero — outgoing/incoming headline lines now fade opacity during
+  the yPercent swap so the two phrases don't overlap illegibly over the busy 3D bg.
+- **REPLACED the door loader with a frying-pan loader** (Figma 124:80) — see Current State §6 for the
+  full spec. Heavily iterated the pancake-flip PHYSICS with the user across ~6 rounds: pivot at the
+  handle, launch from a DIP-DOWN→WHIP-UP (not a flick from rest), pancake rides down glued + sticks
+  briefly + launches from below on the up-stroke, pan must not reverse the instant it lifts, gravity
+  arc + elastic catch, pancake rests low IN the bowl, bowl tips DOWN on the dip. Exit = pancake thrown
+  off-screen + a circular CSS-mask hole opens from the pan revealing the hero (NO white flash). Added
+  EB Garamond font. Every beat verified via headless-Chrome CDP traces (sampled transform.m42 over
+  time to confirm the arc + coupling numerically) + frame captures.
+- **Footer ambient glow** (`FooterGlow.tsx`) — user brief: hero-DNA particles + energy blobs (NO
+  lines), rising from below the fold behind ALL footer text, sparse + randomized. Reads palette/dials
+  live from the same `tweak` config; exact hero fragment shaders; per-instance life-cycle
+  emerge→rise→dissolve. Counts bumped 64→96 particles / 7→11 nodes on user request. **Committed to
+  disk but NOT pushed** (session ended right after local approval → live site is one commit behind).
+- **DEPLOYED** (the milestone). Decisions via Q&A: GitHub repo + Vercel, test build locally first,
+  personal git identity `riddhimandeb12@gmail.com`. **Local `npm run build` passed clean (30.6s, ran
+  on Turbopack, no crash)** — stopped the dev server first to free RAM (crash discipline). Installed
+  `gh` CLI. **Fought through token-scope hell** (fine-grained PATs kept lacking Contents:write; classic
+  `repo`-scoped token finally worked). First 2 commits → pushed to `Rudyman267/Portfolio-2026`
+  (private). Then Vercel: the `juniorscrolls` account's project got **BLOCKED** (commit-email not
+  matched + the `dist`/framework + `.vercelignore` 100MB + SSO-protection issues — ALL now documented
+  in §3). **User switched to their own Vercel account** (`riddhimandeb12-1923`, team `portfolio-27`);
+  created a GitHub-LINKED project via API, set env vars, triggered a GitHub deploy → **built READY**,
+  disabled SSO protection → **LIVE + public at https://portfolio-2026-psi-flax.vercel.app.** Auto-deploy
+  on push is wired. Committed `vercel.json` + `.vercelignore` (3rd commit, pushed).
+- **Working style agreed:** local iterate + verify → push when ready → Vercel shows it. Dev server only
+  when the user must feel GPU/motion.
+- **Ended at:** site is live. ⚠️ Footer glow needs a `git push` to go live. Housekeeping open: revoke
+  the pasted tokens, add Sanity CORS for the Vercel origin, delete the old blocked Vercel project.
+  Next feature: case studies.
+
+### Session 9 — 2026-07-10
+Short focused session — **re-tuned the hero-shader theme** (new palette) via the dev tweak panel.
+- User: "start dev server and launch the shader control UI FAB that we deprecated — I need to tweak
+  the colors again." The panel was UNMOUNTED (not deleted) in Session 8; `Hero.tsx` had a comment
+  with the exact re-mount recipe. **Followed it:** re-added `import dynamic from "next/dynamic"`,
+  re-declared the dev-gated `HeroControls` (dynamic import, `ssr:false`, `NODE_ENV==="development"`
+  so it's tree-shaken from prod), mounted `<HeroControls/>` in the hero section.
+- **Safe dev-server start** per §3: checked free RAM (3.5 GB, no stray node), cleared `.next/dev`
+  lock, started `next dev --webpack` in background, watched RAM through first compile — **home
+  HTTP 200, node peaked ~1.67 GB, ~1.8 GB free, no thrash.** (Webpack, not Turbopack.)
+- User tuned on their GPU → **Copy config** → pasted JSON back. **Baked into `DEFAULT_TWEAK`.**
+  User first tried a silver/dark-teal preset, then said "nvm" and handed a final one: **only the
+  palette changed** from Session 8 → purple/blue/pink to **red `#ff4747` / black `#000000` /
+  white `#ffffff`** (all other dials unchanged). FooterGlow inherits the palette live (same `tweak`).
+- **UNMOUNTED the FAB again** (reverted the 3 Hero.tsx edits, restored the "kept for future tweaks"
+  comment) so production stays clean. typecheck clean; forced a fresh recompile → home HTTP 200,
+  no errors (the transient `dynamic`/`HeroControls is not defined` lines in the log were mid-edit
+  Fast Refresh states, gone after the clean rebuild). Stopped the dev server at end (free RAM 3.49 GB).
+- **Ended at:** new theme baked locally, dev FAB unmounted. ⚠️ NOT pushed — a `git push` next
+  session ships BOTH the new theme AND the still-unpushed Session-8 footer glow. Backlog unchanged:
+  case studies, housekeeping (tokens/CORS), CMS content.
