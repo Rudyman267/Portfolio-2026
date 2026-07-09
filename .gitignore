@@ -32,6 +32,24 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# sanity typegen output / studio dist
+.sanity/
+schema.json
+
+# raw case-study source material (screens/videos) — kept local; the
+# finalized/compressed assets live in Sanity or /public. READMEs are tracked.
+/case-study-assets/**
+!/case-study-assets/**/README.md
+
+# raw 4K hero source footage (175 MB) — only the compressed encodes in
+# /public/videos ship. Never commit this.
+/Asset videos/
+
+# local dev server + build logs
+/dev.log
+/build.log
 
 # vercel
 .vercel
