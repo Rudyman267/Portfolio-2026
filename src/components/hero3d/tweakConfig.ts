@@ -125,7 +125,7 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     cameraDrift: 2.15,
   },
   bloom: {
-    intensity: 2.23,
+    intensity: 3,
     threshold: 0,
     smoothing: 0.71,
   },
@@ -138,16 +138,16 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     vignetteOffset: 0,
     vignetteDarkness: 1.27,
     noiseOpacity: 0.59,
-    chromaticAberration: 0.006,
+    chromaticAberration: 0.002,
   },
   palette: {
-    colorA: "#0011ff", // blue
-    colorB: "#575260", // gray-mauve
-    colorHot: "#ff57ca", // pink highlight
+    colorA: "#c328e2", // magenta
+    colorB: "#000000", // black
+    colorHot: "#ff781f", // orange highlight
   },
   path: {
     f1: 0.155,
-    a1: 5.3,
+    a1: 4.8,
     f2: 0.098,
     a2: 4.2,
     fy: 0.031,
@@ -155,7 +155,7 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     ramp: 15,
   },
   pointer: {
-    pushRadius: 1,
+    pushRadius: 2.5,
     pushStrength: 0.47,
     glowRadius: 20,
   },
@@ -168,11 +168,11 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     breathe: 0.12,
   },
   particles: {
-    count: 700,
+    count: 1200,
     alpha: 1,
     sizeMin: 1.2,
     sizeMax: 4.2,
-    drift: 3,
+    drift: 10,
   },
   nodes: {
     count: 136,
@@ -182,7 +182,7 @@ export const DEFAULT_TWEAK: HeroTweakConfig = {
     breathe: 0.8,
   },
   fragments: {
-    count: 152,
+    count: 70,
     alpha: 1,
     tumble: 1,
   },

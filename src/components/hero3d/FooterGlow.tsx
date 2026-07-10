@@ -3,6 +3,7 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { NOISE } from "@/components/hero3d/shaders";
 import {
@@ -169,9 +170,11 @@ const glowNodeFragment = /* glsl */ `
     float core = 1.0 - fres;
 
     float pulse = 0.6 + 0.4 * sin(uTime * (0.7 + fract(vSeed * 3.1)) + vSeed * 20.0);
-    vec3 col = uColorB * (fres * 1.4 + 0.15) + uColorHot * core * 0.5 * pulse;
+    // brighter emissive so the boxes read as glowing light sources that Bloom
+    // (footer post pass) can bleed into a soft halo — hot core pushed past 1.0.
+    vec3 col = uColorB * (fres * 1.7 + 0.2) + uColorHot * core * 1.1 * pulse;
 
-    float alpha = (fres * 0.7 + core * 0.22) * vEnv * uIntensity * uAlpha;
+    float alpha = (fres * 0.85 + core * 0.32) * vEnv * uIntensity * uAlpha;
     gl_FragColor = vec4(col, alpha);
   }
 `;
@@ -385,6 +388,19 @@ export function FooterGlow() {
             style={{ background: "transparent" }}
           >
             <GlowSystems />
+            {/* Bloom-only post pass — bleeds the bright fresnel/core of the
+                energy boxes into a soft halo so they read as glowing. Low
+                threshold catches the emissive edges; mipmapBlur keeps it cheap.
+                Only Bloom (no DoF/CA/vignette) — this is a light ambient layer,
+                and it only runs while the footer is on-screen (frameloop gate). */}
+            <EffectComposer multisampling={0}>
+              <Bloom
+                intensity={2.4}
+                luminanceThreshold={0.12}
+                luminanceSmoothing={0.7}
+                mipmapBlur
+              />
+            </EffectComposer>
           </Canvas>
         </GlowErrorBoundary>
       )}

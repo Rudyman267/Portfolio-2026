@@ -205,12 +205,13 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ## 6. Current State (as of Session 9)
 
-**Status (as of Session 9): SITE IS LIVE + DEPLOYED. Full home experience — frying-pan
-loader → dark 3D hero → white "MY WORKS." gallery → dark footer finale (with an ambient
-particle glow, now denser). Session 9 RE-TUNED the hero-shader theme on the user's GPU
-(blue/mauve/pink palette + more particles), ADDED live "Footer Glow" controls to the dev panel,
-and SHIPPED (footer glow + new theme pushed to GitHub → Vercel auto-deploy). typecheck clean;
-build clean. Still no CMS content (placeholders).**
+**Status (as of Session 9): SITE IS LIVE + DEPLOYED. Full home experience — FRIED-EGG
+loader → dark 3D hero → white "MY WORKS." gallery → dark footer finale (ambient glow, denser,
+energy boxes now bloom). Session 9 (multi-ship): re-tuned the hero theme repeatedly (FINAL =
+magenta/orange), added live "Footer Glow" panel controls, swapped the loader pancake → the
+Figma FRIED-EGG vector (laid flat into the pan's isometric plane), added a Bloom pass to the
+footer so the energy boxes glow, and made the 🎛 dev FAB PERMANENTLY dev-gated (always in local,
+tree-shaken from prod — no more manual mount/unmount). typecheck + build clean. No CMS content yet.**
 
 ### Hero shader theme + footer controls — Session 9
 User brought the (Session-8-deprecated) shader control FAB back to re-tune the scene, then

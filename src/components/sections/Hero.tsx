@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { Route } from "next";
 import { useRef } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -8,6 +9,20 @@ import { HeroCanvas } from "@/components/hero3d/HeroCanvas";
 import { heroScroll } from "@/components/hero3d/heroScroll";
 import { gsap, useGSAP, ease } from "@/lib/gsap";
 import { LOADER_DONE_EVENT } from "@/components/motion/Loader";
+
+// Hero scene tweak panel (🎛 FAB, incl. the Footer Glow group). PERMANENTLY
+// mounted but dev-gated: in `next dev` NODE_ENV==="development" so the panel
+// loads; in production builds (Vercel) this resolves to a no-op and the dynamic
+// import is tree-shaken out — so it's ALWAYS in local, NEVER shipped. No manual
+// mount/unmount needed. To bake a tuned preset: Copy config → paste into
+// DEFAULT_TWEAK in tweakConfig.ts.
+const HeroControls =
+  process.env.NODE_ENV === "development"
+    ? dynamic(
+        () => import("@/components/hero3d/HeroControls").then((m) => m.HeroControls),
+        { ssr: false },
+      )
+    : () => null;
 
 /**
  * Hero — the dark, cinematic landing (Figma 25:144 + the Reference 1 scroll
@@ -458,16 +473,9 @@ export function Hero() {
       {/* living 3D ecosystem (video/poster fallback inside) */}
       <HeroCanvas />
 
-      {/*
-        DEV-ONLY hero scene tweak panel is UNMOUNTED (preset locked). The panel +
-        store (incl. the "Footer Glow" group) are kept for future tweaks — to bring
-        the floating control bar back, re-add the dynamic import and mount <HeroControls/>:
-          const HeroControls = process.env.NODE_ENV === "development"
-            ? dynamic(() => import("@/components/hero3d/HeroControls")
-                .then((m) => m.HeroControls), { ssr: false })
-            : () => null;
-        (also re-add `import dynamic from "next/dynamic"`).
-      */}
+      {/* Hero scene tweak panel — dev-gated above, so this renders the 🎛 FAB in
+          local dev and NOTHING in production. Safe to leave mounted permanently. */}
+      <HeroControls />
 
       {/* CASES / PLAYS edge curves — spawn during the phrase 2→3 scroll */}
       {CURVES.map((c) => (
