@@ -512,7 +512,13 @@ export function Hero() {
             className="relative select-none text-center leading-[0.95] tracking-[0.01em] text-fg [font-size:clamp(2.5rem,9vw,6.25rem)]"
             style={{ fontFamily: "var(--font-display-tanker)" }}
           >
-            <h1 data-phrase>
+            {/* fontFamily inline on the h1 too — the globals base rule
+                (h1..h4 { font-family: var(--font-display) }) would otherwise
+                override the inherited Tanker with Jakarta on phrase 1 */}
+            <h1
+              data-phrase
+              style={{ fontFamily: "var(--font-display-tanker)" }}
+            >
               <PhraseLines lines={PHRASES[0]} />
             </h1>
             {PHRASES.slice(1).map((lines) => (
@@ -521,6 +527,7 @@ export function Hero() {
                 data-phrase
                 aria-hidden="true"
                 className="absolute inset-0 hidden"
+                style={{ fontFamily: "var(--font-display-tanker)" }}
               >
                 <PhraseLines lines={lines} />
               </div>

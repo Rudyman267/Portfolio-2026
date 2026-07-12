@@ -203,13 +203,71 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 12)
+## 6. Current State (as of Session 13)
 
-**Status (as of Session 12): THE CASE STUDY WAS REBUILT FROM SCRATCH as a LIGHT / EDITORIAL
-design to match Figma, replacing the Session-10 dark-cinematic version. Route unchanged
-(`/work/live-incident-response`). Still LOCAL ONLY — nothing committed/pushed; LIVE site is
-still `23cb3e0`. See "LIR LIGHT REBUILD — Sessions 12" below; the old dark build notes remain
-further down for reference (those components are on disk but UNUSED).**
+**Status (as of Session 13): EVERYTHING IS SHIPPED. Two commits pushed (`2f3009f` LIR case
+study + `4fbf57c` About page); LIVE site = `4fbf57c`. The ABOUT PAGE (`/about`, nav "Me") is a
+complete cinematic scroll journey — the biggest new build. The LIR light case study (Session 12)
+went out in the same push. Verified live: `/`, `/about`, `/work/live-incident-response` all 200.**
+
+### ABOUT PAGE — Session 13 (the "Me" journey, `/about`)
+ONE pinned GSAP timeline (`AboutIntro.tsx`, pin `end:+=1205%`, scrub 0.5, ~36.6 timeline units —
+positions in comments) driving six scenes on the `.hero-dark` `#06080c` canvas. All user-driven,
+storyboard by storyboard. Scene map:
+1. **Name intro** — photo frame scales/drifts (scroll-mapped) while "HEY! THAT'S"/"MY NAME"
+   (Tanker) travel in from the edges, converge white flanking the photo, then FADE OUT while
+   merging into one axis (no crossing shown); "RIDDHIMAN DEB" pops via masked letter rise.
+   Photos AUTOPLAY-shuffle every 900ms (gsap crossfade interval, NOT scroll-mapped; cleaned up
+   via matchMedia teardown). Photos: `public/about/me-{1..4}.jpeg`.
+2. **22 years** — text wipes in line-by-line from the left; the ending video slides in from the
+   right; meet as one composition. Video: `public/about/ending.webm` (VP9 570KB) + `.mp4`
+   fallback (1.28MB); plays via `tl.call` (muted/loop), never under reduced motion.
+3. **NOW I / BUILD / PRODUCT EXPERIENCES** — words fade in at storyboard anchors (no stagger),
+   travel HORIZONTALLY ONLY (ease none) to dock against the game card (parts occluded by its
+   opaque `bg-bg`), then keep drifting and blur(6px)+fade out (no pause — continuous). The card
+   (`GameThumb.tsx`) = live 2D-canvas replica of The Other Hand's DEFAULT particle state (Google
+   palette, pure brownian + wrap — NO center pull, it orbit-decays into a blob). Card =
+   `<Link href="/play">` (page NOT built → 404s), hover = white border + PLAY? glow. Card is a
+   SHORT box (h-22svh, w clamp 21vw) offset +5.35svh so its TOP edge slices NOW I's row and its
+   BOTTOM slices PRODUCT EXPERIENCES'. Then PLAY? → punchline "NVM CHECK IT OUT LATER ITS COOL"
+   (card hides completely first).
+4. **Collapsing boundary (thesis)** — "DESIGN IS / CHANGING" pops stacked → halves pull apart
+   into one row while a hairline rule draws between them → rule flickers, SNAPS, halves collapse
+   into it → "For years designers owned the interface…" paragraph wipes in per-line masks.
+5. **Process rope unroll** — 7 SVG lockups (`public/about/process-{1..7}.svg`, labels BAKED IN,
+   frame 7 = "Reiterate fast") fade in on an ellipse, orbit ONE full rotation (proxy tween +
+   trig placement), then UNROLL onto the line like a rope: coil keeps spinning + shrinking while
+   its head walks the row, icon 1 lays first → 7 last, whole thing drifts left `-3S·p` so the
+   line ends centered. Seamless at both ends of the morph.
+6. **Finale** — icons collapse into a glowing idea-dot → dot pops into "IDEAS DESERVE MORE THAN
+   PROTOTYPES. THEY DESERVE TO EXIST." (masked rise) → scroll THROUGH it (scale 2.3 + blur) →
+   "I DON'T JUST WANT TO DESIGN THE FUTURE OF PRODUCTS. I WANT TO HELP BUILD IT." resolves from
+   depth → unpin → footer.
+Reduced motion: scene-1 settled state only (photo+name), everything else hidden; sr-only h1/p
+carry all copy. FOUC guards: every animated layer inline `opacity:0;visibility:hidden` +
+`immediateRender:true` on later-positioned fromTos. `document.fonts.ready → ScrollTrigger.refresh()`
+(Tanker changes phrase widths). Function-based x/y + `invalidateOnRefresh` throughout.
+
+### Supporting changes shipped with it (Session 13)
+- **Egg loader physics pass** (`Loader.tsx`): egg re-seated on the bowl's visual center
+  (left 16% / top 34% / width 46%); egg now rides dip + ROT_DROP≈14px (pan pivots at the handle —
+  y alone made it float); exit throw egg rides only ~4px (the +8° tilt RAISES the bowl); catch
+  squash (scaleY .93 at contact patch, elastic back); sizzle micro-jiggle on `.pan__egg` (child
+  svg, never fights wrapper transforms), killed on openPan.
+- **Frame-zero reload guarantee**: browsers deferred-restore a CLAMPED scroll position after the
+  provider's reset (pin spacers grow the page late) → the loader now re-asserts `scrollTo(0,0)`
+  on mount AND in `finish()`/`handOff()`. Verified: reload from 11000px deep → scrollY 0.
+- **Header on dark pages**: `/about` → solid header inverts to `#06080c` + white nav via
+  `data-solid-dark` attr + globals rules (transparent-over-dark behavior unchanged). Mobile
+  panel inverts too. `darkPage = pathname === "/about"` in Header.tsx.
+- **Nav "Me" → `/about`** (DEFAULT_NAV). **Gallery card 1 → the real LIR study**
+  (placeholderProjects[0] = live-incident-response); cards 2–5 still 404 to not-found.
+- **Hero phrases → Tanker** (all 3 scenes; single-weight, tracking 0.01em, no font-bold).
+- **One canvas color everywhere**: `#06080c` (hero-dark) — the earlier custom `#050608` made a
+  visible band at the about→footer seam. About page wraps in a `bg-[#06080c]` div so the pin
+  spacer / seam can never flash white.
+- **`.gitignore`**: `the-other-hand project/` + zip (separate game project, NOT part of the
+  site), `.claude/settings.json`.
 
 ### LIR LIGHT REBUILD — Session 12 (the current case study)
 Recreated the **Live Incidence Response** case study from **Figma node 172:56 / frame 168:408**
@@ -636,13 +694,14 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0. **UNCOMMITTED WORK ON DISK (Session 12)** — the LIGHT LIR rebuild is built + verified locally but
-   **NOT committed or pushed.** LIVE site is still `23cb3e0`. Key new/changed files:
-   `src/lib/caseStudies/lirDesign.ts`, `src/components/case-study/{LirCaseStudy,lirBlocks,Chapter}.tsx`,
-   `src/app/(site)/work/[slug]/page.tsx` (points at `<LirCaseStudy>`), `src/app/globals.css` (`.lir`
-   scope + tokens), `src/app/layout.tsx` (Tanker font), `src/app/fonts/Tanker-Regular.woff2`, and
-   assets in `public/case-study/`. **Run `npm run build` before pushing** (no prod build this session).
-1. **CONTINUE THE CHAPTER-BY-CHAPTER BUILD (user drives, section by section).** Chapters wired so far:
+0. **BUILD THE `/play` PAGE** — the About page's game card links to `/play` (currently the styled
+   404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
+   in gitignored `the-other-hand project/`; DO NOT commit it — it's a separate Vite app).
+   Also `#play` + `#resume` nav anchors still have no destinations.
+1. **USER TO FEEL THE ABOUT PAGE ON GPU** — whole journey verified only in software-rendered
+   headless Chrome. Dials documented inline in `AboutIntro.tsx` (timeline unit positions, pin
+   length 1205%, scrub 0.5, photo-shuffle 900ms, rope-unroll windows).
+2. **CONTINUE THE LIR CHAPTER-BY-CHAPTER BUILD (user drives, section by section).** Chapters wired so far:
    Context, Problem, Reframe (flash transition + spawns). **Next up: "the shift" (04) → process (05) →
    solution (06) → trade-offs (07) → Impact (08) → reflection (09).** To chapter-ize one: add its id to
    `CHAPTER_IDS` in `LirCaseStudy.tsx`. NOTE the 9 TOC entries currently map to FEWER real sections
@@ -671,6 +730,43 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 13 — 2026-07-12 (later same day)
+**BUILT THE ENTIRE ABOUT PAGE (`/about`) and SHIPPED EVERYTHING — two commits pushed
+(`2f3009f` LIR case study, `4fbf57c` About page + supporting), live at `4fbf57c`.** Long
+storyboard-driven session; the user supplied reference frames scene by scene and iterated
+tightly on every beat (see Current State §6 "ABOUT PAGE — Session 13" for the full scene map
+and dials). Highlights & lessons:
+- **One pinned timeline, 6 scenes** (name intro → 22-years+video → NOW-I-BUILD + game card →
+  collapsing boundary → process rope unroll → idea-dot + quotes finale). User taste rules that
+  emerged: motion mapped to scroll (`ease:"none"`, no decorative staggers), horizontal-only text
+  travel, no docking pauses (speed-continuous disappearances), fades > per-letter mask tricks
+  (built letter-walls, then reverted to blur+fade on request), occlusion via opaque `bg-bg`
+  layers, exact anchor %s from storyboards.
+- **GameThumb**: replicating the game's neutral state — ANY radial force + damping collapses a
+  brownian field into a blob (orbit decay); pure brownian + edge wrap keeps it uniform. Canvas
+  must size from `offsetWidth` (layout), NOT `getBoundingClientRect` (includes GSAP scale).
+- **Egg loader physics** (pan pivots at handle → bowl moves MORE than pan y; egg must ride
+  dip+ROT_DROP or it floats; exit +8° tilt RAISES the bowl). Catch squash + sizzle idle added.
+- **Reload = frame zero**: browsers deferred-restore a clamped scroll AFTER the provider reset
+  (pin spacers grow the page late) → Loader re-asserts `scrollTo(0,0)` on mount + at handOff.
+  Verified reload from 11000px deep → 0.
+- **Seam bug**: a second dark hex (`#050608`) next to hero-dark's `#06080c` = visible band at
+  the about→footer boundary → unified everything on `#06080c`. Also the white-hairline artifact
+  = body's white showing through a sub-pixel pin-spacer gap → dark wrapper div on the page.
+- **Stitching**: nav Me → `/about`; gallery card 1 → real LIR study (cards 2–5 still 404);
+  hero phrases → Tanker (single weight — drop font-bold, tracking 0.01em); `/play` link 404s
+  until built. `the-other-hand project/` gitignored (separate Vite app, NOT committed).
+- **Assets pipeline**: user photos + ending video (VP9 webm 570KB vs mp4 1.28MB) + 7 process
+  SVG lockups (labels baked in) copied into `public/about/`.
+- **Harness gotcha**: scratchpad CDP scripts must `createRequire(<project>/package.json)` to
+  resolve `ws` — bare ESM imports resolve from the script's own dir, not cwd.
+- **Ship discipline** per §3: killed dev+chrome, local `npm run build` clean, two feature
+  commits, push → Vercel auto-deploy, polled live URLs (all 200). User's browser showed a
+  CACHED pre-deploy home page (hero seemed non-Tanker) — live HTML verified correct; hard
+  refresh resolves.
+- **Ended at:** site live at `4fbf57c` with Home + About + LIR case study stitched. Next: /play
+  page, GPU feel-pass on About, remaining case studies. Dev server + all node stopped.
 
 ### Session 12 — 2026-07-12
 **REBUILT the LIR case study as a LIGHT / EDITORIAL design from Figma (172:56), replacing the
