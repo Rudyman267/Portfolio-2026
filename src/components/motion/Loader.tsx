@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 import { whenHeroVideoReady } from "@/components/motion/heroReady";
 
@@ -69,10 +70,12 @@ function PanArt() {
 function EggArt() {
   return (
     <svg
-      className="block w-full overflow-visible"
+      className="pan__egg block w-full overflow-visible"
       viewBox="0 0 116 64"
       fill="none"
       aria-hidden="true"
+      // squash/settle pivots at the egg's contact patch, not its center
+      style={{ transformOrigin: "50% 70%" }}
     >
       {/* occluder — sits behind the egg, hides the pan lines under it. Sized to
           the pre-distorted egg body (roughly x14–100, y13–48; center ~57,31). */}
@@ -184,6 +187,13 @@ function EggArt() {
 }
 
 export function Loader() {
+  const pathname = usePathname();
+  // Only the home page mounts the 3D hero that calls markHeroVideoReady(); on
+  // every other route there's no hero to wait for, so the counter must not hold
+  // at 90 forever. `heroWait` resolves instantly off-home; on home it awaits the
+  // hero as before (with a failsafe timeout so it can never deadlock either).
+  const isHome = pathname === "/";
+
   const root = useRef<HTMLDivElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
   const tossRef = useRef<gsap.core.Timeline | null>(null);
@@ -192,6 +202,11 @@ export function Loader() {
   const openedRef = useRef(false);
 
   const finish = () => {
+    // hard guarantee: the experience always starts at frame zero. Browsers
+    // can deferred-restore a clamped scroll position AFTER the provider's
+    // reset (the pin spacers grow the page late), so re-assert top at the
+    // exact moment the overlay lifts — nothing can have scrolled since.
+    window.scrollTo(0, 0);
     window.dispatchEvent(new Event(LOADER_DONE_EVENT));
     document.body.classList.remove("is-loading");
     ScrollTrigger.refresh();
@@ -210,6 +225,7 @@ export function Loader() {
       }
 
       document.body.classList.add("is-loading");
+      window.scrollTo(0, 0); // start measuring from the top, always
 
       // Entrance — pan settles in, label + counter rise after it.
       gsap.set(".pan__group", { scale: 0.82, opacity: 0, y: 12 });
@@ -244,14 +260,20 @@ export function Loader() {
       // up THROUGH and past its rest level. So the launch comes from BELOW, on
       // the up-stroke, not from a flick starting at rest.
       //
-      // Timing (the pan drives everything; pancake is glued until DIP→launch):
+      // Timing (the pan drives everything; the egg is glued until DIP→launch):
       const DIP_DEPTH = 20; // how far the pan drops on the windup
       const DIP_AT = 0.42; // pan reaches the BOTTOM of the dip here
-      const LAUNCH_AT = 0.6; // pan whips back UP through rest → pancake flies
+      const LAUNCH_AT = 0.6; // pan whips back UP through rest → egg flies
       const WHIP_TOP = -16; // small overshoot above rest as the pan tops its whip
-      const AIR = 0.86; // pancake airborne time (a touch longer = smoother flip)
-      const APEX = -116; // peak height of the pancake above the bowl
+      const AIR = 0.86; // egg airborne time (a touch longer = smoother flip)
+      const APEX = -116; // peak height of the egg above the bowl
       const IMPACT = LAUNCH_AT + AIR;
+      // The pan pivots at its HANDLE, so tilting moves the bowl MORE than the
+      // pan's y alone: bowl-to-pivot ≈ 52% of the pan width (~130px rendered),
+      // sin(6°)·130 ≈ 14px of extra drop. The egg must ride that too or it
+      // visibly floats above the bowl during the windup.
+      const ROT_DROP = 14; // extra bowl drop from the -6° windup tilt
+      const CATCH_DROP = 4; // ditto for the -2° catch give
 
       const toss = gsap.timeline({ repeat: -1, repeatDelay: 0.7, delay: 1.05 });
 
@@ -259,19 +281,19 @@ export function Loader() {
         // WINDUP / DIP — pan sinks DOWN and tips the bowl DOWN to scoop (the
         // front lip drops, like loading a throw). Pivot is at the handle, so a
         // NEGATIVE rotation drops the bowl end; positive would lift it (which
-        // read backwards — as if the pancake was pulling the pan up). Pancake
-        // glued in the bowl, riding smoothly down with it.
+        // read backwards — as if the egg was pulling the pan up). The egg is
+        // glued in the bowl: it rides the pan's y PLUS the tilt's extra drop.
         .to(".pan__svg", { y: DIP_DEPTH, rotation: -6, duration: DIP_AT, ease: "sine.inOut" }, 0)
-        .to(".pan__cake", { y: DIP_DEPTH, duration: DIP_AT, ease: "sine.inOut" }, 0)
+        .to(".pan__cake", { y: DIP_DEPTH + ROT_DROP, duration: DIP_AT, ease: "sine.inOut" }, 0)
 
         // WHIP-UP — from the bottom the pan swings back up FAST and un-tilts.
-        // The pancake stays glued through the up-stroke until the pan reaches
-        // rest level (y:0) — that's the launch instant (LAUNCH_AT): the pan's
-        // upward speed is highest here, so this is what flings the pancake.
+        // The egg stays glued through the up-stroke until the pan reaches rest
+        // level (y:0) — that's the launch instant (LAUNCH_AT): the pan's
+        // upward speed is highest here, so this is what flings the egg.
         .to(".pan__svg", { y: 0, rotation: 0, duration: LAUNCH_AT - DIP_AT, ease: "power3.in" }, DIP_AT)
         .to(".pan__cake", { y: 0, duration: LAUNCH_AT - DIP_AT, ease: "power3.in" }, DIP_AT)
 
-        // LAUNCH — pancake leaves the pan at rest level with the pan's upward
+        // LAUNCH — the egg leaves the pan at rest level with the pan's upward
         // momentum and arcs freely: rise decelerating, fall accelerating (real
         // gravity), a gentle sideways drift, and ONE smooth flip across the arc.
         .to(".pan__cake", { y: APEX, duration: AIR / 2, ease: "power2.out" }, LAUNCH_AT)
@@ -284,22 +306,39 @@ export function Loader() {
           LAUNCH_AT,
         )
 
-        // pan CONTINUES its whip a touch past rest (natural follow-through of the
-        // up-swing that threw the pancake), tops out at WHIP_TOP, then eases back
-        // to rest and waits, level, under the airborne pancake.
-        .to(".pan__svg", { y: WHIP_TOP, duration: 0.12, ease: "power1.out" }, LAUNCH_AT)
-        .to(".pan__svg", { y: 0, duration: 0.34, ease: "sine.inOut" }, LAUNCH_AT + 0.12)
+        // pan CONTINUES its whip a touch past rest (natural follow-through of
+        // the up-swing that threw the egg — including a whisper of rotational
+        // follow-through), tops out at WHIP_TOP, then eases back to rest and
+        // waits, level, under the airborne egg.
+        .to(".pan__svg", { y: WHIP_TOP, rotation: 1.5, duration: 0.12, ease: "power1.out" }, LAUNCH_AT)
+        .to(".pan__svg", { y: 0, rotation: 0, duration: 0.34, ease: "sine.inOut" }, LAUNCH_AT + 0.12)
 
-        // CATCH — timed to IMPACT: the pan gives downward to absorb the pancake's
-        // momentum, then springs back with a soft elastic settle. The pancake
-        // lands with it — no hard mechanical stop.
+        // CATCH — timed to IMPACT: the pan gives downward to absorb the egg's
+        // momentum, then springs back with a soft elastic settle. The egg lands
+        // with it (again riding the tilt's extra drop) and SQUASHES a touch at
+        // its contact patch before relaxing — weight, not a mechanical stop.
         .to(".pan__svg", { y: 9, rotation: -2, duration: 0.11, ease: "power2.out" }, IMPACT)
-        .to(".pan__cake", { y: 9, duration: 0.11, ease: "power2.out" }, IMPACT)
+        .to(".pan__cake", { y: 9 + CATCH_DROP, duration: 0.11, ease: "power2.out" }, IMPACT)
+        .to(".pan__egg", { scaleY: 0.93, scaleX: 1.05, duration: 0.09, ease: "power2.out" }, IMPACT)
         .to(".pan__svg", { y: 0, rotation: 0, duration: 0.5, ease: "elastic.out(1, 0.5)" }, IMPACT + 0.11)
         .to(".pan__cake", { y: 0, duration: 0.5, ease: "elastic.out(1, 0.55)" }, IMPACT + 0.11)
+        .to(".pan__egg", { scaleY: 1, scaleX: 1, duration: 0.45, ease: "elastic.out(1, 0.45)" }, IMPACT + 0.09)
         // reset drift for the next cycle (rotation already landed at 360 = flat).
         .set(".pan__cake", { rotation: 0, x: 0 });
       tossRef.current = toss;
+
+      // SIZZLE — while the egg rests in the pan it shivers almost sub-pixel,
+      // like it's actually frying. Lives on the inner svg (.pan__egg) so it
+      // never fights the toss transforms on the wrapper (.pan__cake).
+      gsap.to(".pan__egg", {
+        y: -0.8,
+        rotation: 0.5,
+        duration: 0.09,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+        delay: 1.05,
+      });
 
       // Counter reflects REAL loading: eases to 90 over ~1.7s, holds until the
       // hero has buffered (whenHeroVideoReady), then 90→100 and unlocks.
@@ -317,7 +356,16 @@ export function Loader() {
         delay: 0.35,
         onUpdate: paint,
         onComplete: () => {
-          whenHeroVideoReady().then(() => {
+          // Off-home: no hero exists, resolve immediately. On home: await the
+          // hero, but race an 8s failsafe so a hero that never signals can't
+          // strand the loader at 90 (mirrors the fallback-ladder failsafe).
+          const heroWait = isHome
+            ? Promise.race([
+                whenHeroVideoReady(),
+                new Promise<void>((r) => setTimeout(r, 8000)),
+              ])
+            : Promise.resolve();
+          heroWait.then(() => {
             gsap.to(counter, {
               value: 100,
               duration: 0.4,
@@ -351,19 +399,23 @@ export function Loader() {
     const handOff = () => {
       if (handedOff) return;
       handedOff = true;
+      window.scrollTo(0, 0); // same frame-zero guarantee as finish()
       window.dispatchEvent(new Event(LOADER_DONE_EVENT));
       document.body.classList.remove("is-loading");
       ScrollTrigger.refresh();
     };
 
-    // Take over from the loop wherever it is — snap pan & pancake back to rest
+    // Take over from the loop wherever it is — snap pan & egg back to rest
     // (level, y:0) so the final throw starts from a clean, known state instead
-    // of mid-arc.
+    // of mid-arc. The sizzle stops too: the egg is about to leave the heat.
     tossRef.current?.pause();
-    gsap.to([".pan__svg", ".pan__cake"], {
+    gsap.killTweensOf(".pan__egg");
+    gsap.to([".pan__svg", ".pan__cake", ".pan__egg"], {
       y: 0,
       x: 0,
       rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
       duration: 0.18,
       ease: "power2.out",
       overwrite: true,
@@ -387,13 +439,15 @@ export function Loader() {
     const OUT_REVEAL = OUT_LAUNCH + 0.15; // hole opens just after launch
     tl
       .to(".pan__label", { opacity: 0, duration: 0.25 }, 0)
-      // dip — pan (and pancake) sink down to load, tilting back to scoop.
+      // dip — pan sinks down to load, tilting BACK (+8° lifts the bowl end
+      // ~18px at the handle pivot), so the egg's NET ride is only ~4px down —
+      // tweening it the full 20 would bury it through the pan floor.
       .to(".pan__svg", { y: 20, rotation: 8, duration: OUT_DIP, ease: "sine.inOut" }, 0)
-      .to(".pan__cake", { y: 20, duration: OUT_DIP, ease: "sine.inOut" }, 0)
-      // whip-up — pan swings up fast; pancake glued until it passes rest level.
+      .to(".pan__cake", { y: 4, duration: OUT_DIP, ease: "sine.inOut" }, 0)
+      // whip-up — pan swings up fast; egg glued until it passes rest level.
       .to(".pan__svg", { y: 0, rotation: 0, duration: OUT_LAUNCH - OUT_DIP, ease: "power3.in" }, OUT_DIP)
       .to(".pan__cake", { y: 0, duration: OUT_LAUNCH - OUT_DIP, ease: "power3.in" }, OUT_DIP)
-      // launch — pancake flies off-screen decelerating (gravity), many flips.
+      // launch — the egg flies off-screen decelerating (gravity), many flips.
       .to(
         ".pan__cake",
         { y: "-85vh", rotation: 1000, duration: 1.0, ease: "power1.out" },
@@ -471,7 +525,10 @@ export function Loader() {
           <span
             className="pan__cake absolute block will-change-transform"
             aria-hidden="true"
-            style={{ left: "26%", top: "44%", width: "36%" }}
+            // Seated on the BOWL's visual center (~38% of the pan width — the
+            // handle pulls the geometric center right), sized to properly own
+            // the bowl instead of floating in it.
+            style={{ left: "16%", top: "34%", width: "46%" }}
           >
             <EggArt />
           </span>

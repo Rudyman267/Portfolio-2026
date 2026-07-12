@@ -203,26 +203,165 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 9)
+## 6. Current State (as of Session 12)
 
-**Status (as of Session 9): SITE IS LIVE + DEPLOYED. Full home experience — FRIED-EGG
-loader → dark 3D hero → white "MY WORKS." gallery → dark footer finale (ambient glow, denser,
-energy boxes now bloom). Session 9 (multi-ship): re-tuned the hero theme repeatedly (FINAL =
-magenta/orange), added live "Footer Glow" panel controls, swapped the loader pancake → the
-Figma FRIED-EGG vector (laid flat into the pan's isometric plane), added a Bloom pass to the
-footer so the energy boxes glow, and made the 🎛 dev FAB PERMANENTLY dev-gated (always in local,
-tree-shaken from prod — no more manual mount/unmount). typecheck + build clean. No CMS content yet.**
+**Status (as of Session 12): THE CASE STUDY WAS REBUILT FROM SCRATCH as a LIGHT / EDITORIAL
+design to match Figma, replacing the Session-10 dark-cinematic version. Route unchanged
+(`/work/live-incident-response`). Still LOCAL ONLY — nothing committed/pushed; LIVE site is
+still `23cb3e0`. See "LIR LIGHT REBUILD — Sessions 12" below; the old dark build notes remain
+further down for reference (those components are on disk but UNUSED).**
+
+### LIR LIGHT REBUILD — Session 12 (the current case study)
+Recreated the **Live Incidence Response** case study from **Figma node 172:56 / frame 168:408**
+(1920 frame) as a **light, editorial** page — white canvas, near-black text, electric-blue
+`#1291e0` accent, **Tanker** display headings. Wired the route at `work/[slug]/page.tsx` →
+`<LirCaseStudy>`. The Session-10 dark `<CaseStudy>` + `blocks.tsx` + `StageRail.tsx` stay on
+disk, unused.
+
+**Files (all NEW this direction):**
+- `src/lib/caseStudies/lirDesign.ts` — typed content + block model (`LirDesign`, `Section`,
+  `Block`, `Span`). Discriminated-union blocks: `label`, `lede`, `p`, `richP` (mixed-weight +
+  indented bold lead), `quote`, `quoteFlash` (2nd full-screen flash), `note`, `media`
+  (+`caption`), `figure` (isolated/hanging transparent img), `gapHeading`, `centerP`,
+  `diagram`, `matters`, `gapCards`, `auditNotes`, `designMd`. Asset punch-list at bottom.
+- `src/components/case-study/LirCaseStudy.tsx` — orchestrator (one `"use client"` island):
+  fixed z-index thumbnail intro, persistent 2-col grid, hero, `SectionRenderer` + `ProseBody`.
+- `src/components/case-study/lirBlocks.tsx` — atoms: `DroneMark` (real FlytBase sparkle SVG),
+  `CountUp` (stat ticker), `Figure`, `OutlineNote`, `PullQuote`, `MattersList`, `GapCards`,
+  `DecisionCluster`, + inline SVG diagrams (`PersonaSplitDiagram` etc — persona now uses the
+  real `diagram-users.svg`).
+- `src/components/case-study/Chapter.tsx` — the **chapter flash transition** (`Chapter`,
+  `FlashPanel`, `Spawn`).
+
+**Type scale — EXACT Figma px (÷16 = rem), sourced via MCP, NOT guessed.** Tokens live in the
+`.lir` scope in `globals.css` (`--lir-h-section` … `--lir-body`, `--lir-rail-*`, geometry
+`--lir-rail-w` 315→now 210, `--lir-col-gap`, `--lir-measure`). Body text was reduced 4px per
+type on user request (lede/body 20→16, secondary 16→12, meta 13→11-ish rail, captions 13→9).
+Frame reference: **1920** — user designs there, we map px→rem 1:1 on desktop with clamp floors.
+
+**Tanker font** self-hosted at `src/app/fonts/Tanker-Regular.woff2` via `next/font/local`
+(`--font-tanker`), exposed as `--font-display-tanker` in `.lir .display`. ⚠️ GOTCHA fixed:
+the token was originally named `--font-tanker` (same as the next/font var) → circular ref →
+Tanker never rendered. Must use a DIFFERENT token name than the next/font variable.
+
+**Real assets** copied into `public/case-study/` (source in gitignored `Asset videos/` +
+`case-study-assets/flytbase-project-1/`): `flytbase-logo.svg`, `diagram-users.svg`,
+`thumbnail-1.svg`, `image-1.png` (cover/session view), `scenario.png`, `drone-diagram.png`,
+`dock-diagram.png`, `heres-the-gap.svg`. `Figure`/`figure` render real `<img>` when `src` set.
+
+**Thumbnail intro = z-index cover reveal** (NOT opacity fade — that ghosted). Thumbnail is
+`fixed inset-0 z-0` fully opaque + never fades; page content is `z-10` + opaque `bg-bg` and
+scrolls UP over it, covering from the bottom. `[data-intro-wrap]` = 100vh spacer. Whisper of
+parallax on the img + "scroll to enter" hint fade.
+
+**Chapter flash transition (Context, Problem, Reframe wired; add ids to `CHAPTER_IDS` set to
+enable more).** Each `Chapter`: a **55vh lead-in** (so the previous chapter's last element
+scrolls out first), then a PINNED full-viewport flash of the Tanker title (`FlashPanel`,
+scrubbed fade+scale in→hold→out, replays on scroll-up), then content where each block spawns
+in **scrubbed** (`Spawn`, via the `spawn` prop threaded through `ProseBody`'s `<W>` wrapper).
+A chapter can hold MULTIPLE flashes — Problem has a 2nd `quoteFlash` ("During an emergency…",
+all grey `#636363`, ExtraBold, wide 2-line, plays then clears as the scenario image appears).
+
+**Stat ticker (`CountUp`):** counts 0→target when in view, **slow (2.8s)**, **replays every
+time it re-enters** (resets to 0 on leave). Handles decoration: `<30s` keeps `<`/`s`.
+
+**Contents nav scroll-spy:** blue is a MOVING highlight (one active at a time). `#overview`
+marker + each `[data-section]` band runs top→next-section-top. "Overview" is grey by default,
+lit only at the top. (Note: some TOC labels share a target — the-shift/process, etc.)
+
+**Content structure locked so far (per user, chapter by chapter):**
+- **Overview** (hero, right column): title 32px + blue eyebrow 24px + drone mark LEFT of the
+  46px headline (35px gap, 60px eyebrow→headline) + lede + 4 stat tickers + cover (image-1) +
+  build statement + **"Features shipped" label + capability note** (these CLOSE the overview,
+  NOT the start of Context).
+- **01 Context:** hanging drone-diagram (isolated, no box) → `richP` body ("Drones are
+  operational infrastructure now." bold indented lead + bold entity names) → hanging
+  dock-diagram. Caption/body match the cover width.
+- **02 Problem:** PROBLEM flash → grey "During an emergency" quoteFlash → scenario.png (as-is)
+  + center caption (full image width) → "Here's the gap" SVG → center CEO text (full width).
+- **03 Reframe:** REFRAME flash → "If it sounds like…/The brief…/Read it again…" + the
+  **matters list** (moved here FROM Problem) → "single room per incident" lede → persona
+  diagram (`diagram-users.svg`) → audit notes.
+- **the shift / process / solution / trade-offs / Impact / reflection:** NOT yet chapter-ized
+  (still render as plain sections via the non-chapter `SectionRenderer` path).
+
+**Two-column layout:** container `max-w-[1680px]` so the sticky rail (meta card + Contents,
+white fill `#dcdcdc` border r12, ~2/3 scale) hangs near the left edge; content column capped
+`max-w-[860px]` + `mx-auto` so it floats centered. Rail persists the whole page (sticky).
+
+**Header:** this page is LIGHT → no `data-header-dark` on content, so the header renders solid
+(white bar, black nav). The thumbnail intro DOES carry `data-header-dark` so nav stays visible
+over the dark cover.
+
+**Verification each step:** typecheck clean throughout; drove the running app with a raw-CDP
+headless-Chrome harness (scratchpad `cap*.mjs`, uses `ws` from node_modules — run scripts FROM
+the project dir so `ws` resolves; dismiss the egg loader by clicking
+`button[aria-label="Click to enter the site"]` after enabling it). NO prod build run this
+session; NOT committed/pushed.
+
+### LIR case study — Session 10
+The flagship case study (Flytbase project 1, "Live Incident Response") is built and verified
+locally (desktop + mobile screenshots, typecheck + prod build clean). Route:
+**`/work/live-incident-response`**. Direction: **dark cinematic** (echoes hero/footer via
+`.hero-dark` scope) + **editorial calm**, per-study accent = signal **orange `#ff781f`**.
+- **Source copy:** `case-study-assets/flytbase-project-1/LIR_case_study_copy.md` (hand-authored,
+     senior register, ~20 `[FILL]` metrics). User confirmed LIR = THE flagship.
+- **NOT in Sanity** (Sanity still empty). Built as a **typed local data file** —
+     `src/lib/caseStudies/liveIncidentResponse.ts` (Sanity-shaped, mirrors `placeholderProjects.ts`
+     pattern, migrates later). Discriminated-union `Section` types (prose/decisions/features/impact);
+     `Block[]` stream (p/quote/media/metric/table). `[FILL]` metrics render as `pending:true`
+     (muted "Awaiting data"). Bottom of that file has the **ASSET PUNCH-LIST**.
+- **Components** (`src/components/case-study/`): `CaseStudy.tsx` (orchestrator — poster w/ accent
+     wash, snapshot bar, headline metrics, cover, 9 spine sections, close; one "use client" island);
+     `StageRail.tsx` (fixed left "you are here" rail 01–09, lights active section in accent via
+     per-section ScrollTrigger; hidden < lg, inline numbers on mobile); `blocks.tsx` (PullQuote,
+     DecisionCard [tradeoff in accent footer], ImpactMetric [↑ arrows], DataTable, MediaPlaceholder
+     [Fig.NN labeled slots], MetricRow, Measure/Para).
+- **`work/[slug]/page.tsx` rewritten** — server comp with a `STUDIES` slug registry → renders
+     `<CaseStudy>`; `generateStaticParams`/`generateMetadata` from local data; `notFound()` else.
+     **Dropped the `ContactCTA` import** (footer IS the contact close). NOTE: `ContactCTA.tsx` is
+     STILL USED by `about/page.tsx` + `work/page.tsx` — do NOT delete it.
+- **Structure** takes cues from ref **gauravi.design/case-business.html** (numbered sections, Fig.
+     labels, tradeoff grouping, directional impact numbers) — but look is 100% our tokens/motion.
+- **NO IMAGES yet** — user has them in Figma. Every image/diagram/graph renders as a labeled
+     dashed `Fig.NN` placeholder (grid texture + caption). **6 slots + 1 cover** to fill; punch-list
+     in the data file + relayed to user. Diagrams (2×2 segmentation, loop comparison, DOM-bug,
+     system-parity) could alternatively be built as inline SVG if user prefers.
+- **Tables built** (real, not placeholder): the 4-layer reframe, the 3-roles breakdown.
+
+### Loader fix — Session 10 (⚠️ ties into the case study)
+The fried-egg loader **hung at 90 forever on non-home routes** — it awaits `whenHeroVideoReady()`,
+which ONLY the home page's 3D hero calls (`markHeroVideoReady`). Fixed in `Loader.tsx`: added
+`usePathname()`; off-home → `heroWait = Promise.resolve()` (no hero to wait for); on home → still
+awaits the hero but **races an 8s failsafe** so it can never deadlock either. Verified: on
+`/work/live-incident-response` the counter now reaches 100 → "click to enter". typecheck clean.
+- **Dev-overlay "1 Issue" hydration warning is a FALSE POSITIVE** — a browser extension
+     (BitDefender/Kaspersky-style) injects `bis_skin_checked="1"` attrs before React hydrates.
+     Dev-only, never in prod, not our code. Don't chase it.
+
+### Session 9 state (home experience — unchanged, still live)
+Full home experience — FRIED-EGG loader → dark 3D hero → white "MY WORKS." gallery → dark footer
+finale (ambient glow, denser, energy boxes bloom). Session 9 (multi-ship): re-tuned the hero theme
+repeatedly (FINAL = MAGENTA/ORANGE), added live "Footer Glow" panel controls, swapped the loader
+pancake → a FRIED-EGG (final = the user's PRE-DISTORTED egg vector, perspective baked into the
+paths, centered in the pan — NO CSS skew/scale), added a Bloom pass to the footer so the energy
+boxes glow, and made the 🎛 dev FAB PERMANENTLY dev-gated (always in local, tree-shaken from prod
+— no more manual mount/unmount, see [[shader-fab-dev-gated]] memory). typecheck + build clean.
+No CMS content yet.**
 
 ### Hero shader theme + footer controls — Session 9
 User brought the (Session-8-deprecated) shader control FAB back to re-tune the scene, then
 shipped. Two things happened:
-1. **New theme baked into `DEFAULT_TWEAK`** (`tweakConfig.ts`). Many palette iterations across the
-   session (purple/blue/pink → silver → red/black → charcoal → teal → …); **FINAL shipped preset:**
-   - **Palette:** `colorA` **`#0011ff`** (blue) / `colorB` **`#575260`** (gray-mauve) /
-        `colorHot` **`#ff57ca`** (pink highlight). FooterGlow inherits it live via shared `tweak`.
-   - **`grade.chromaticAberration`** `0.001` → **`0.006`** (max); **`grade.vignetteDarkness`**
-        `1.03` → **`1.27`**; **hero `particles.count`** `300` → **`700`**. Everything else = Session-8
-        preset (intensity 1.68, scrollTravel 159, path, bloom, etc.).
+1. **New theme baked into `DEFAULT_TWEAK`** (`tweakConfig.ts`). MANY palette iterations across the
+   session (purple/blue/pink → silver → red/black → charcoal → teal → blue/mauve/pink → …);
+   **FINAL shipped preset (magenta/orange):**
+   - **Palette:** `colorA` **`#c328e2`** (magenta) / `colorB` **`#000000`** (black) /
+        `colorHot` **`#ff781f`** (orange highlight). FooterGlow inherits it live via shared `tweak`
+        — footer colors ALWAYS track the hero automatically (user confirmed they should).
+   - **`bloom.intensity`** → **3**; **`grade.chromaticAberration`** → **0.002**;
+        **`grade.vignetteDarkness`** `1.03` → **`1.27`**; **`path.a1`** → **4.8**;
+        **`pointer.pushRadius`** → **2.5**; **hero `particles.count`** `300` → **`1200`**
+        (**drift 10**); **`fragments.count`** → **70**. Rest = Session-8 preset.
 2. **Live "Footer Glow" controls added.** FooterGlow's density/motion were hardcoded constants; now
    they're a **`footer` group in `tweakConfig`** (`particleCount`, `nodeCount`, `spawnMin/Max`,
    `riseMin/Max`, `lifeMin/Max`) exposed as a rebuild-class slider group in `HeroControls.tsx`.
@@ -231,8 +370,29 @@ shipped. Two things happened:
    on swap so live count tuning doesn't leak GPU buffers. **Shipped footer values:** particleCount
    **310**, nodeCount **22**, spawn **[-11,-10]**, rise **[8, 19.5]**, life **[12.5, 22]** (denser,
    rises higher, lingers longer than the original 140/11/…).
-**FAB UNMOUNTED again before shipping** (restored the "kept for future tweaks" comment in Hero.tsx,
-now noting the Footer Glow group) — production stays clean. Panel + store kept on disk.
+**FAB is now PERMANENTLY dev-gated** (not manually unmounted) — mounted in Hero.tsx behind
+`process.env.NODE_ENV === "development"` (dynamic, ssr:false), so it's ALWAYS in `next dev` and
+tree-shaken from prod. User asked for "panel in local only, gone on Vercel." Verified against the
+real prod build: `HeroControls`/`Copy config` appear ONLY in a `.map` sourcemap, zero in client
+chunks. **Do NOT manually mount/unmount going forward** — see [[shader-fab-dev-gated]].
+
+### Fried-egg loader — Session 9
+Implemented Figma node **133-155** (pan with a FRIED EGG replacing the pancake). Swapped the
+`pan__cake` ellipse for the egg SVG, reusing the `pan__cake` element so ALL the toss/flip/exit
+GSAP physics drive it unchanged. Iterated the egg's isometric tilt HEAVILY with the user (CSS
+`skewX/skewY/scaleX/scaleY` on an inner wrapper — many rounds: too flat → too skewed → wider →
+recentered). **Final resolution:** the user supplied a **PRE-DISTORTED egg export** (`EggArt`
+viewBox **116×64**, perspective baked into the paths) — so the component uses it at NATURAL
+proportions with **NO CSS skew/scale**, just seated centered in the bowl via wrapper `left/top/
+width` (`left:26% top:44% width:36%`). The old 72×68 upright egg paths were removed. Lesson the
+user drove home: **don't stretch the vector** — bake perspective into the art, place it undistorted.
+
+### Footer energy-box bloom — Session 9
+Added a **Bloom-only `EffectComposer` pass** to the FooterGlow `<Canvas>` (`@react-three/
+postprocessing`, intensity 2.4 / threshold 0.12 / mipmapBlur) + brighter node emissive (hot core
+pushed past 1.0) so the energy boxes glow like light sources. Runs only while the footer is
+on-screen (existing frameloop gate). Transparency holds (no black-box regression) — verified via
+headless capture: boxes bloom, text/wordmark/bg still show through.
 
 ### Frying-pan loader (Session 8 — replaced the door)
 `src/components/motion/Loader.tsx` fully rewritten from the door intro to the Figma 124:80
@@ -446,8 +606,8 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
      `main`. `Asset videos/` + logs + `.vercel` gitignored; `.vercelignore` mirrors it for CLI uploads.
 - ✅ **DEPLOYED to Vercel** (Session 8): live at **https://portfolio-2026-psi-flax.vercel.app**,
      GitHub-connected (auto-deploy on push). SSO protection disabled (public). See §2 + §3 deploy notes.
-- ⚠️ **Footer glow committed to disk but NOT pushed** — LIVE site is one commit behind (pre-glow footer).
-     `git push` next session to deploy it.
+- ✅ **Footer glow SHIPPED** (Session 9) — pushed + live. Everything through the egg fix (`23cb3e0`)
+     is on the live site; nothing pending unpushed.
 - ⚠️ **Sanity CORS not added for the Vercel origin** — embedded Studio (`/studio`) + live content won't
      connect on the deployed site until `https://portfolio-2026-psi-flax.vercel.app` is added at
      sanity.io/manage/project/4bo3ynjd/api. Public site still works (placeholders).
@@ -457,9 +617,9 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
      `juniorscrolls2017-8889` account can be deleted.
 - ⛔ `SANITY_API_READ_TOKEN` / `SANITY_REVALIDATE_SECRET` not set on Vercel (draft preview + webhook
      revalidation inactive — optional, public site fine without).
-- ⚠️ **`ContactCTA.tsx` now unused on the home flow** but still imported by `work/[slug]/page.tsx`
-     (case-study page) — that page is pre-redesign and needs the footer swap. Don't delete ContactCTA
-     until that page is redone (or it'll break the build).
+- ⚠️ **`ContactCTA.tsx` — do NOT delete.** No longer imported by `work/[slug]/page.tsx` (Session 10
+     rewrite dropped it — case-study page uses the footer as the contact close). BUT still imported by
+     `about/page.tsx` + `work/page.tsx`, so deleting it breaks the build. Leave it.
 - ⚠️ Nav anchors (`/#play`, `/#me`, `/#resume`) still point at sections that **don't exist**. `#work`
      (gallery) and `#contact` (footer) now resolve. `#me`/`#play` could map to About/a playground later.
 - ⚠️ **Whole cinematic flow verified only in software-rendered headless Chrome** — user must judge
@@ -476,25 +636,30 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0. **`git push` to deploy the pending look** — TWO things are committed/edited on disk but NOT
-   pushed: the Session-8 **footer glow** (`FooterGlow.tsx`, untracked) and the Session-9 **new
-   hero theme** (silver/dark-teal/deep-red in `tweakConfig.ts`). The LIVE site still shows the OLD
-   purple/blue/pink hero + pre-glow footer. Commit + push auto-deploys both via Vercel. (First
-   thing if the user wants the new look live.) New hero palette = red/black/white
-   (`#ff4747`/`#000000`/`#ffffff`). Note: Hero.tsx is currently modified only by the
-   FAB unmount round-trip — net diff should be ~none; verify before committing.
-1. **Housekeeping (security):** user should REVOKE the tokens pasted in Session 8 (GitHub PATs +
+0. **UNCOMMITTED WORK ON DISK (Session 12)** — the LIGHT LIR rebuild is built + verified locally but
+   **NOT committed or pushed.** LIVE site is still `23cb3e0`. Key new/changed files:
+   `src/lib/caseStudies/lirDesign.ts`, `src/components/case-study/{LirCaseStudy,lirBlocks,Chapter}.tsx`,
+   `src/app/(site)/work/[slug]/page.tsx` (points at `<LirCaseStudy>`), `src/app/globals.css` (`.lir`
+   scope + tokens), `src/app/layout.tsx` (Tanker font), `src/app/fonts/Tanker-Regular.woff2`, and
+   assets in `public/case-study/`. **Run `npm run build` before pushing** (no prod build this session).
+1. **CONTINUE THE CHAPTER-BY-CHAPTER BUILD (user drives, section by section).** Chapters wired so far:
+   Context, Problem, Reframe (flash transition + spawns). **Next up: "the shift" (04) → process (05) →
+   solution (06) → trade-offs (07) → Impact (08) → reflection (09).** To chapter-ize one: add its id to
+   `CHAPTER_IDS` in `LirCaseStudy.tsx`. NOTE the 9 TOC entries currently map to FEWER real sections
+   (the-shift→process, solution/trade-offs→decisions, reflection→impact share targets) — user may want
+   distinct sections per entry; ask before splitting. The old dark data file
+   (`liveIncidentResponse.ts`) still exists on disk but is UNUSED — real content is in `lirDesign.ts`.
+   a. **Remaining real image assets** the user still needs to supply/place (map/mobile/annotate/
+      translation/session-create/PostHog dashboards) — see the punch-list at the bottom of
+      `lirDesign.ts`; some are still labelled placeholders via `Figure`.
+   b. **Derive the 4 thinner studies** later (Flytbase 2/3, ORO, self) as their own `lirDesign`-shaped
+      files in a `STUDIES` registry. Must name employer.
+   d. **Later:** migrate to Sanity (add `sectionHeading` block to `richContent`, `npm run typegen`)
+      when the CMS is populated — the local data files are Sanity-shaped for this.
+2. **Housekeeping (security):** user should REVOKE the tokens pasted in Session 8 (GitHub PATs +
    Vercel `vcp_` tokens + old Claude-Desktop `ghp_315k...`); delete the old blocked Vercel project on
    the `juniorscrolls2017-8889` account. **Add Sanity CORS** for `portfolio-2026-psi-flax.vercel.app`
    (sanity.io/manage/project/4bo3ynjd/api) so `/studio` + live content work on the deployed site.
-2. **CASE STUDIES — the main remaining feature** (brief in `docs/case-study-brief.md`, confirmed):
-   a. **User picks the flagship** + gives real project names (rename `case-study-assets/*` slugs).
-   b. **User drops assets + rough story** into the flagship's `case-study-assets/<slug>/` folder
-      (screens/videos + Problem→Approach→Build→Result→Tradeoffs in the README).
-   c. **Add the `sectionHeading` block** (optional stage label) to `richContent`; run `npm run typegen`.
-   d. **Build the flagship case-study page** against real content — redesign `work/[slug]/page.tsx`
-      to the cinematic direction, swap orphaned `ContactCTA` → footer, scrubbed section reveals,
-      stage wayfinding. Then derive the thinner studies. Must name employer (Flytbase/ORO/self).
 3. **Add content in the Studio** (`localhost:3000/studio` or live once CORS added) — Site Settings
    (email/socials/résumé so footer + gallery stop using placeholders), Profile, the 5 Projects. Wire
    `FEATURED_PROJECTS_QUERY` result into `WorkGallery` (replace `placeholderProjects`).
@@ -506,6 +671,80 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 12 — 2026-07-12
+**REBUILT the LIR case study as a LIGHT / EDITORIAL design from Figma (172:56), replacing the
+Session-10 dark version. Long iterative session, built chapter by chapter with tight user feedback.**
+- Pulled the design via Figma MCP (`get_metadata`/`get_design_context`/`get_screenshot`). Confirmed
+  direction with the user: **replace dark → light**, **self-host Tanker**. Built new data model
+  (`lirDesign.ts`) + components (`LirCaseStudy`, `lirBlocks`, `Chapter`) + `.lir` token scope.
+- **Assets:** real FlytBase drone-mark SVG (user supplied), `flytbase-logo.svg`, `diagram-users.svg`
+  (persona split), `thumbnail-1.svg`, `image-1.png`, `scenario.png`, `drone/dock-diagram.png`,
+  `heres-the-gap.svg` — all copied from gitignored source folders into `public/case-study/`.
+- **Type scale:** iterated hard on sizing. User pushed back that I was guessing → pulled EXACT Figma
+  px via MCP and mapped px→rem 1:1 (frame 1920). Later reduced all body text 4px per type. Scaled the
+  rail down ~1/3 (white cards, #dcdcdc border). Fixed the **Tanker circular-var bug** (token name ==
+  next/font var name → nothing rendered; renamed to `--font-display-tanker`).
+- **Layout:** widened container to 1680, rail hangs left, content capped 860 + centered. Persistent
+  sticky 2-col grid the whole page.
+- **Motion built this session:** (1) **thumbnail intro** changed from opacity-fade (ghosted) → **z-index
+  cover reveal** (page rises over the fixed opaque thumbnail). (2) **stat tickers** (`CountUp`) — slow
+  2.8s, replay every time in view, handles `<30s`. (3) **chapter flash transition** (`Chapter` +
+  `FlashPanel` + `Spawn`) — pinned full-viewport Tanker title flash then scrubbed content spawns;
+  supports MULTIPLE flashes per chapter; 55vh lead-in so chapters don't overlap. (4) moving Contents
+  scroll-spy highlight.
+- **Content wired chapter by chapter with the user:** Overview (hero + Features-shipped close),
+  01 Context (hanging drone/dock illos + mixed-weight `richP`), 02 Problem (PROBLEM flash → grey
+  "During an emergency" quoteFlash → scenario img + center caption → "Here's the gap" SVG → center CEO
+  text), 03 Reframe (REFRAME flash → the "If it sounds like…" paras + matters list MOVED here from
+  Problem → single-room lede → persona diagram → audit notes). the-shift→reflection NOT chapter-ized yet.
+- **Verification:** typecheck clean throughout; drove the app via raw-CDP headless Chrome (scratchpad
+  `cap*.mjs`) capturing each flash/spawn/ticker state. NO prod build; NOT committed/pushed.
+- **RAM watch:** user on 16GB with Figma/Discord/Brave open (~2.5–4.8GB free during the session); dev
+  server + headless Chrome ran fine, node never spiked near the crash zone. User declined closing
+  Discord (on a call). Dev server + all node/headless-chrome stopped at end.
+- **Ended at:** everything above built + verified locally, **uncommitted/unpushed**. First move next
+  session: `npm run build`, then keep chapter-izing (the shift → …). See Next Steps §1.
+
+### Session 11 — 2026-07-12
+- Short session — started the dev server to resume work, then user closed for the day without code
+  changes. **No edits made this session.** The LIR flagship case study + loader fix from Session 10
+  remain built on disk, **still uncommitted/unpushed**. Live site unchanged (`23cb3e0`).
+- Housekeeping only: corrected a stale Open Item (the `ContactCTA` note — that import was already
+  dropped from `work/[slug]/page.tsx` in Session 10). Next Steps + Current State from Session 10
+  still accurate.
+- **Ended at:** dev server + all node stopped. First move next session: review the LIR page, then
+  commit + push, then fill the 7 Figma asset slots + `[FILL]` metrics (see Next Steps §1).
+
+### Session 10 — 2026-07-11
+Built the **flagship case study — Live Incident Response** (Flytbase project 1), the big
+remaining feature from the brief.
+- Read the hand-authored copy (`case-study-assets/flytbase-project-1/LIR_case_study_copy.md`).
+  User confirmed via Q&A: **LIR = the flagship**; direction = **dark cinematic** (not light
+  editorial); wayfinding = **fixed side-rail + inline**. Mid-session user asked for **placeholder
+  slots for all images/diagrams** (assets live in Figma, none dropped yet) + **build tables where
+  useful**, and shared **gauravi.design/case-business.html** as a STRUCTURE reference (design stays
+  ours).
+- **Architecture decision:** built as a **typed local data file** (`liveIncidentResponse.ts`,
+  Sanity-shaped) + client `<CaseStudy>` island, NOT via Sanity (empty CMS, bespoke copy). Mirrors
+  the `placeholderProjects.ts` pattern; migrates to CMS later. Discriminated-union sections;
+  Fig.NN labeled media placeholders; `[FILL]` metrics render as muted "Awaiting data".
+- **Rewrote `work/[slug]/page.tsx`** to a `STUDIES` slug registry → `<CaseStudy>`. Dropped the
+  `ContactCTA` import (footer is the contact close) — but KEPT `ContactCTA.tsx` (still used by
+  about + work index; would break build if deleted). Verified this before removing.
+- **Fixed loader hang:** the fried-egg loader waited for a hero-ready signal only the home page
+  sends → stuck at 90 on `/work/*`. Added `usePathname()` gating + 8s failsafe race. Verified the
+  counter reaches 100 → "click to enter" on the case-study route.
+- **Verification:** typecheck clean; prod `next build` clean (`/work/live-incident-response`
+  prerendered SSG); drove the running app with headless-Chrome/CDP (reduced-motion emulation to
+  bypass the loader) — captured poster, decisions, stage-rail (03 lit orange as scrolled),
+  mobile (390px, rail hidden, inline numbers). All render correctly.
+- Diagnosed the dev-overlay "1 Issue" as a **BitDefender-style extension false-positive**
+  (`bis_skin_checked` attrs), NOT our code.
+- **Ended at:** case study built + verified locally, **NOT committed/pushed** (user: "work later,
+  close for today"). Dev server + all node stopped. Next: commit+push, then fill the 6 image/
+  diagram slots + `[FILL]` metrics from Figma/PostHog, then derive the 4 thinner studies.
+
 
 ### Session 1 — 2026-06-14
 - Planned the full architecture (Plan agent) and locked all decisions via Q&A.
@@ -733,10 +972,23 @@ Short focused session — **re-tuned the hero-shader theme** (new palette) via t
   User first tried a silver/dark-teal preset, then said "nvm" and handed a final one: **only the
   palette changed** from Session 8 → purple/blue/pink to **red `#ff4747` / black `#000000` /
   white `#ffffff`** (all other dials unchanged). FooterGlow inherits the palette live (same `tweak`).
-- **UNMOUNTED the FAB again** (reverted the 3 Hero.tsx edits, restored the "kept for future tweaks"
-  comment) so production stays clean. typecheck clean; forced a fresh recompile → home HTTP 200,
-  no errors (the transient `dynamic`/`HeroControls is not defined` lines in the log were mid-edit
-  Fast Refresh states, gone after the clean rebuild). Stopped the dev server at end (free RAM 3.49 GB).
-- **Ended at:** new theme baked locally, dev FAB unmounted. ⚠️ NOT pushed — a `git push` next
-  session ships BOTH the new theme AND the still-unpushed Session-8 footer glow. Backlog unchanged:
-  case studies, housekeeping (tokens/CORS), CMS content.
+  (NOTE: the entry above captured only the first hour. The session then ran LONG — see below.)
+- **Then it became a big multi-ship session.** After more palette rounds the FINAL preset landed on
+  **magenta `#c328e2` / black / orange `#ff781f`** (+ bloom 3, 1200 particles/drift 10, CA 0.002,
+  fragments 70, push 2.5). Added a live **"Footer Glow" control group** (`tweak.footer` → sliders in
+  HeroControls; FooterGlow rebuilds meshes on generation, disposes old buffers). Footer values
+  bumped to 310 particles / 22 nodes / higher rise / longer life.
+- **Fried-egg loader** (Figma 133-155): pancake → egg. Long tilt iteration, resolved by the user
+  handing a **PRE-DISTORTED egg vector** (116×64, perspective in the paths) → used undistorted,
+  centered in the pan. Lesson: don't stretch the vector.
+- **Footer energy boxes now GLOW** — Bloom `EffectComposer` pass on the FooterGlow canvas + brighter
+  node emissive. Transparency verified intact.
+- **🎛 FAB made PERMANENTLY dev-gated** (user: "panel in local only, gone on Vercel"). No more
+  mount/unmount; verified absent from prod build (sourcemap-only). Saved [[shader-fab-dev-gated]].
+- **SHIPPED — 3 pushes:** `21bd9d0` (footer glow + blue/mauve/pink theme + footer controls),
+  `a21bc92` (magenta/orange + footer bloom + egg + permanent FAB), `23cb3e0` (pre-distorted egg,
+  centered). Each: stop dev → prod build (crash-safe, ~21-33s clean) → commit → push → Vercel
+  auto-deploys. Verified every step via headless-Chrome captures + typecheck + build.
+- **Ended at:** everything live at `23cb3e0`, nothing pending. Dev server stopped, RAM freed.
+  Backlog unchanged: case studies (main feature), housekeeping (revoke Session-8 tokens, add Sanity
+  CORS for the Vercel origin), CMS content. Next feature session → case studies (§7.2).

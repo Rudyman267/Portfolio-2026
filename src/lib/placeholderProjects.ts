@@ -17,12 +17,16 @@ export type GalleryProject = {
 };
 
 export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
+  // THE REAL FLAGSHIP — links to the built case study at
+  // /work/live-incident-response (the only real study so far; the rest of the
+  // cards are placeholders whose slugs 404 until their studies exist).
   {
-    title: "Helix",
-    slug: "helix",
-    summary: "An AI research console that turns messy prompts into reproducible pipelines.",
+    title: "Live Incident Response",
+    slug: "live-incident-response",
+    summary:
+      "A single live room for drone-led emergency response — built at FlytBase.",
     year: "2025",
-    tags: ["Product", "AI", "0→1"],
+    tags: ["Product", "0→1", "FlytBase"],
     size: "lg",
   },
   {

@@ -27,6 +27,10 @@ export function Header({
   const pathname = usePathname();
   const [overHero, setOverHero] = useState(false);
 
+  // Dark-theme pages: the SOLID header inverts (page-hex bar, white nav)
+  // instead of falling back to the white bar. /about is a full-dark route.
+  const darkPage = pathname === "/about";
+
   useEffect(() => {
     const zones = Array.from(
       document.querySelectorAll<HTMLElement>("[data-header-dark]"),
@@ -88,11 +92,14 @@ export function Header({
   return (
     <header
       data-over-hero={overHero || undefined}
+      data-solid-dark={(!overHero && darkPage) || undefined}
       className={cn(
         "sticky top-0 z-50 transition-colors duration-500",
         overHero
           ? "-mb-16 bg-transparent text-white"
-          : "bg-white text-black",
+          : darkPage
+            ? "bg-[#06080c] text-white"
+            : "bg-white text-black",
       )}
     >
       <Container width="wide" className="flex h-16 items-center justify-between">
@@ -122,7 +129,8 @@ export function Header({
       <div
         ref={panelRef}
         className={cn(
-          "overflow-hidden bg-white sm:hidden",
+          "overflow-hidden sm:hidden",
+          darkPage ? "bg-[#06080c]" : "bg-white",
           "hidden", // starts closed; GSAP toggles display
         )}
       >

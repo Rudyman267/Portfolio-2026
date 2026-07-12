@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 
 export type NavItem = { label: string; href: string };
 
-// Home-page section anchors for now — the standalone pages come later.
-// (Figma 25:144 nav: Work Play Me Resume Contact)
+// Home-page section anchors for now — standalone pages replace them as they
+// are built (Me → /about). (Figma 25:144 nav: Work Play Me Resume Contact)
 export const DEFAULT_NAV: NavItem[] = [
   { label: "Work", href: "/#work" },
   { label: "Play", href: "/#play" },
-  { label: "Me", href: "/#me" },
+  { label: "Me", href: "/about" },
   { label: "Resume", href: "/#resume" },
   { label: "Contact", href: "/#contact" },
 ];

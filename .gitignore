@@ -60,3 +60,10 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# separate project (the game) — lives in this folder but is NOT part of the site
+/the-other-hand project/
+/the-other-hand project.zip
+
+# local Claude session permissions
+.claude/settings.json

@@ -505,8 +505,13 @@ export function Hero() {
             18.5544° N , 73.7759°
           </p>
 
-          {/* headline stack — phrase 0 in flow, the rest overlaid on top */}
-          <div className="relative select-none text-center font-bold leading-[0.95] tracking-[-0.03em] text-fg [font-size:clamp(2.5rem,9vw,6.25rem)]">
+          {/* headline stack — phrase 0 in flow, the rest overlaid on top.
+              Tanker (the site display face) — single weight, so no font-bold,
+              and its natural tracking instead of the old tight Jakarta set. */}
+          <div
+            className="relative select-none text-center leading-[0.95] tracking-[0.01em] text-fg [font-size:clamp(2.5rem,9vw,6.25rem)]"
+            style={{ fontFamily: "var(--font-display-tanker)" }}
+          >
             <h1 data-phrase>
               <PhraseLines lines={PHRASES[0]} />
             </h1>
