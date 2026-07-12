@@ -25,6 +25,10 @@
   /* Typography */
   --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  /* Tanker display face (case-study section headings). NOTE: the next/font var
+     is literally `--font-tanker`, so this stack must use a DIFFERENT name or it
+     references itself and resolves to nothing. */
+  --font-display-tanker: var(--font-tanker), var(--font-plus-jakarta), ui-sans-serif, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   /* Fluid type scale — clamp(min, preferred, max) */
@@ -86,6 +90,63 @@
 
   background-color: rgb(var(--color-bg));
   color: rgb(var(--color-fg));
+}
+
+/* ============================================================================
+   LIR CASE-STUDY SCOPE — the "Live Incidence Response" case study (Figma
+   172:56) is a light, editorial layout: pure-white canvas, near-black text,
+   an electric-blue accent, and TANKER display headings. Scoped tokens so the
+   page reads clean without touching the site's warm-neutral global theme.
+   Decision cards use fixed green / orange washes from the Figma (kept as raw
+   values in the component, not tokens — they're semantic to that block).
+   ========================================================================== */
+
+.lir {
+  --color-bg: 255 255 255;          /* pure white canvas */
+  --color-surface: 255 255 255;
+  --color-surface-2: 247 248 250;   /* faint inset for meta/nav cards */
+  --color-fg: 17 17 19;             /* near-black text */
+  --color-muted: 90 96 106;         /* secondary text (slate) */
+  --color-faint: 140 146 156;       /* tertiary / captions */
+  --color-accent: 18 145 224;       /* #1291e0 — the signal blue */
+  --color-accent-fg: 255 255 255;
+  --color-border: 228 231 236;      /* hairlines / card outlines */
+  --color-ring: 18 145 224;
+
+  /* ── Type scale — EXACT Figma values (1920 frame), px ÷ 16 = rem. Fixed on
+        desktop so it's pixel-accurate to the design; clamp only scales the two
+        display sizes DOWN on small screens. Everything sourced via MCP. ─────── */
+  --lir-h-section: clamp(3.5rem, 2rem + 6vw, 5.868rem); /* Tanker 93.896px */
+  --lir-headline:  clamp(2rem, 1.3rem + 3vw, 2.897rem); /* headline 46.35px */
+  --lir-title:     2rem;        /* 32px  title */
+  --lir-eyebrow:   1.5rem;      /* 24px  eyebrow */
+  --lir-lede:      1rem;        /* 16px  lede / body-reading (Figma 20 − 4) */
+  --lir-stat:      2.25rem;     /* 36px  stat number (display, unchanged) */
+  --lir-body:      1rem;        /* 16px  reading body (Figma 20 − 4) */
+  --lir-body-sm:   0.75rem;     /* 12px  secondary (16 − 4) */
+  --lir-label:     0.5625rem;   /* 9px   captions / small labels (13 − 4) */
+  --lir-nav:       0.75rem;     /* 12px  Contents entries (16 − 4) */
+  --lir-stat-label: 0.75rem;    /* 12px  stat label + sub (16 − 4) */
+
+  /* Left rail — scaled to ~2/3 of the Figma card so it isn't claustrophobic. */
+  --lir-rail-meta:  0.6875rem;  /* 11px  meta rows (was 13) */
+  --lir-rail-nav:   0.6875rem;  /* 11px  Contents entries (was 16) */
+
+  /* two-column geometry — Figma: rail 315px @ x71, content @ x530 (frame 1920) */
+  --lir-rail-w: 210px;          /* ~2/3 of Figma's 315px card */
+  --lir-col-gap: clamp(2rem, 1rem + 4vw, 9rem); /* Figma gap ≈ 144px */
+  --lir-measure: 63.6rem;       /* match the cover image width (Figma 1017px) */
+
+  background-color: rgb(var(--color-bg));
+  color: rgb(var(--color-fg));
+}
+
+/* Section headings in the case study use Tanker, uppercase, tight. */
+.lir .display {
+  font-family: var(--font-display-tanker);
+  letter-spacing: 0.01em;
+  line-height: 0.92;
+  text-wrap: initial;
 }
 
 /* ============================================================================
@@ -214,6 +275,16 @@ header:not([data-over-hero]) nav a {
 header:not([data-over-hero]) nav a:hover,
 header:not([data-over-hero]) nav a[aria-current="page"] {
   color: rgb(0 0 0);
+}
+
+/* Dark pages (/about): the solid header inverts — page-hex bar, white nav.
+   Placed after the rule above so it wins at equal specificity. */
+header[data-solid-dark] nav a {
+  color: rgb(255 255 255 / 0.85);
+}
+header[data-solid-dark] nav a:hover,
+header[data-solid-dark] nav a[aria-current="page"] {
+  color: rgb(255 255 255);
 }
 
 /* SplitText needs to measure lines cleanly — text-wrap:balance fights the

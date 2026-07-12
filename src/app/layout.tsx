@@ -1,6 +1,17 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono, EB_Garamond } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
+
+// Tanker — the heavy display face used for case-study section headings
+// (Figma "Live Incidence Response" project). Free Fontshare font, self-hosted
+// as a single woff2 so it isn't a runtime dependency on Fontshare's CDN.
+const tanker = localFont({
+  src: "./fonts/Tanker-Regular.woff2",
+  variable: "--font-tanker",
+  weight: "400",
+  display: "swap",
+});
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -52,7 +63,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={`${plusJakarta.variable} ${geistMono.variable} ${ebGaramond.variable} h-full`}
+      className={`${plusJakarta.variable} ${geistMono.variable} ${ebGaramond.variable} ${tanker.variable} h-full`}
     >
       <body className="min-h-full antialiased" suppressHydrationWarning>
         {children}
