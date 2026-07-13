@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 import { gsap, ScrollTrigger } from "@/lib/gsap";
 import { lenisRef } from "@/components/motion/lenisBridge";
@@ -17,6 +18,9 @@ import { lenisRef } from "@/components/motion/lenisBridge";
  * right and Lenis can fight the browser.
  */
 export function SmoothScrollProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const firstNav = useRef(true);
+
   useEffect(() => {
     // Always start at the top of the hero on (re)load. Browsers restore the
     // previous scroll position by default, which lands mid-page and desyncs the
@@ -63,6 +67,39 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
       lenis.destroy();
     };
   }, []);
+
+  // Reset to the top of the page on EVERY client-side navigation. The provider
+  // lives in the persistent (site) layout, so its setup effect above runs only
+  // once — without this, a route change keeps the previous page's scroll offset,
+  // which lands the new page's pinned ScrollTriggers mid-timeline (the "loads a
+  // garbled mid-way frame" bug when clicking a nav link from deep in /about).
+  // Skip the very first render (setup already forced the top) so we don't fight
+  // the loader's own frame-zero handoff. Every nav link therefore opens its
+  // target fresh, from the start. Jump both the Lenis virtual position and the
+  // native scroll, then let the new page's triggers re-measure.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // skip the very first render — the setup effect + loader already own the
+    // initial frame-zero handoff; only re-fire on ACTUAL navigations.
+    if (firstNav.current) {
+      firstNav.current = false;
+      return;
+    }
+    // If the pan-flip curtain is up (is-loading set by beginRouteTransition),
+    // IT owns the ordered clean-slate reset (stop Lenis → rewind → refresh →
+    // reveal → resume). Doing our own reset/refresh here would race it and
+    // re-introduce the auto-scrub. Only handle curtain-LESS navs (e.g. a gallery
+    // card → case study) as the safety net.
+    if (document.body.classList.contains("is-loading")) return;
+    // instant jump — Lenis owns scroll when active; fall back to native scroll
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true, force: true });
+    }
+    window.scrollTo(0, 0);
+    // let layout settle (pin spacers, fonts) before triggers re-measure
+    requestAnimationFrame(() => ScrollTrigger.refresh());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return <>{children}</>;
 }

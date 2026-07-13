@@ -237,10 +237,25 @@ export function Hero() {
           }
         };
 
+        // rAF ids for the deferred client-nav reveal (cancelled in cleanup).
+        let revealRaf1 = 0;
+        let revealRaf2 = 0;
+
         if (document.body.classList.contains("is-loading")) {
+          // fresh full load → wait for the loader to hand off, then reveal.
           window.addEventListener(LOADER_DONE_EVENT, reveal, { once: true });
         } else {
-          reveal();
+          // client-side nav (e.g. clicking "Rudyman" from another page) — no
+          // loader runs. The SmoothScrollProvider queues a ScrollTrigger.refresh
+          // on the next frame to re-measure this page's pins; running reveal()
+          // synchronously here collides with that refresh, whose pin re-layout
+          // interrupts the tween and STRANDS the headline part-way down (the
+          // "text doesn't load" glitch). Defer past the refresh so the reveal
+          // animates cleanly on stable layout. Double rAF: frame 1 = provider's
+          // refresh, frame 2 = us.
+          revealRaf1 = requestAnimationFrame(() => {
+            revealRaf2 = requestAnimationFrame(reveal);
+          });
         }
 
         // --- curve hover open/close (blank wave → full panel + content) -----
@@ -457,6 +472,8 @@ export function Hero() {
 
         return () => {
           window.removeEventListener(LOADER_DONE_EVENT, reveal);
+          cancelAnimationFrame(revealRaf1);
+          cancelAnimationFrame(revealRaf2);
           curveCleanups.forEach((fn) => fn());
         };
       });

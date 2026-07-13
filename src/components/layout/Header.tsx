@@ -8,6 +8,7 @@ import { Container } from "@/components/ui/Container";
 import { Nav, DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
 import { gsap, useGSAP, ease } from "@/lib/gsap";
 import { cn } from "@/lib/utils";
+import { hardNavigate } from "@/components/motion/routeTransitionBridge";
 
 export function Header({
   brand = "Rudyman",
@@ -105,6 +106,14 @@ export function Header({
       <Container width="wide" className="flex h-16 items-center justify-between">
         <Link
           href="/"
+          onClick={(e) => {
+            // returning home from another route → HARD load (loads like a
+            // refresh via the Loader). Already home → default (no-op nav).
+            if (pathname !== "/") {
+              e.preventDefault();
+              hardNavigate("/");
+            }
+          }}
           className="text-[14px] font-semibold tracking-[-0.42px]"
         >
           {brand}

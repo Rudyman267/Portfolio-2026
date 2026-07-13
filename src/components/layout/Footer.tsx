@@ -4,11 +4,13 @@ import Link from "next/link";
 import type { Route } from "next";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, ArrowUp } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { scrollToTop } from "@/components/motion/lenisBridge";
 import { DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
+import { hardNavigate } from "@/components/motion/routeTransitionBridge";
 
 // Ambient particle/energy-blob glow behind the footer — a whisper of the hero
 // ecosystem (same palette/shapes/motion). Client-only; skips itself on
@@ -76,6 +78,7 @@ export function Footer({
   nav?: NavItem[];
 }) {
   const root = useRef<HTMLElement>(null);
+  const pathname = usePathname();
   const year = "2026";
 
   // Connect column = Sanity socials (when present) else placeholder profiles,
@@ -207,6 +210,13 @@ export function Footer({
                 <li key={item.href}>
                   <Link
                     href={item.href as Route}
+                    onClick={(e) => {
+                      const target = item.href.split("#")[0] || "/";
+                      if (target !== pathname) {
+                        e.preventDefault();
+                        hardNavigate(item.href);
+                      }
+                    }}
                     className="group inline-flex items-center gap-1.5 text-fg/70 transition-colors hover:text-fg"
                   >
                     {item.label}

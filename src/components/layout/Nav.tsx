@@ -4,6 +4,12 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { hardNavigate } from "@/components/motion/routeTransitionBridge";
+
+/** Path part of an href (drops any #hash), for same-route detection. */
+function pathOf(href: string) {
+  return href.split("#")[0] || "/";
+}
 
 export type NavItem = { label: string; href: string };
 
@@ -40,7 +46,16 @@ export function Nav({
           <Link
             key={item.href}
             href={item.href as Route}
-            onClick={onNavigate}
+            onClick={(e) => {
+              // Cross-route → HARD load (fresh Lenis/ScrollTrigger + Loader), so
+              // the destination loads exactly like a refresh. Same-route (incl.
+              // an on-page #hash anchor) keeps default SPA behaviour.
+              if (pathOf(item.href) !== pathname) {
+                e.preventDefault();
+                hardNavigate(item.href);
+              }
+              onNavigate?.();
+            }}
             aria-current={active ? "page" : undefined}
             className={cn(
               "transition-colors duration-[var(--duration-fast)] hover:text-fg",

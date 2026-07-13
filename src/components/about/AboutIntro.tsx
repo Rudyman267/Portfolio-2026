@@ -175,7 +175,10 @@ export function AboutIntro() {
           scrollTrigger: {
             trigger: section,
             start: "top top",
-            end: "+=1205%",
+            // total timeline shrank ~36.6→~31.9 units when scene 1's entrance
+            // moved to the load intro; pin length drops proportionally so the
+            // px-per-unit scroll speed (and every scene's feel) stays identical.
+            end: "+=1050%",
             pin: true,
             scrub: 0.5,
             anticipatePin: 1,
@@ -183,19 +186,79 @@ export function AboutIntro() {
           },
         });
 
-        // ── the frame: grow to full by the convergence, settle down for the
-        //    name card, whisper of vertical drift the whole way ──────────────
-        tl.fromTo(
+        // ── AUTONOMOUS INTRO (plays on load, NOT scroll-mapped) ──────────────
+        // The old scene-1 entrance (frame grow 0→4.25 + phrases sliding in to
+        // flank the photo) used to live on the scrubbed timeline, so a visitor
+        // who hadn't scrolled just saw a tiny photo shuffling. That entrance now
+        // plays on its own the moment the page loads, resolving to the readable
+        // "HEY! THAT'S [photo] MY NAME" convergence. The scrubbed timeline below
+        // STARTS from that converged state (frame full, phrases flanking, white)
+        // and only owns the merge/fade onward — so scrolling continues the story
+        // and scrolling back to the top rests on the converged frame, never the
+        // tiny-photo opening.
+        //
+        // Seat the OPENING state (frame small, phrases parked offscreen and
+        // hidden) so nothing of frame 2 flashes before the intro runs. The
+        // intro grows/slides them to the converged state; the scrubbed timeline
+        // below then STARTS from that convergence — its downstream .to()s read
+        // the live x/scale the intro leaves behind.
+        gsap.set(frame, { scale: 0.36 });
+        gsap.set(phraseA, { autoAlpha: 0, color: "#4a4a4a", x: startX(phraseA, -1) });
+        gsap.set(phraseB, { autoAlpha: 0, color: "#4a4a4a", x: startX(phraseB, 1) });
+
+        const intro = gsap.timeline({ paused: true });
+        // frame grows from the small opening state to full
+        intro.to(
           frame,
-          { scale: 0.36 },
-          { scale: 1, duration: 4.25, ease: "power1.inOut" },
+          { scale: 1, duration: 1.5, ease: "power1.inOut" },
           0,
         );
-        tl.to(frame, { scale: 0.72, duration: 1.3, ease: "power1.inOut" }, 5.3);
+        // phrases fade in and slide from offscreen to flank the photo…
+        // fromTo (not to): the scrubbed timeline sitting at progress 0 forces x
+        // to flankX during ScrollTrigger's initial refresh, so a plain .to would
+        // start from flankX and never travel. Forcing the offscreen `from` when
+        // the intro plays restores the full slide.
+        intro.to([phraseA, phraseB], { autoAlpha: 1, duration: 0.4 }, 0);
+        intro.fromTo(
+          phraseA,
+          { x: startX(phraseA, -1) },
+          { x: () => flankX(phraseA, -1), duration: 1.5, ease: "power2.out" },
+          0,
+        );
+        intro.fromTo(
+          phraseB,
+          { x: startX(phraseB, 1) },
+          { x: () => flankX(phraseB, 1), duration: 1.5, ease: "power2.out" },
+          0,
+        );
+        // …turning grey → white as they arrive, landing on the readable sentence
+        intro.to(
+          [phraseA, phraseB],
+          { color: "#ffffff", duration: 0.9, ease: "none" },
+          0.7,
+        );
+
+        // Kick the intro once the loader has cleared (or immediately on a
+        // client-side nav where the loader never mounted). Guard so it fires
+        // exactly once even if both paths race.
+        let introStarted = false;
+        const startIntro = () => {
+          if (introStarted) return;
+          introStarted = true;
+          intro.play(0);
+        };
+        if (document.body.classList.contains("is-loading")) {
+          window.addEventListener("loader:done", startIntro, { once: true });
+        } else {
+          startIntro();
+        }
+
+        // whisper of vertical drift on the frame the whole way (scroll-mapped)
+        tl.to(frame, { scale: 0.72, duration: 1.3, ease: "power1.inOut" }, 0.6);
         tl.fromTo(
           frame,
           { y: () => window.innerHeight * 0.04 },
-          { y: () => window.innerHeight * -0.02, duration: 10 },
+          { y: () => window.innerHeight * -0.02, duration: 5.3 },
           0,
         );
 
@@ -210,34 +273,48 @@ export function AboutIntro() {
           photoIdx = next;
         }, 900);
 
-        // ── the two phrases: approach → hold the sentence → fade as they merge.
-        // Two segments per phrase: the entry lands them flanking the photo at
-        // the convergence (the readable "HEY! THAT'S [photo] MY NAME" beat,
-        // held briefly), then they keep drifting toward one axis and dissolve
-        // into it — they never come back on the far sides.
-        tl.set([phraseA, phraseB], { autoAlpha: 1 }, 0.01);
+        // ── the two phrases: the autonomous intro (above) lands them flanking
+        // the photo, white — the readable "HEY! THAT'S [photo] MY NAME" beat.
+        // Scroll then drifts them on toward one axis and dissolves them into it
+        // STARTING IMMEDIATELY at t=0 — the entrance is owned by the load intro,
+        // so the scrubbed timeline has no dead scroll before the text reacts.
+        // (They never come back on the far sides; scrolling to the top rests on
+        // the convergence rather than replaying the tiny-photo opening.)
+        //
+        // These live at position 0 so their START must be the convergence the
+        // load intro lands on — otherwise the scrubbed ScrollTrigger's own
+        // refresh caches the setup (offscreen) x and the phrase SNAPS back there
+        // the instant you scroll. Two guards together fix it cleanly:
+        //   • explicit `from: flankX` — the tween's start is the convergence,
+        //     not whatever live value happens to be cached;
+        //   • immediateRender:false — DON'T paint that start at setup (which
+        //     would flash the phrases in before the loader clears). Init is
+        //     deferred to first scroll, by which point the load intro has landed
+        //     them exactly on flankX — so scroll continues seamlessly from it.
         tl.fromTo(
           phraseA,
-          { x: startX(phraseA, -1) },
-          { x: () => flankX(phraseA, -1), duration: 4.25 },
+          { x: () => flankX(phraseA, -1) },
+          { x: startX(phraseA, 1), duration: 3.8, immediateRender: false },
           0,
         );
-        tl.to(phraseA, { x: startX(phraseA, 1), duration: 3.8 }, 4.7);
         tl.fromTo(
           phraseB,
-          { x: startX(phraseB, 1) },
-          { x: () => flankX(phraseB, 1), duration: 4.25 },
+          { x: () => flankX(phraseB, 1) },
+          { x: startX(phraseB, -1), duration: 3.8, immediateRender: false },
           0,
         );
-        tl.to(phraseB, { x: startX(phraseB, -1), duration: 3.8 }, 4.7);
-        // grey → white into the convergence, then gone mid-merge — fully faded
-        // just before the physical cross (~t5.4) so the overlap never shows
-        tl.to([phraseA, phraseB], { color: "#ffffff", duration: 0.9 }, 3.3);
-        tl.to([phraseA, phraseB], { autoAlpha: 0, duration: 0.8 }, 4.8);
+        // gone mid-merge — fully faded just before the physical cross (~t0.7)
+        // so the overlap never shows
+        tl.fromTo(
+          [phraseA, phraseB],
+          { autoAlpha: 1 },
+          { autoAlpha: 0, duration: 0.8, immediateRender: false },
+          0.1,
+        );
 
         // ── the name: pops right after the phrases dissolve — quick masked
         //    per-letter rise over the settled photo ───────────────────────────
-        tl.set(nameLayer, { autoAlpha: 1 }, 5.95);
+        tl.set(nameLayer, { autoAlpha: 1 }, 1.25);
         tl.fromTo(
           letters,
           { yPercent: 115 },
@@ -247,33 +324,33 @@ export function AboutIntro() {
             stagger: 0.035,
             ease: "power3.out",
           },
-          6.0,
+          1.3,
         );
 
         // ── scene 2: the name scene recedes, then "22 YEARS OF EXPERIENCE
         //    DREAMING ABOUT TECH" wipes in line-by-line from the left while
         //    the ending video slides in from the right — mirrored moves that
         //    meet as one composition and hold to the unpin ────────────────────
-        tl.to([frame, nameLayer], { autoAlpha: 0, duration: 0.8 }, 7.6);
-        tl.to(frame, { scale: 0.6, duration: 0.8, ease: "power1.in" }, 7.6);
-        tl.set(scene2, { autoAlpha: 1 }, 8.3);
+        tl.to([frame, nameLayer], { autoAlpha: 0, duration: 0.8 }, 2.9);
+        tl.to(frame, { scale: 0.6, duration: 0.8, ease: "power1.in" }, 2.9);
+        tl.set(scene2, { autoAlpha: 1 }, 3.6);
         tl.fromTo(
           lines22,
           { xPercent: -112 },
           { xPercent: 0, duration: 0.9, stagger: 0.16, ease: "power3.out" },
-          8.4,
+          3.7,
         );
         tl.fromTo(
           video22,
           { x: () => window.innerWidth * 0.65 },
           { x: 0, duration: 1.35, ease: "power3.out" },
-          8.4,
+          3.7,
         );
         // start the loop as the scene arrives (muted → allowed without gesture)
-        tl.call(() => videoEl?.play().catch(() => {}), [], 8.4);
+        tl.call(() => videoEl?.play().catch(() => {}), [], 3.7);
         // settled hold with a whisper of lift, then the composition clears
-        tl.to(scene2, { y: () => window.innerHeight * -0.015, duration: 1.2 }, 9.8);
-        tl.to(scene2, { autoAlpha: 0, duration: 0.8 }, 10.4);
+        tl.to(scene2, { y: () => window.innerHeight * -0.015, duration: 1.2 }, 5.1);
+        tl.to(scene2, { autoAlpha: 0, duration: 0.8 }, 5.7);
 
         // ── scene 3: NOW I / BUILD / PRODUCT EXPERIENCES fade in scattered,
         //    with the game-thumbnail frame docked small beside BUILD ─────────
@@ -286,13 +363,13 @@ export function AboutIntro() {
         gsap.set(d4Line1, { y: () => -d4Line1.offsetHeight * 0.62 });
         gsap.set(d4Line2, { y: () => d4Line2.offsetHeight * 0.62 });
         gsap.set(d4Rule, { xPercent: -50, yPercent: -50, scaleY: 0 });
-        tl.set([words3Layer, frame3Layer], { autoAlpha: 1 }, 10.9);
+        tl.set([words3Layer, frame3Layer], { autoAlpha: 1 }, 6.2);
         // all together, pure fade, no stagger, no rise — scroll-mapped
         tl.fromTo(
           [...words3, frame3],
           { autoAlpha: 0 },
           { autoAlpha: 1, duration: 0.6 },
-          11.0,
+          6.3,
         );
 
         // ── the migration: HORIZONTAL ONLY, ease none — pure scroll mapping.
@@ -327,7 +404,7 @@ export function AboutIntro() {
               duration: 1.2,
               ease: "none",
             },
-            12.4,
+            7.7,
           );
           // the exit: no pause at the dock — the word keeps drifting in its
           // direction at the same scroll-mapped rate while it softly blurs
@@ -343,7 +420,7 @@ export function AboutIntro() {
               duration: 0.9,
               ease: "none",
             },
-            13.6,
+            8.9,
           );
         });
         tl.fromTo(
@@ -363,35 +440,35 @@ export function AboutIntro() {
             duration: 1.2,
             ease: "none",
             // render the docked state immediately so the card is small when
-            // it first fades in at 11.0, before this tween's own window
+            // it first fades in at 6.3, before this tween's own window
             immediateRender: true,
           },
-          12.4,
+          7.7,
         );
 
-        // PLAY? pops on the settled card (the long PE tail finishes ~15.4)
+        // PLAY? pops on the settled card (the long PE tail finishes ~10.7)
         tl.fromTo(
           playLabel,
           { autoAlpha: 0, scale: 0.92 },
           { autoAlpha: 1, scale: 1, duration: 0.5, ease: "power2.out" },
-          15.6,
+          10.9,
         );
 
-        // ── hold the PLAY? card (hover/click affordance window) ── 16.1–16.8
+        // ── hold the PLAY? card (hover/click affordance window) ── 11.4–12.1
 
         // ── the punchline: the card (particles, border, PLAY?) clears out
         //    COMPLETELY, leaving pure black for NVM ───────────────────────────
-        tl.to(frame3, { autoAlpha: 0, duration: 0.8 }, 16.8);
-        tl.set(nvmLayer, { autoAlpha: 1 }, 17.2);
+        tl.to(frame3, { autoAlpha: 0, duration: 0.8 }, 12.1);
+        tl.set(nvmLayer, { autoAlpha: 1 }, 12.5);
         tl.fromTo(
           nvmLines,
           { autoAlpha: 0, y: 26 },
           { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.12, ease: "power2.out" },
-          17.3,
+          12.6,
         );
         // NVM holds with a whisper of lift, then clears for the thesis
-        tl.to(nvmLayer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 18.2);
-        tl.to(nvmLayer, { autoAlpha: 0, duration: 0.7 }, 18.6);
+        tl.to(nvmLayer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 13.5);
+        tl.to(nvmLayer, { autoAlpha: 0, duration: 0.7 }, 13.9);
 
         // ── scene 4: THE COLLAPSING BOUNDARY — the interaction acts out the
         //    copy. "DESIGN IS / CHANGING" pops stacked; scroll pulls the two
@@ -399,16 +476,16 @@ export function AboutIntro() {
         //    them (designers | engineers); the line flickers, SNAPS shut, and
         //    the halves collapse into it — then the paragraph assembles
         //    line-by-line through masks, mapped to scroll. ────────────────────
-        tl.set(scene4, { autoAlpha: 1 }, 19.2);
+        tl.set(scene4, { autoAlpha: 1 }, 14.5);
         // pop: masked per-line rise, same voice as the name reveal
         tl.fromTo(
           [d4Inner1, d4Inner2],
           { yPercent: 115 },
           { yPercent: 0, duration: 0.55, stagger: 0.12, ease: "power3.out" },
-          19.3,
+          14.6,
         );
 
-        // ── hold the stacked headline ── 19.9–20.5
+        // ── hold the stacked headline ── 15.2–15.8
 
         // pull apart: stacked → one row flanking the (drawing) hairline
         const RULE_GAP = 90; // px between the halves at full separation
@@ -420,7 +497,7 @@ export function AboutIntro() {
             duration: 0.8,
             ease: "none",
           },
-          20.5,
+          15.8,
         );
         tl.to(
           d4Line2,
@@ -430,48 +507,48 @@ export function AboutIntro() {
             duration: 0.8,
             ease: "none",
           },
-          20.5,
+          15.8,
         );
         tl.fromTo(
           d4Rule,
           { scaleY: 0, autoAlpha: 1 },
           { scaleY: 1, duration: 0.8, ease: "none" },
-          20.5,
+          15.8,
         );
 
-        // ── hold the divided composition ── 21.3–21.5
+        // ── hold the divided composition ── 16.6–16.8
 
         // the boundary gives out: flicker …
-        tl.to(d4Rule, { opacity: 0.25, duration: 0.08 }, 21.5);
-        tl.to(d4Rule, { opacity: 1, duration: 0.08 }, 21.58);
-        tl.to(d4Rule, { opacity: 0.15, duration: 0.08 }, 21.66);
-        tl.to(d4Rule, { opacity: 1, duration: 0.08 }, 21.74);
+        tl.to(d4Rule, { opacity: 0.25, duration: 0.08 }, 16.8);
+        tl.to(d4Rule, { opacity: 1, duration: 0.08 }, 16.88);
+        tl.to(d4Rule, { opacity: 0.15, duration: 0.08 }, 16.96);
+        tl.to(d4Rule, { opacity: 1, duration: 0.08 }, 17.04);
         // … then SNAP — and the halves get pulled into the collapse
-        tl.to(d4Rule, { scaleY: 0, duration: 0.3, ease: "power3.in" }, 21.9);
+        tl.to(d4Rule, { scaleY: 0, duration: 0.3, ease: "power3.in" }, 17.2);
         tl.to(
           d4Line1,
           { x: "+=34", autoAlpha: 0, duration: 0.5, ease: "power2.in" },
-          21.9,
+          17.2,
         );
         tl.to(
           d4Line2,
           { x: "-=34", autoAlpha: 0, duration: 0.5, ease: "power2.in" },
-          21.9,
+          17.2,
         );
 
         // the paragraph assembles — one masked line-wipe per scroll increment
-        tl.set(paraLayer, { autoAlpha: 1 }, 22.6);
+        tl.set(paraLayer, { autoAlpha: 1 }, 17.9);
         paraLines.forEach((line, i) => {
           tl.fromTo(
             line,
             { xPercent: -103 },
             { xPercent: 0, duration: 0.55, ease: "none" },
-            22.7 + i * 0.5,
+            18.0 + i * 0.5,
           );
         });
         // thesis holds with a whisper of lift, then clears for the process
-        tl.to(paraLayer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 25.6);
-        tl.to(paraLayer, { autoAlpha: 0, duration: 0.7 }, 26.0);
+        tl.to(paraLayer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 20.9);
+        tl.to(paraLayer, { autoAlpha: 0, duration: 0.7 }, 21.3);
 
         // ── scene 5: THE PROCESS — seven icons fade in on a circle, orbit the
         //    center exactly ONCE (scroll-mapped), then lay themselves out in a
@@ -526,35 +603,35 @@ export function AboutIntro() {
         };
         placeOrbit(); // seat everyone on the circle before the fade-in
 
-        tl.set(scene5, { autoAlpha: 1 }, 26.5);
+        tl.set(scene5, { autoAlpha: 1 }, 21.8);
         tl.fromTo(
           icons5,
           { autoAlpha: 0 },
           { autoAlpha: 1, duration: 0.5 },
-          26.6,
+          21.9,
         );
         // one full rotation…
-        tl.to(orbit, { t: 1, duration: 2.0, ease: "none", onUpdate: placeOrbit }, 27.0);
+        tl.to(orbit, { t: 1, duration: 2.0, ease: "none", onUpdate: placeOrbit }, 22.3);
         // …then the rope unrolls onto the line, 1 first, 7 last
-        tl.to(morph, { p: 1, duration: 1.6, ease: "none", onUpdate: placeMorph }, 29.0);
-        // ── hold the lined-up process ── 30.2–31.2
+        tl.to(morph, { p: 1, duration: 1.6, ease: "none", onUpdate: placeMorph }, 24.3);
+        // ── hold the lined-up process ── 25.5–26.5
 
         // ── scene 6: the finale. The process COLLAPSES into a single glowing
         //    dot — everything condensing into one idea — which pops into the
         //    first quote; then you scroll THROUGH it (it scales past the
         //    camera, blurring) and the last word resolves from the depth. ─────
-        tl.to(icons5, { x: 0, y: 0, scale: 0.3, duration: 1.0, ease: "power1.in" }, 31.2);
-        tl.to(icons5, { autoAlpha: 0, duration: 0.3 }, 32.0);
+        tl.to(icons5, { x: 0, y: 0, scale: 0.3, duration: 1.0, ease: "power1.in" }, 26.5);
+        tl.to(icons5, { autoAlpha: 0, duration: 0.3 }, 27.3);
         tl.fromTo(
           ideaDot,
           { scale: 0, autoAlpha: 1 },
           { scale: 1, duration: 1.0, ease: "power2.in", immediateRender: true },
-          31.4,
+          26.7,
         );
         // the idea pops…
-        tl.to(ideaDot, { scale: 1.8, autoAlpha: 0, duration: 0.5, ease: "power2.out" }, 32.3);
+        tl.to(ideaDot, { scale: 1.8, autoAlpha: 0, duration: 0.5, ease: "power2.out" }, 27.6);
         // …into existence
-        tl.set(quote1Layer, { autoAlpha: 1 }, 32.3);
+        tl.set(quote1Layer, { autoAlpha: 1 }, 27.6);
         tl.fromTo(
           q1Lines,
           { yPercent: 115 },
@@ -565,18 +642,18 @@ export function AboutIntro() {
             ease: "power3.out",
             immediateRender: true,
           },
-          32.4,
+          27.7,
         );
 
-        // ── hold quote 1 ── 33.3–34.0
+        // ── hold quote 1 ── 28.6–29.3
 
         // push-through: quote 1 sails past the camera, quote 2 resolves behind
         tl.to(
           q1Block,
           { scale: 2.3, autoAlpha: 0, filter: "blur(10px)", duration: 1.2, ease: "power1.in" },
-          34.0,
+          29.3,
         );
-        tl.set(quote2Layer, { autoAlpha: 1 }, 34.2);
+        tl.set(quote2Layer, { autoAlpha: 1 }, 29.5);
         tl.fromTo(
           q2Block,
           { scale: 0.82, autoAlpha: 0, filter: "blur(8px)" },
@@ -588,17 +665,22 @@ export function AboutIntro() {
             ease: "power1.out",
             immediateRender: true,
           },
-          34.3,
+          29.6,
         );
         // the final word settles — hold with a whisper of lift to the unpin
-        tl.to(quote2Layer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 35.8);
+        tl.to(quote2Layer, { y: () => window.innerHeight * -0.012, duration: 0.8 }, 31.1);
 
         // Tanker loads async and changes phrase widths — re-measure the
         // function-based travel once fonts settle.
         document.fonts?.ready.then(() => ScrollTrigger.refresh());
 
-        // matchMedia cleanup — stop the autoplay shuffle
-        return () => window.clearInterval(shuffle);
+        // matchMedia cleanup — stop the autoplay shuffle, tear down the
+        // load-intro and drop its listener (in case it never fired)
+        return () => {
+          window.clearInterval(shuffle);
+          window.removeEventListener("loader:done", startIntro);
+          intro.kill();
+        };
       });
 
       mm.add("(prefers-reduced-motion: reduce)", () => {

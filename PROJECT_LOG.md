@@ -203,17 +203,54 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 13)
+## 6. Current State (as of Session 14)
 
-**Status (as of Session 13): EVERYTHING IS SHIPPED. Two commits pushed (`2f3009f` LIR case
-study + `4fbf57c` About page); LIVE site = `4fbf57c`. The ABOUT PAGE (`/about`, nav "Me") is a
-complete cinematic scroll journey — the biggest new build. The LIR light case study (Session 12)
-went out in the same push. Verified live: `/`, `/about`, `/work/live-incident-response` all 200.**
+**Status (as of Session 14): NAVIGATION + ABOUT-INTRO POLISH SHIPPED. Session 14 fixed how the
+site loads between pages and reworked the About opening. See "NAV + LOAD BEHAVIOUR — Session 14"
+below for the model that is now LOCKED. Everything from Session 13 (About page, LIR study) is
+still live. Session 14 = one commit on top.**
+
+### NAV + LOAD BEHAVIOUR — Session 14 (LOCKED — do not re-litigate)
+The load/navigation model, decided after several failed SPA attempts:
+- **The About opening now AUTO-PLAYS on load.** `AboutIntro.tsx` has a separate PAUSED `intro`
+  timeline (frame grow 0.36→1 + "HEY! THAT'S"/"MY NAME" sliding in from the edges, grey→white)
+  that `.play()`s on `LOADER_DONE_EVENT` (or immediately if not loading). The SCRUBBED timeline
+  no longer owns that entrance — it STARTS from the converged flank state and its first scroll
+  beat is the merge/fade. So a visitor sees the intro animate itself; scrolling continues the
+  story and scrolling back to top rests on the convergence (never the tiny-photo opening).
+  - The intro's x slides are `fromTo(startX → flankX)` (NOT `.to`) — the scrubbed timeline's
+    initial ScrollTrigger refresh pins the phrases at flankX, so a plain `.to` would have zero
+    travel; forcing the offscreen `from` restores the slide. GOTCHA, keep it.
+  - Pin length dropped **1205% → 1050%**, timeline **~36.6 → ~31.9 units** (scene-1 entrance
+    moved off the scrub to the load intro; everything downstream rebased −4.7 units, same feel).
+- **Cross-route navigation = a REAL (hard) page load, NOT SPA.** Nav links (Rudyman brand, header
+  Nav, footer INDEX) call `hardNavigate(href)` (`routeTransitionBridge.ts`) → `location.assign`.
+  WHY: the persistent Lenis + ScrollTrigger carry the previous route's scroll/pin state across a
+  client-side nav; NO ordering of reset/refresh reliably reproduced a clean load (headless looked
+  fine, real GPUs still auto-scrubbed the hero + distorted pins with hourglass pin-spacers). A
+  hard load = fresh Lenis/ScrollTrigger + the Loader runs = identical to a refresh, by construction.
+  **Do NOT try to make these SPA again.**
+  - **Pan-flip feel kept, no click gate:** `hardNavigate` sets a one-shot `sessionStorage` flag
+    (`NAV_FLAG`); the Loader reads it on the fresh load and runs in **transition mode — pan ONLY**
+    (no counter, no "cooking"/"click to enter" label), one quick flip, then AUTO-exits (`openPan`).
+    A cold first visit (no flag) keeps the full click-to-enter loader. `openPan` guard relaxed to
+    allow opening when `isNav` (nav mode drives the open; `ready` may still be false).
+  - Same-page `#hash` links (Work `/#work`, Contact `/#contact` when already home) keep normal
+    in-page scroll — `hardNavigate` only fires when the target PATH differs from current pathname.
+  - `SmoothScrollProvider` gained a pathname-change scroll-reset effect (bails while `is-loading`,
+    i.e. lets the loader own curtain navs) — kept as the safety net for any curtain-LESS nav
+    (e.g. a future gallery-card → case-study client link).
+  - Hero client-nav reveal defers 2 rAFs past the ScrollTrigger refresh (harmless now that nav is
+    hard-load, but correct if any SPA nav returns).
+- **The SPA `RouteTransition` curtain component was built then DELETED** — it was the racy approach.
+  If you see references to it, they're stale.
 
 ### ABOUT PAGE — Session 13 (the "Me" journey, `/about`)
-ONE pinned GSAP timeline (`AboutIntro.tsx`, pin `end:+=1205%`, scrub 0.5, ~36.6 timeline units —
-positions in comments) driving six scenes on the `.hero-dark` `#06080c` canvas. All user-driven,
-storyboard by storyboard. Scene map:
+ONE pinned GSAP timeline (`AboutIntro.tsx`, pin `end:+=1050%` — was 1205% before Session 14
+rebased scene 1 off the scrub, scrub 0.5, ~31.9 timeline units — positions in comments) driving
+six scenes on the `.hero-dark` `#06080c` canvas. All user-driven, storyboard by storyboard.
+**Scene 1's entrance now auto-plays on load — see "NAV + LOAD BEHAVIOUR — Session 14" above.**
+Scene map:
 1. **Name intro** — photo frame scales/drifts (scroll-mapped) while "HEY! THAT'S"/"MY NAME"
    (Tanker) travel in from the edges, converge white flanking the photo, then FADE OUT while
    merging into one axis (no crossing shown); "RIDDHIMAN DEB" pops via masked letter rise.
@@ -698,9 +735,10 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
    in gitignored `the-other-hand project/`; DO NOT commit it — it's a separate Vite app).
    Also `#play` + `#resume` nav anchors still have no destinations.
-1. **USER TO FEEL THE ABOUT PAGE ON GPU** — whole journey verified only in software-rendered
-   headless Chrome. Dials documented inline in `AboutIntro.tsx` (timeline unit positions, pin
-   length 1205%, scrub 0.5, photo-shuffle 900ms, rope-unroll windows).
+1. **USER TO FEEL THE ABOUT PAGE + NAV FLOW ON GPU** — whole journey verified only in
+   software-rendered headless Chrome. Dials documented inline in `AboutIntro.tsx` (timeline unit
+   positions, pin length **1050%**, scrub 0.5, photo-shuffle 900ms, rope-unroll windows; auto-play
+   intro timeline separate from the scrub). Also feel the pan-flip nav transition on real clicks.
 2. **CONTINUE THE LIR CHAPTER-BY-CHAPTER BUILD (user drives, section by section).** Chapters wired so far:
    Context, Problem, Reframe (flash transition + spawns). **Next up: "the shift" (04) → process (05) →
    solution (06) → trade-offs (07) → Impact (08) → reflection (09).** To chapter-ize one: add its id to
@@ -730,6 +768,30 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 14 — 2026-07-14
+**Navigation + About-intro polish. One commit on top of `4fbf57c`.** Focused, iterative session
+on how the site loads. What shipped (details in Current State §6 "NAV + LOAD BEHAVIOUR"):
+- **About opening auto-plays on load** — extracted scene 1's entrance (frame grow + "HEY! THAT'S
+  / MY NAME" edge-slide, grey→white) into a separate paused `intro` timeline that plays on
+  `LOADER_DONE_EVENT`; the scrubbed timeline now starts from the converged state. Rebased the whole
+  About timeline −4.7 units so scrolling reacts immediately (killed the "residue scroll" before the
+  text moved); pin 1205%→1050%. Fixed a snap/zero-travel bug: intro x slides must be `fromTo`
+  (offscreen `from`) because the scrub's initial refresh pins the phrases at flankX.
+- **Nav "text doesn't load" / "garbled mid-way page" fixed at the root.** Diagnosis chain: client
+  nav didn't run the loader → destination pins measured against the old page's tearing-down layout
+  → hero stranded/auto-scrubbed. Tried an SPA `RouteTransition` pan curtain + Lenis stop/rewind/
+  refresh ordering — worked headless, still raced on the user's real GPU (hourglass pin-spacers,
+  ballooning circle-wipe). **Final call (user chose "hard nav + keep pan feel"): cross-route nav is
+  now a REAL page load** (`hardNavigate` → `location.assign`), so it's identical to a refresh by
+  construction. Kept the pan-flip feel via a `sessionStorage` `NAV_FLAG` that puts the Loader in
+  **pan-only auto-play mode** (no counter/label/click) for nav loads; cold visits keep click-to-enter.
+  Deleted the racy `RouteTransition` component.
+- **Lesson:** for a persistent-Lenis + heavy-pinned-page site, SPA route transitions between pinned
+  pages are not worth the race — a hard load is the robust, refresh-identical path. Don't reintroduce.
+- Verified via headless CDP capture harnesses (scratchpad; drove real click-throughs, sampled
+  scrollY / intro transform / circle-wipe scale over time). typecheck clean throughout. NOT run as a
+  prod build this session.
 
 ### Session 13 — 2026-07-12 (later same day)
 **BUILT THE ENTIRE ABOUT PAGE (`/about`) and SHIPPED EVERYTHING — two commits pushed

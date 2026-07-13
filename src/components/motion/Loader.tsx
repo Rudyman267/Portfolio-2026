@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 import { whenHeroVideoReady } from "@/components/motion/heroReady";
+import { NAV_FLAG } from "@/components/motion/routeTransitionBridge";
 
 /** Fired on window when the intro finishes so the hero can begin its reveal. */
 export const LOADER_DONE_EVENT = "loader:done";
@@ -29,7 +30,7 @@ export const LOADER_DONE_EVENT = "loader:done";
 
 /** Figma line-art pan (Group 9, viewBox 284.897 × 113.313), inlined so GSAP
  *  can drive it directly and the strokes stay crisp at any size. */
-function PanArt() {
+export function PanArt() {
   return (
     <svg
       className="pan__svg block w-full overflow-visible will-change-transform"
@@ -67,7 +68,7 @@ function PanArt() {
  *  so it needs NO CSS skew/scale — used at natural proportions. Yolk #FBC94A /
  *  #FDDC81, white line-art. The black backing ellipse occludes the pan's rim/
  *  floor lines behind the egg so it reads as sitting inside the bowl. */
-function EggArt() {
+export function EggArt() {
   return (
     <svg
       className="pan__egg block w-full overflow-visible"
@@ -201,6 +202,25 @@ export function Loader() {
   const [ready, setReady] = useState(false); // load hit 100 → pan unlocks
   const openedRef = useRef(false);
 
+  // Was this load triggered by an in-app nav click (hardNavigate)? If so the
+  // Loader runs in "transition" mode: pan ONLY (no counter, no label, no click
+  // gate), a brief flip, then it lifts itself. A cold first visit (no flag)
+  // keeps the full click-to-enter experience. Read once + clear immediately so
+  // a subsequent manual refresh is treated as a cold visit again.
+  const navModeRef = useRef<boolean | null>(null);
+  if (navModeRef.current === null) {
+    let flagged = false;
+    try {
+      flagged = typeof window !== "undefined" &&
+        sessionStorage.getItem(NAV_FLAG) === "1";
+      if (flagged) sessionStorage.removeItem(NAV_FLAG);
+    } catch {
+      flagged = false;
+    }
+    navModeRef.current = flagged;
+  }
+  const isNav = navModeRef.current;
+
   const finish = () => {
     // hard guarantee: the experience always starts at frame zero. Browsers
     // can deferred-restore a clamped scroll position AFTER the provider's
@@ -226,6 +246,36 @@ export function Loader() {
 
       document.body.classList.add("is-loading");
       window.scrollTo(0, 0); // start measuring from the top, always
+
+      // ── NAV (transition) MODE — pan ONLY, no counter/label/click. A short
+      //    pan entrance + one flip, then it auto-exits (openPan). Used when the
+      //    load came from an in-app nav click, so navigation reads as a quick
+      //    pan-flip curtain over a real (refresh-clean) page load. ────────────
+      if (isNav) {
+        gsap.set([".pan__count", ".pan__label"], { opacity: 0 });
+        gsap.set(".pan__group", { scale: 0.85, opacity: 0, y: 10 });
+        gsap
+          .timeline({
+            defaults: { ease: "power2.out" },
+            // after the pan has popped in + done ~one flip, auto-open (throw +
+            // hole reveal + handoff). `ready` must be true for openPan to run.
+            onComplete: () => {
+              setReady(true);
+              openPan();
+            },
+          })
+          .to(".pan__group", { scale: 1, opacity: 1, y: 0, duration: 0.4 })
+          // one quick flip in place so the pan reads as active, not frozen
+          .to(".pan__svg", { y: 14, rotation: -6, duration: 0.16, ease: "sine.inOut" }, 0.15)
+          .to(".pan__cake", { y: 26, duration: 0.16, ease: "sine.inOut" }, 0.15)
+          .to(".pan__svg", { y: 0, rotation: 0, duration: 0.18, ease: "power3.in" }, 0.31)
+          .to(".pan__cake", { y: 0, duration: 0.18, ease: "power3.in" }, 0.31)
+          .to(".pan__cake", { y: -90, duration: 0.22, ease: "power2.out" }, 0.49)
+          .to(".pan__cake", { rotation: 360, duration: 0.44, ease: "none" }, 0.49)
+          .to(".pan__cake", { y: 0, duration: 0.22, ease: "power2.in" }, 0.71)
+          .set(".pan__cake", { rotation: 0 });
+        return;
+      }
 
       // Entrance — pan settles in, label + counter rise after it.
       gsap.set(".pan__group", { scale: 0.82, opacity: 0, y: 12 });
@@ -390,7 +440,9 @@ export function Loader() {
   );
 
   const openPan = () => {
-    if (!ready || openedRef.current) return;
+    // nav (transition) mode drives the open itself — it doesn't use the
+    // click-gate, so `ready` may still be false when it calls this.
+    if ((!ready && !isNav) || openedRef.current) return;
     openedRef.current = true;
 
     // Hand off to the hero partway through — while the hole is opening — so
