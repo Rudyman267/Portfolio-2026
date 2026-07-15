@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:lir": "node scripts/dev-open.mjs /work/live-incident-response",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

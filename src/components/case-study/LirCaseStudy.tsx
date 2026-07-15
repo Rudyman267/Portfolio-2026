@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useRef, type Key, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
@@ -9,6 +9,8 @@ import { Chapter, FlashPanel, Spawn } from "@/components/case-study/Chapter";
 import {
   CountUp,
   Figure,
+  BeforeAfter,
+  FeatureRow,
   OutlineNote,
   PullQuote,
   MattersList,
@@ -20,8 +22,17 @@ import {
   StakeholderActionsDiagram,
 } from "@/components/case-study/lirBlocks";
 
-/** Chapters wired to the full-viewport flash transition (built one at a time). */
-const CHAPTER_IDS = new Set<string>(["context", "problem", "reframe"]);
+/** Chapters wired to the full-viewport flash transition — every numbered
+ *  section now opens on its Tanker title flash, then spawns its content. */
+const CHAPTER_IDS = new Set<string>([
+  "context",
+  "problem",
+  "reframe",
+  "process",
+  "decisions",
+  "features",
+  "impact",
+]);
 import type {
   Block,
   LirDesign,
@@ -39,13 +50,163 @@ import type {
    ========================================================================== */
 
 const flytbaseLogo = (
-  // eslint-disable-next-line @next/next/no-img-element
-  <img
-    src="/case-study/flytbase-logo.svg"
-    alt="FlytBase"
-    className="inline-block h-2.5 w-auto align-middle"
-  />
+  // The FlytBase wordmark is a dark/gradient logo that vanishes on the dark
+  // meta card — seat it on a small light chip so it always reads.
+  <span className="inline-flex items-center rounded-[5px] bg-white px-1.5 py-0.5 align-middle">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      src="/case-study/flytbase-logo.svg"
+      alt="FlytBase"
+      className="inline-block h-2.5 w-auto"
+    />
+  </span>
 );
+
+/* ── GapMorph — one pinned full-viewport scene: the "Here's the gap" text
+   holds centered, then morphs (scales up + fades) as the orange gap-conclusion
+   box scales in from the center to fill the frame. Scrubbed to scroll, so it
+   plays forward on the way down and reverses on the way up. Reduced motion:
+   the box simply shows, text hidden. ─────────────────────────────────────── */
+function GapMorph({ heading, src }: { heading: string; src: string }) {
+  const root = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      const el = root.current;
+      if (!el) return;
+      const runway = el.querySelector<HTMLElement>("[data-gm-runway]");
+      const text = el.querySelector<HTMLElement>("[data-gm-text]");
+      const box = el.querySelector<HTMLElement>("[data-gm-box]");
+      if (!runway || !text || !box) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.set(text, { autoAlpha: 0, scale: 0.85 });
+        gsap.set(box, { autoAlpha: 0, scale: 0.3, transformOrigin: "50% 50%" });
+        gsap
+          .timeline({
+            scrollTrigger: {
+              trigger: runway,
+              start: "top top",
+              end: "+=160%",
+              scrub: true,
+              pin: runway,
+              anticipatePin: 1,
+            },
+          })
+          // text rises + holds
+          .to(text, { autoAlpha: 1, scale: 1, ease: "power2.out", duration: 0.5 })
+          .to(text, { duration: 0.3 })
+          // text blows out as the box scales up through it to fill the frame
+          .to(text, { autoAlpha: 0, scale: 1.4, ease: "power2.in", duration: 0.5 }, ">-0.1")
+          .to(box, { autoAlpha: 1, scale: 1, ease: "power3.out", duration: 0.7 }, "<");
+      });
+      mm.add("(prefers-reduced-motion: reduce)", () => {
+        gsap.set(text, { autoAlpha: 0 });
+        gsap.set(box, { autoAlpha: 1, scale: 1 });
+        gsap.set(runway, { height: "auto" });
+      });
+    },
+    { scope: root },
+  );
+
+  return (
+    <div ref={root} data-section-scene>
+      <div
+        data-gm-runway
+        className="relative flex h-screen w-full items-center justify-center overflow-hidden"
+      >
+        {/* the "Here's the gap" bars/title SVG, centered */}
+        <div data-gm-text className="pointer-events-none absolute px-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/case-study/heres-the-gap.svg"
+            alt={heading}
+            className="mx-auto h-auto w-full max-w-[620px]"
+          />
+        </div>
+        {/* the orange gap-conclusion box that fills the frame */}
+        <div data-gm-box className="absolute w-full max-w-[var(--lir-measure)] px-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt="The CEO whose building is on fire and the fire captain in the parking lot don't have a FlytBase account, don't know what FlytBase is — a phone in one hand, a radio in the other, and they need answers now."
+            className="mx-auto h-auto w-full rounded-[21px]"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── GapReveal — the orange "gap conclusion" card, revealed with a spring-in
+   (scale + rise + a soft orange glow that pulses on arrival). Reduced motion:
+   it simply appears. ─────────────────────────────────────────────────────── */
+function GapReveal({ src }: { src: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      const el = ref.current;
+      if (!el) return;
+      const card = el.querySelector<HTMLElement>("[data-gap-card]");
+      const glow = el.querySelector<HTMLElement>("[data-gap-glow]");
+      if (!card) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.set(card, { autoAlpha: 0, y: 60, scale: 0.94 });
+        if (glow) gsap.set(glow, { autoAlpha: 0, scale: 0.6 });
+        const tl = gsap.timeline({
+          scrollTrigger: { trigger: el, start: "top 80%" },
+        });
+        tl.to(card, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          duration: 0.9,
+          ease: "back.out(1.5)",
+        });
+        if (glow)
+          tl.to(
+            glow,
+            { autoAlpha: 1, scale: 1.1, duration: 0.7, ease: "power2.out" },
+            0.1,
+          ).to(glow, {
+            autoAlpha: 0.55,
+            scale: 1,
+            duration: 1.2,
+            ease: "sine.inOut",
+          });
+      });
+      mm.add("(prefers-reduced-motion: reduce)", () => {
+        gsap.set(card, { autoAlpha: 1, y: 0, scale: 1 });
+      });
+    },
+    { scope: ref },
+  );
+
+  return (
+    <div ref={ref} className="relative py-6">
+      {/* soft orange bloom behind the card */}
+      <div
+        data-gap-glow
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-0 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(60% 60% at 50% 50%, rgb(var(--color-accent) / 0.45), transparent 70%)",
+        }}
+      />
+      <div data-gap-card className="relative z-10 will-change-[transform,opacity]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="The CEO whose building is on fire and the fire captain in the parking lot don't have a FlytBase account, don't know what FlytBase is — a phone in one hand, a radio in the other, and they need answers now."
+          className="mx-auto h-auto w-full max-w-[var(--lir-measure)] rounded-[21px]"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function LirCaseStudy({ data }: { data: LirDesign }) {
   const root = useRef<HTMLElement>(null);
@@ -56,6 +217,36 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
+
+      // ── CRITICAL: lazy-loaded images change layout height AFTER ScrollTrigger
+      //    computes all pin/flash/spawn/section positions. Without a refresh the
+      //    chapters collapse to their imageless height and later flashes (e.g.
+      //    FEATURES) land on top of earlier content (e.g. decisions 2/3 vanish).
+      //    Refresh once every image in the article has loaded, once fonts are
+      //    ready (Tanker changes heading widths), and after the load event.
+      const imgs = Array.from(
+        root.current?.querySelectorAll<HTMLImageElement>("img") ?? [],
+      );
+      let pending = imgs.filter((im) => !im.complete).length;
+      const onOne = () => {
+        pending -= 1;
+        if (pending <= 0) ScrollTrigger.refresh();
+      };
+      imgs.forEach((im) => {
+        if (im.complete) return;
+        im.addEventListener("load", onOne, { once: true });
+        im.addEventListener("error", onOne, { once: true });
+      });
+      if (typeof document !== "undefined" && document.fonts?.ready) {
+        document.fonts.ready.then(() => ScrollTrigger.refresh());
+      }
+      if (typeof window !== "undefined") {
+        if (document.readyState === "complete") {
+          requestAnimationFrame(() => ScrollTrigger.refresh());
+        } else {
+          window.addEventListener("load", () => ScrollTrigger.refresh(), { once: true });
+        }
+      }
 
       // ── Thumbnail intro: the cover is fixed BEHIND the page (z-0) and never
       //    fades. The page content (z-10, opaque bg) rises over it as you scroll
@@ -186,8 +377,8 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               <ArrowLeft size={16} /> {data.backLabel}
             </Link>
 
-            {/* overview meta card — white fill, hairline border (Figma), ~2/3 scale */}
-            <div className="mt-8 rounded-[10px] border border-[#dcdcdc] bg-white p-3.5">
+            {/* overview meta card — lifted dark surface, faint white hairline */}
+            <div className="mt-8 rounded-[10px] border border-white/12 bg-surface p-3.5">
               <dl className="space-y-1.5">
                 {data.meta.map((m) => (
                   <div
@@ -205,10 +396,10 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </dl>
             </div>
 
-            {/* contents nav — white fill, hairline border (Figma), ~2/3 scale */}
+            {/* contents nav — lifted dark surface, faint white hairline */}
             <nav
               aria-label="Contents"
-              className="mt-3 rounded-[10px] border border-[#dcdcdc] bg-white px-3.5 py-4"
+              className="mt-3 rounded-[10px] border border-white/12 bg-surface px-3.5 py-4"
             >
               <p className="text-[length:var(--lir-rail-nav)] font-semibold uppercase tracking-wide text-fg">
                 Contents
@@ -220,10 +411,10 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                       href={`#${c.id ?? "overview"}`}
                       data-toc-link
                       data-target={c.id ?? "overview"}
-                      className="group flex items-baseline gap-2 text-[length:var(--lir-rail-nav)] text-[#636363] transition-colors data-[active]:text-accent hover:text-fg"
+                      className="group flex items-baseline gap-2 text-[length:var(--lir-rail-nav)] text-muted transition-colors data-[active]:text-accent hover:text-fg"
                     >
                       {c.n && (
-                        <span className="w-3.5 tabular-nums text-[#636363] group-data-[active]:text-accent">
+                        <span className="w-3.5 tabular-nums text-muted group-data-[active]:text-accent">
                           {c.n}
                         </span>
                       )}
@@ -304,17 +495,33 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </p>
             </Reveal>
 
-            {/* Features shipped — closes the Overview (label + capability note) */}
-            <Reveal className="mt-20">
-              <p className="text-[length:var(--lir-eyebrow)] font-medium text-accent">
-                Features shipped
-              </p>
-              <div className="mt-6 max-w-[var(--lir-measure)]">
-                <OutlineNote>
-                  Live drone feeds, a shared map, and real-time annotation for
-                  emergency responders who&rsquo;ve never seen the platform — no
-                  account, no install, no training.
-                </OutlineNote>
+            {/* Demo video — closes the Overview. A real demo video drops into
+                this 16:9 placeholder frame later. */}
+            <Reveal className="mt-16 max-w-[var(--lir-measure)]">
+              <div
+                className="relative flex items-center justify-center overflow-hidden rounded-[var(--radius-lg)] border border-white/12 bg-surface-2"
+                style={{ aspectRatio: "16 / 9" }}
+              >
+                <div
+                  aria-hidden
+                  className="absolute inset-0 opacity-[0.5]"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(rgb(var(--color-fg) / 0.10) 1px, transparent 1px)",
+                    backgroundSize: "22px 22px",
+                  }}
+                />
+                <div className="relative flex flex-col items-center gap-3 text-center">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/15 text-accent">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </span>
+                  <p className="max-w-[40ch] text-[13px] text-muted">
+                    Demo video — a 60-second walkthrough of Live Incident
+                    Response in a real session.
+                  </p>
+                </div>
               </div>
             </Reveal>
 
@@ -330,7 +537,7 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
             </div>
 
             {/* close */}
-            <Reveal className="mt-20 border-t border-border pt-10">
+            <Reveal className="mt-20 border-t border-white/12 pt-10">
               <p className="text-[var(--lir-label)] font-bold uppercase tracking-widest text-faint">
                 End of case study
               </p>
@@ -354,120 +561,138 @@ function SectionRenderer({
   section: Section;
   nextFig: () => string;
 }) {
-  // Chapters wired to the flash transition: the Tanker title fills the viewport
-  // (scrubbed) then disappears, and the prose blocks spawn in scrubbed.
-  if (section.kind === "prose" && CHAPTER_IDS.has(section.id)) {
+  const isChapter = CHAPTER_IDS.has(section.id);
+
+  // Chapter: the Tanker title fills the viewport (scrubbed) then disappears,
+  // and each content block spawns in scrubbed as it arrives.
+  if (isChapter) {
     return (
       <Chapter id={section.id} title={section.heading}>
-        <ProseBody blocks={section.blocks} nextFig={nextFig} spawn />
+        <SectionBody section={section} nextFig={nextFig} spawn />
       </Chapter>
     );
   }
 
   return (
-    <section
-      id={section.id}
-      data-section
-      className="scroll-mt-28 pt-24"
-    >
-      {/* big Tanker blue heading */}
+    <section id={section.id} data-section className="scroll-mt-28 pt-24">
       <h2
         data-heading
         className="display text-[length:var(--lir-h-section)] uppercase text-accent"
       >
         {section.heading}
       </h2>
-
       <div className="mt-7">
-        {section.kind === "prose" && (
-          <ProseBody blocks={section.blocks} nextFig={nextFig} />
-        )}
-
-        {section.kind === "decisions" && (
-          <>
-            {section.intro && (
-              <Reveal>
-                <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
-                  {section.intro}
-                </p>
-              </Reveal>
-            )}
-            <div className="mt-12 space-y-16">
-              {section.clusters.map((c) => (
-                <Reveal key={c.n}>
-                  <DecisionCluster {...c} />
-                  {c.media?.map((slot) => (
-                    <div key={slot.id} className="mt-6">
-                      <Figure slot={slot} fig={nextFig()} />
-                    </div>
-                  ))}
-                </Reveal>
-              ))}
-            </div>
-          </>
-        )}
-
-        {section.kind === "features" && (
-          <div className="space-y-24">
-            {section.features.map((f) => (
-              <Reveal key={f.title}>
-                <h3 className="max-w-[24ch] text-[length:var(--lir-lede)] font-bold leading-tight tracking-[-0.01em] text-fg">
-                  {f.title}
-                </h3>
-                {f.constraint && (
-                  <div className="mt-5 max-w-[var(--lir-measure)]">
-                    <p className="text-[var(--lir-label)] font-bold uppercase tracking-widest text-accent">
-                      {f.constraintLabel}
-                    </p>
-                    <p className="mt-1.5 text-[var(--lir-body-sm)] leading-relaxed text-muted">
-                      {f.constraint}
-                    </p>
-                  </div>
-                )}
-                <p className="mt-5 max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-fg/80">
-                  {f.body}
-                </p>
-                <div className="mt-8 grid gap-6 sm:grid-cols-2">
-                  {f.media.map((slot) => (
-                    <Figure key={slot.id} slot={slot} fig={nextFig()} ratio="16 / 10" />
-                  ))}
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        )}
-
-        {section.kind === "impact" && (
-          <>
-            <Reveal>
-              <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-lede)] font-medium text-fg">
-                {section.lede}
-              </p>
-            </Reveal>
-            <Reveal className="mt-10">
-              <Figure slot={section.dashboard} fig={nextFig()} ratio="16 / 8" />
-              <p className="mt-4 max-w-[var(--lir-measure)] text-[var(--lir-body-sm)] leading-relaxed text-muted">
-                {section.dashboardCaption}
-              </p>
-            </Reveal>
-            <Reveal className="mt-14">
-              <Figure slot={section.growth} fig={nextFig()} ratio="16 / 7" />
-              <p className="mt-4 max-w-[var(--lir-measure)] text-[var(--lir-body-sm)] leading-relaxed text-muted">
-                {section.growthCaption}
-              </p>
-            </Reveal>
-            <Reveal className="mt-16">
-              <p className="max-w-[28ch] text-[length:var(--lir-headline)] font-extrabold leading-[1.05] tracking-[-0.01em] text-fg">
-                {section.closer}
-              </p>
-              <div className="mt-8">
-                <Figure slot={section.closerMedia} fig={nextFig()} ratio="16 / 9" />
-              </div>
-            </Reveal>
-          </>
-        )}
+        <SectionBody section={section} nextFig={nextFig} />
       </div>
     </section>
+  );
+}
+
+/* ── Section body — the content of a section, revealed either play-once
+   (<Reveal>) or scrubbed inside a chapter (<Spawn>). ─────────────────────── */
+function SectionBody({
+  section,
+  nextFig,
+  spawn = false,
+}: {
+  section: Section;
+  nextFig: () => string;
+  spawn?: boolean;
+}) {
+  // wrap a block: scrubbed <Spawn> inside a chapter, else play-once <Reveal>.
+  // A helper CALL (not a component) so it isn't re-created every render.
+  const w = (children: ReactNode, className?: string, key?: Key) =>
+    spawn ? (
+      <Spawn key={key} className={className}>
+        {children}
+      </Spawn>
+    ) : (
+      <Reveal key={key} className={className}>
+        {children}
+      </Reveal>
+    );
+
+  if (section.kind === "prose") {
+    return <ProseBody blocks={section.blocks} nextFig={nextFig} spawn={spawn} />;
+  }
+
+  if (section.kind === "decisions") {
+    return (
+      <>
+        {section.intro &&
+          w(
+            <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
+              {section.intro}
+            </p>,
+          )}
+        <div className="mt-12 space-y-16">
+          {/* DecisionCluster owns its own bounded map grid (Figma 239:27) — do
+              NOT also render c.media here or the images render twice/full-scale. */}
+          {section.clusters.map((c) => w(<DecisionCluster {...c} />, undefined, c.n))}
+        </div>
+      </>
+    );
+  }
+
+  if (section.kind === "features") {
+    return (
+      <div className="space-y-28">
+        {section.features.map((f) =>
+          w(
+            <FeatureRow
+              tagline={f.tagline}
+              title={f.title}
+              body={f.body}
+              body2={f.body2}
+              textSide={f.textSide}
+              media={f.media}
+            />,
+            undefined,
+            f.title,
+          ),
+        )}
+      </div>
+    );
+  }
+
+  // impact
+  return (
+    <>
+      {w(
+        <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-lede)] font-medium text-fg">
+          {section.lede}
+        </p>,
+      )}
+      {w(
+        <>
+          <Figure slot={section.dashboard} fig={nextFig()} ratio="16 / 8" />
+          <p className="mt-4 max-w-[var(--lir-measure)] text-[var(--lir-body-sm)] leading-relaxed text-muted">
+            {section.dashboardCaption}
+          </p>
+        </>,
+        "mt-10",
+      )}
+      {w(
+        <>
+          <Figure slot={section.growth} fig={nextFig()} ratio="16 / 7" />
+          <p className="mt-4 max-w-[var(--lir-measure)] text-[var(--lir-body-sm)] leading-relaxed text-muted">
+            {section.growthCaption}
+          </p>
+        </>,
+        "mt-14",
+      )}
+      {w(
+        <>
+          <p className="max-w-[28ch] text-[length:var(--lir-headline)] font-extrabold leading-[1.05] tracking-[-0.01em] text-fg">
+            {section.closer}
+          </p>
+          <div className="mt-8">
+            <Figure slot={section.closerMedia} fig={nextFig()} ratio="16 / 9" />
+          </div>
+        </>,
+        "mt-16",
+      )}
+    </>
   );
 }
 
@@ -519,7 +744,7 @@ function ProseBody({
                   alt={b.alt}
                   className="mx-auto h-auto w-full"
                   style={{ maxWidth: b.maxW ? `${b.maxW}px` : "100%" }}
-                  loading="lazy"
+                  loading="eager"
                 />
               </W>
             );
@@ -534,7 +759,7 @@ function ProseBody({
           case "p":
             return (
               <W key={i}>
-                <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-fg/80">
+                <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
                   {b.text}
                 </p>
               </W>
@@ -568,7 +793,7 @@ function ProseBody({
             // that the Chapter's GSAP pins + scrubs.) Wide → ~2 lines.
             return (
               <FlashPanel key={i}>
-                <span className="max-w-[60ch] text-center text-[clamp(1.4rem,0.9rem+1.9vw,2.3rem)] font-extrabold leading-[1.2] tracking-[-0.01em] text-balance text-[#636363]">
+                <span className="max-w-[60ch] text-center text-[clamp(1.4rem,0.9rem+1.9vw,2.3rem)] font-extrabold leading-[1.2] tracking-[-0.01em] text-balance text-muted">
                   {b.text}
                 </span>
               </FlashPanel>
@@ -589,9 +814,9 @@ function ProseBody({
                   src={b.slot.src}
                   alt={b.slot.label}
                   className="mx-auto h-auto w-full rounded-[6px]"
-                  loading="lazy"
+                  loading="eager"
                 />
-                <p className="mt-6 text-center text-[length:var(--lir-body)] leading-relaxed text-fg/80">
+                <p className="mt-6 text-center text-[length:var(--lir-body)] leading-relaxed text-muted">
                   {b.caption}
                 </p>
               </W>
@@ -613,10 +838,51 @@ function ProseBody({
                 />
               </W>
             );
+          case "gapConclusion":
+            // the orange gap-conclusion card (copy baked into the SVG) — follows
+            // "Here's the gap". Given its own spring-in animation via GapReveal.
+            return (
+              <GapReveal key={i} src={b.src} />
+            );
+          case "gapMorph":
+            // "Here's the gap" text → morphs full-viewport into the orange box.
+            return <GapMorph key={i} heading={b.heading} src={b.src} />;
+          case "video":
+            // 16:9 video placeholder frame — a real demo video drops in here.
+            return (
+              <W key={i} className="max-w-[var(--lir-measure)]">
+                <div
+                  className="relative flex items-center justify-center overflow-hidden rounded-[var(--radius-lg)] border border-white/12 bg-surface-2"
+                  style={{ aspectRatio: "16 / 9" }}
+                >
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-[0.5]"
+                    style={{
+                      backgroundImage:
+                        "radial-gradient(rgb(var(--color-fg) / 0.10) 1px, transparent 1px)",
+                      backgroundSize: "22px 22px",
+                    }}
+                  />
+                  <div className="relative flex flex-col items-center gap-3 text-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </span>
+                    <p className="max-w-[40ch] text-[13px] text-muted">{b.label}</p>
+                  </div>
+                </div>
+              </W>
+            );
+          case "sceneBreak":
+            // a full-viewport beat so the NEXT block group scrubs into an empty
+            // frame — gives a paragraph group its own scene inside a chapter.
+            return <div key={i} aria-hidden className="h-[70vh]" />;
           case "centerP":
             return (
               <W key={i}>
-                <p className="text-center text-[length:var(--lir-body)] leading-relaxed text-fg/80">
+                <p className="text-center text-[length:var(--lir-body)] leading-relaxed text-muted">
                   {b.text}
                 </p>
               </W>
@@ -656,13 +922,117 @@ function ProseBody({
                 ))}
               </div>
             );
+          case "heading":
+            // bold white subsection title (2-line, tight) — Figma 229:3.
+            return (
+              <W key={i} className="mt-4">
+                <h3 className="max-w-[22ch] text-[clamp(1.5rem,1.1rem+1.4vw,2rem)] font-bold leading-[1.1] tracking-[-0.01em] text-fg">
+                  {b.text}
+                </h3>
+              </W>
+            );
+          case "subhead":
+            // smaller white subhead (e.g. "Confused?", "What This Achieved").
+            return (
+              <W key={i}>
+                <h4 className="text-[length:var(--lir-lede)] font-semibold text-fg">
+                  {b.text}
+                </h4>
+              </W>
+            );
+          case "beforeAfter":
+            return (
+              <W key={i} className="max-w-[var(--lir-measure)]">
+                <BeforeAfter before={b.before} after={b.after} caption={b.caption} />
+              </W>
+            );
+          case "splitRow": {
+            // asymmetric editorial row: prose on one side, a bare image on the
+            // other. On mobile it stacks (image always second). Vertical
+            // centering so the image sits against the text block (Figma 229:3).
+            const imgFirst = b.side === "left";
+            const textCol = (
+              <div className="flex flex-col gap-5">
+                {b.body.map((mb, j) => {
+                  switch (mb.k) {
+                    case "heading":
+                      return (
+                        <h3
+                          key={j}
+                          className="max-w-[22ch] text-[clamp(1.4rem,1.05rem+1.2vw,1.9rem)] font-bold leading-[1.12] tracking-[-0.01em] text-fg"
+                        >
+                          {mb.text}
+                        </h3>
+                      );
+                    case "subhead":
+                      return (
+                        <h4
+                          key={j}
+                          className="mt-3 text-[length:var(--lir-lede)] font-semibold text-fg"
+                        >
+                          {mb.text}
+                        </h4>
+                      );
+                    case "richP":
+                      return (
+                        <p
+                          key={j}
+                          className="text-[length:var(--lir-body)] leading-relaxed text-muted"
+                        >
+                          {mb.spans.map((s, k) => (
+                            <span key={k} className={s.bold ? "font-semibold text-fg" : ""}>
+                              {s.text}
+                            </span>
+                          ))}
+                        </p>
+                      );
+                    default:
+                      return (
+                        <p
+                          key={j}
+                          className="text-[length:var(--lir-body)] leading-relaxed text-muted"
+                        >
+                          {mb.text}
+                        </p>
+                      );
+                  }
+                })}
+              </div>
+            );
+            const imgCol = (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={b.img}
+                alt={b.imgAlt}
+                className="h-auto w-full"
+                loading="eager"
+              />
+            );
+            return (
+              <W key={i} className="mt-4">
+                <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-14">
+                  {imgFirst ? (
+                    <>
+                      <div className="order-2 lg:order-1">{imgCol}</div>
+                      <div className="order-1 lg:order-2">{textCol}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="order-1">{textCol}</div>
+                      <div className="order-2">{imgCol}</div>
+                    </>
+                  )}
+                </div>
+              </W>
+            );
+          }
           case "designMd":
             return (
               <Reveal key={i}>
                 <h3 className="text-[length:var(--lir-lede)] font-bold text-fg">
                   How I Got AI to Follow Our Design System
                 </h3>
-                <p className="mt-4 max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-fg/80">
+                <p className="mt-4 max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
                   {b.body}
                 </p>
                 <div className="mt-8 grid gap-6 sm:grid-cols-2">

@@ -1,14 +1,15 @@
 import { Hero } from "@/components/sections/Hero";
-import { WorkGallery } from "@/components/sections/WorkGallery";
+import { WorksIndexStatic } from "@/components/sections/WorksJourney";
 
 export default async function HomePage() {
-  // WorkGallery falls back to placeholder projects while Sanity is empty;
-  // it'll take a FEATURED_PROJECTS_QUERY result once content exists.
-  // Contact lives in the full-viewport Footer finale (site layout) — /#contact.
+  // The work showcase lives INSIDE the hero's pinned journey now (project-node
+  // beats over the tunnel — WorksJourney.tsx). WorksIndexStatic is the
+  // reduced-motion fallback so the case studies stay reachable without the
+  // scrub. Contact lives in the full-viewport Footer finale (site layout).
   return (
     <>
       <Hero />
-      <WorkGallery />
+      <WorksIndexStatic />
     </>
   );
 }

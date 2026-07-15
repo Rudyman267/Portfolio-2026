@@ -203,12 +203,82 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 14)
+## 6. Current State (as of Session 15)
 
-**Status (as of Session 14): NAVIGATION + ABOUT-INTRO POLISH SHIPPED. Session 14 fixed how the
-site loads between pages and reworked the About opening. See "NAV + LOAD BEHAVIOUR — Session 14"
-below for the model that is now LOCKED. Everything from Session 13 (About page, LIR study) is
-still live. Session 14 = one commit on top.**
+**Status (as of Session 15): HOME "WORKS JOURNEY" + LIR DARK-MODE REBUILD SHIPPED. Two big bodies
+of work this session (see "WORKS JOURNEY — Session 15" and "LIR DARK REBUILD — Session 15" below).
+Prod `npm run build` clean (29.6s Turbopack, 13 pages incl. /work/live-incident-response).
+Everything from Session 14 (nav/about) still live. All committed on a Session-15 branch.**
+
+### WORKS JOURNEY — Session 15 (home work showcase moved INTO the hero tunnel)
+The white horizontal "MY WORKS." gallery is GONE (`WorkGallery.tsx` deleted; `page.tsx` now renders
+`<Hero/>` + `<WorksIndexStatic/>` reduced-motion fallback). The work showcase now happens INSIDE the
+hero's pinned dark tunnel — the circle-wipe is gone too.
+- **New files:** `src/components/sections/WorksJourney.tsx` (the beats + ticker + static fallback),
+  `worksAnchor.ts` (bridge so `/#work` glides to the in-pin chapter offset — no `#work` element on
+  the motion path), `hero3d/WorksNode.tsx` (the real 3D energy-cuboid mesh), `hero3d/pathMath.ts`
+  (THREE-free `pathOffset`/`smoothstep` mirror of the shader path, so DOM riders bend along the
+  same snake path).
+- **How it works:** after phrase 3 recedes, "HERE'S SOME OF MY WORK" rises, then 5 project beats
+  play out on the SAME pinned scrub. Each beat: a real orange energy CUBOID (`WorksProjectNode`,
+  same RoundedBox + fresnel/hot-core shader as the background `EnergyNodes`, a camera child, gets
+  the scene's bloom/DoF for free) flies up the snake path via `heroScroll.worksNode` (camera-space
+  x/y/z the DOM ticker publishes each frame), then morphs into the white project WINDOW (DOM frame
+  crossfades in as the cuboid burns off). Window = real `<Link>` to the case study. LIR shows its
+  real cover; others clean white (add to `THUMB_SRC`). On the video fallback (no WebGL2), the DOM
+  orange-skin flies the whole way instead (`heroScroll.sceneLive` gate).
+- **Bridge (`heroScroll.ts`) gained:** `travel` (SceneController writes eased uTravel back for DOM
+  riders), `sceneLive`, `worksNode`. Hero pin length now scales with `scrub.duration()` so the
+  tunnel's world-units-per-scroll stays constant however many beats exist. Nav + Footer `/#work`
+  call `scrollToWorks()`. **NOT felt on real GPU yet** (headless can't run WebGL) — dials are at the
+  top of `WorksJourney.tsx` (FLIGHT_H, SCATTER, NODE_D_FAR, beat rhythm SPAWN/MORPH/HOLD/EXIT).
+- **`npm run dev:lir`** added (`scripts/dev-open.mjs`) — starts dev + opens straight to the LIR
+  route so only that route compiles (skips the heavy hero compile). Next 16 removed `next dev
+  --open`, so the wrapper opens the browser itself.
+
+### LIR DARK REBUILD — Session 15 (the case study, now DARK + real assets + scroll scenes)
+The LIR case study was flipped from the light/editorial build to **DARK** and wired with the user's
+real Figma exports, per-section scroll scenes, and Figma-faithful layouts (nodes 229:3, 239:27,
+240:42). It supersedes the Session-12 light look; `lirDesign.ts` + `LirCaseStudy.tsx` + `lirBlocks.tsx`
++ `Chapter.tsx` are the live files.
+- **Dark palette (`.lir` scope in globals.css):** bg `#06080c` (the About/hero canvas), headings
+  `#FFFFFF`, body `#B4B4B4` (`--color-muted`), accent ORANGE `#FF8D3B`, surfaces `#0d1016`, white
+  hairlines via alpha. Type scale/geometry tokens UNCHANGED — only the palette flipped. DroneMark
+  sparkle → orange, 4 spokes → white. FlytBase logo sits on a white chip (dark logo vanished).
+- **All real assets wired** (in `public/case-study/`, sources in gitignored `case-study-assets/
+  flytbase-project-1/`): fresh dark drone/dock diagrams; `user-flow.svg`/`stakeholder-actions.svg`
+  (persona `roles.svg` REMOVED — it duplicated the "matters" list); design-decision card SVGs
+  (`dd{1,2,3}-{tempting,gaveup,shortcut,why}.svg`, copy baked in) + screenshots (`dd*-img-*`);
+  `features-1..7`, `impact-1..3`, `design-system`/`ascii-layout`/`before-ui`, `gap-conclusion.svg`.
+  **All images render BARE** (no rounded embed frame, no crop) — `Figure` shows a real `src` as a
+  plain `<img>`; only src-less placeholder slots keep the dashed box.
+- **Every numbered section is now a CHAPTER** (`CHAPTER_IDS` = context/problem/reframe/process/
+  decisions/features/impact) — full-viewport Tanker title FLASH then content spawns scrubbed.
+- **Scene splits:** Problem = quoteFlash → warehouse image → "Here's the gap" bars → orange
+  gap-conclusion box (plain stacked blocks, NOT the pinned `gapMorph` — that overlapped; `GapMorph`
+  exists but is unused). Reframe split via `sceneBreak` blocks (intro trio / matters list / audit).
+  New block types: `heading`, `subhead`, `beforeAfter`, `splitRow`, `gapConclusion`, `gapMorph`,
+  `video`, `sceneBreak`. "Features shipped" overview note → a 16:9 VIDEO placeholder frame.
+- **Process design.md subsection (Figma 240:42-ish):** asymmetric `splitRow`s (text one side, bare
+  image the other) + a **before/after drag SLIDER** (`BeforeAfter`, Before UI → shipped screen,
+  pointer-drag wipe + keyboard range).
+- **Design decisions (Figma 239:27):** `DecisionCluster` renders the card SVGs (tempting+counter
+  row → wide "why"/"what it cost me") + a `mediaRows` image grid (explicit `cols` per row — e.g.
+  dd3 concludes with the **3 phone shots 3-up** + 2 persona figures). dd3 card order = "Why I gave
+  it up" then "What it cost me".
+- **Features (Figma 240:42):** each feature = a cream `#FFE2B1` tagline pill (full width) + a
+  two-col row, TEXT sticky/fixed beside the images. 2+ images = a horizontal scroll-snap strip
+  ("one after another"); 1 image = static. Session-creation split into two features.
+- **⚠️ CHAPTER SEGMENTATION — two bugs fixed, keep both fixes (`Chapter.tsx`):**
+  1. **Flash ghosting** — the flash title bled through neighbouring content. Fix: each flash has an
+     opaque **`fixed inset-0` backdrop** (viewport-covering) toggled SOLID for the whole pin via
+     `onToggle`, + a **45vh trailing spacer** after each chapter's content. Verified 0 overlaps.
+  2. **Sections collapsing / next flash eating prior content** (decisions 2/3 vanished under the
+     FEATURES flash) — ROOT CAUSE was `loading="lazy"` images: below-fold images had no height when
+     ScrollTrigger measured all pin/flash/section positions, so chapters collapsed and later flashes
+     landed too early. Fix: case-study images switched to **`loading="eager"`** + a
+     **`ScrollTrigger.refresh()`** on all-images-loaded / `fonts.ready` / window `load` in the
+     `LirCaseStudy` useGSAP. Verified: decision clusters ~1550px apart, FEATURES after all of them.
 
 ### NAV + LOAD BEHAVIOUR — Session 14 (LOCKED — do not re-litigate)
 The load/navigation model, decided after several failed SPA attempts:
@@ -735,24 +805,29 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
    in gitignored `the-other-hand project/`; DO NOT commit it — it's a separate Vite app).
    Also `#play` + `#resume` nav anchors still have no destinations.
-1. **USER TO FEEL THE ABOUT PAGE + NAV FLOW ON GPU** — whole journey verified only in
-   software-rendered headless Chrome. Dials documented inline in `AboutIntro.tsx` (timeline unit
-   positions, pin length **1050%**, scrub 0.5, photo-shuffle 900ms, rope-unroll windows; auto-play
-   intro timeline separate from the scrub). Also feel the pan-flip nav transition on real clicks.
-2. **CONTINUE THE LIR CHAPTER-BY-CHAPTER BUILD (user drives, section by section).** Chapters wired so far:
-   Context, Problem, Reframe (flash transition + spawns). **Next up: "the shift" (04) → process (05) →
-   solution (06) → trade-offs (07) → Impact (08) → reflection (09).** To chapter-ize one: add its id to
-   `CHAPTER_IDS` in `LirCaseStudy.tsx`. NOTE the 9 TOC entries currently map to FEWER real sections
-   (the-shift→process, solution/trade-offs→decisions, reflection→impact share targets) — user may want
-   distinct sections per entry; ask before splitting. The old dark data file
-   (`liveIncidentResponse.ts`) still exists on disk but is UNUSED — real content is in `lirDesign.ts`.
-   a. **Remaining real image assets** the user still needs to supply/place (map/mobile/annotate/
-      translation/session-create/PostHog dashboards) — see the punch-list at the bottom of
-      `lirDesign.ts`; some are still labelled placeholders via `Figure`.
-   b. **Derive the 4 thinner studies** later (Flytbase 2/3, ORO, self) as their own `lirDesign`-shaped
-      files in a `STUDIES` registry. Must name employer.
+1. **USER TO FEEL ON REAL GPU** — everything below verified only in software-rendered headless
+   Chrome; feel it on the actual GPU:
+   a. **Home WORKS JOURNEY** — the 5 project-node beats (energy cuboid flying the snake path →
+      morph into the white window). Dials at the top of `WorksJourney.tsx` (FLIGHT_H, SCATTER,
+      NODE_D_FAR, SPAWN/MORPH/HOLD/EXIT) + the `uGlow` ramp in `WorksNode.tsx`. Check the flight
+      reads as "one node glows and comes forward", the morph crossfade aligns, and the pin length
+      feels right. Confirm image slots land in the right beats.
+   b. **About page + nav flow** — dials inline in `AboutIntro.tsx` (pin 1050%, scrub 0.5, etc.).
+   c. **LIR case study** — the chapter flashes, the before/after slider drag, the features
+      horizontal image strips. Confirm no section overlap on a real GPU (the lazy-load fix should
+      hold, but the bug was GPU-timing-sensitive).
+2. **LIR — remaining polish (user drives).** The DARK rebuild + real assets + scroll scenes are
+   DONE (see Current State §6 "LIR DARK REBUILD"). Left:
+   a. **Fill the demo VIDEO** — the overview has a 16:9 video-placeholder frame (after the build
+      statement) awaiting the real walkthrough video.
+   b. **Verify per-image placement** — features (7 imgs / 3-4 features) and dd3 (5 imgs) were mapped
+      by best guess of order; user to confirm none land in the wrong slot.
+   c. **Derive the 4 thinner studies** later (Flytbase 2/3, ORO, self) as their own `lirDesign`-shaped
+      files in the `STUDIES` registry. Must name employer.
    d. **Later:** migrate to Sanity (add `sectionHeading` block to `richContent`, `npm run typegen`)
-      when the CMS is populated — the local data files are Sanity-shaped for this.
+      when the CMS is populated — the local data files are Sanity-shaped for this. NOTE the old dark
+      data file `liveIncidentResponse.ts` still exists on disk but is UNUSED; the unused inline
+      diagram components (`PersonaSplitDiagram` etc.) + the unused `GapMorph` can be pruned.
 2. **Housekeeping (security):** user should REVOKE the tokens pasted in Session 8 (GitHub PATs +
    Vercel `vcp_` tokens + old Claude-Desktop `ghp_315k...`); delete the old blocked Vercel project on
    the `juniorscrolls2017-8889` account. **Add Sanity CORS** for `portfolio-2026-psi-flax.vercel.app`
@@ -768,6 +843,27 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 15 — 2026-07-14 → 07-16
+**Two big bodies of work; details in Current State §6 ("WORKS JOURNEY" + "LIR DARK REBUILD").**
+1. **Home works journey** — deleted the white horizontal `WorkGallery`; the work showcase now plays
+   INSIDE the hero tunnel as 5 project-node beats (a real 3D energy cuboid flies the snake path then
+   morphs into a white case-study window). New: `WorksJourney.tsx`, `worksAnchor.ts`,
+   `hero3d/WorksNode.tsx`, `hero3d/pathMath.ts`; `heroScroll` bridge extended; Hero pin scales with
+   beat count; `/#work` glides into the pin. Added `npm run dev:lir` (`scripts/dev-open.mjs`).
+2. **LIR dark-mode rebuild** — flipped the case study to DARK (`#06080c` / white / `#B4B4B4` /
+   orange `#FF8D3B`), wired ALL the user's real Figma exports (bare images, no frames), made every
+   numbered section a full-viewport chapter flash, added scene splits + new block types
+   (`beforeAfter` drag slider, `splitRow`, `heading`/`subhead`, `video`, `sceneBreak`,
+   `gapConclusion`), rebuilt decisions (card SVGs + `mediaRows` grid, dd3 = 3 phones 3-up + persona
+   figures) and features (cream tagline pills + sticky-text/scroll-strip rows) to Figma 229:3 /
+   239:27 / 240:42. **Fixed two chapter-segmentation bugs:** flash ghosting (opaque `fixed` backdrop
+   + trailing spacer) and sections collapsing under the next flash (root cause: `loading="lazy"` →
+   switched to eager + `ScrollTrigger.refresh()` on images-loaded/fonts-ready/load).
+- **Verified:** prod `npm run build` clean (29.6s, 13 pages). Iterated heavily via a raw-CDP
+  headless-Chrome harness (scratchpad `cap-*.mjs`) — dismiss the egg loader via the
+  `button[aria-label="Click to enter the site"]`; NOT felt on real GPU (see Next Steps §1).
+- **Ended:** dev server stopped; committed on a Session-15 branch. NOT pushed/deployed.
 
 ### Session 14 — 2026-07-14
 **Navigation + About-intro polish. One commit on top of `4fbf57c`.** Focused, iterative session

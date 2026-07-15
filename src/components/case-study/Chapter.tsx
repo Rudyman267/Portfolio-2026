@@ -18,17 +18,31 @@ import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 
 /** One pinned full-viewport flash: `content` holds on an empty screen while you
  *  scroll its runway, fading + scaling in then out. Use for chapter titles and
- *  in-chapter quote flashes alike. */
+ *  in-chapter quote flashes alike.
+ *
+ *  The flash sits on an OPAQUE page-colored backdrop at a high z-index, so while
+ *  it holds nothing behind or after it can ghost through; the backdrop fades
+ *  with the flash so the content underneath is revealed cleanly. */
 export function FlashPanel({ children }: { children: ReactNode }) {
   return (
     <div
       data-flash-runway
-      className="flex h-screen w-full items-center justify-center overflow-hidden"
+      className="relative flex h-screen w-full items-center justify-center overflow-hidden"
     >
+      {/* opaque FIXED backdrop — while the flash holds it covers the WHOLE
+          viewport (not just this runway box), so neither the previous chapter's
+          trailing content nor the next chapter's leading content can ever show
+          through or ghost. Toggled solid only while the flash pin is active. */}
+      <div
+        data-flash-bg
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[40] bg-bg"
+        style={{ opacity: 0, visibility: "hidden" }}
+      />
       <div
         data-flash
         aria-hidden
-        className="pointer-events-none flex items-center justify-center px-6"
+        className="pointer-events-none relative z-[41] flex items-center justify-center px-6"
       >
         {children}
       </div>
@@ -63,8 +77,13 @@ export function Chapter({
         );
         runways.forEach((runway) => {
           const flash = runway.querySelector<HTMLElement>("[data-flash]");
+          const bg = runway.querySelector<HTMLElement>("[data-flash-bg]");
           if (!flash) return;
           gsap.set(flash, { autoAlpha: 0, scale: 0.9 });
+          // backdrop is opaque for the WHOLE pin (set once, on enter/leave via
+          // toggle) so nothing behind the pinned flash can ever ghost through;
+          // only the flash text itself fades in/out.
+          if (bg) gsap.set(bg, { autoAlpha: 0 });
           gsap
             .timeline({
               scrollTrigger: {
@@ -74,9 +93,14 @@ export function Chapter({
                 scrub: true,
                 pin: runway,
                 anticipatePin: 1,
+                // hard on/off for the opaque backdrop at the pin edges — it is
+                // fully solid the entire time the flash scene owns the viewport.
+                onToggle: (self) => {
+                  if (bg) gsap.set(bg, { autoAlpha: self.isActive ? 1 : 0 });
+                },
               },
             })
-            .to(flash, { autoAlpha: 1, scale: 1, ease: "power1.out", duration: 0.42 })
+            .to(flash, { autoAlpha: 1, scale: 1, ease: "power1.out", duration: 0.42 }, 0)
             .to(flash, { autoAlpha: 1, duration: 0.16 })
             .to(flash, {
               autoAlpha: 0,
@@ -135,8 +159,16 @@ export function Chapter({
         </span>
       </FlashPanel>
 
+      {/* gap so the title flash fully clears before content spawns — prevents
+          the big title ghosting behind the first blocks */}
+      <div className="h-[30vh]" aria-hidden />
+
       {/* chapter content — flash panels + spawned blocks */}
       <div>{children}</div>
+
+      {/* trailing gap — the chapter's last content scrolls fully out before the
+          NEXT chapter's lead-in + title flash, so sections never overlap */}
+      <div className="h-[45vh]" aria-hidden />
     </section>
   );
 }

@@ -5,6 +5,7 @@ import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
+import { scrollToWorks } from "@/components/sections/worksAnchor";
 
 /** Path part of an href (drops any #hash), for same-route detection. */
 function pathOf(href: string) {
@@ -53,6 +54,11 @@ export function Nav({
               if (pathOf(item.href) !== pathname) {
                 e.preventDefault();
                 hardNavigate(item.href);
+              } else if (item.href === "/#work") {
+                // the works chapter lives INSIDE the hero pin — no #work
+                // element exists on the motion path; glide to its offset.
+                e.preventDefault();
+                scrollToWorks();
               }
               onNavigate?.();
             }}

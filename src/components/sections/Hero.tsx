@@ -7,8 +7,14 @@ import { useRef } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { HeroCanvas } from "@/components/hero3d/HeroCanvas";
 import { heroScroll } from "@/components/hero3d/heroScroll";
-import { gsap, useGSAP, ease } from "@/lib/gsap";
+import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
 import { LOADER_DONE_EVENT } from "@/components/motion/Loader";
+import {
+  WorksOverlay,
+  addWorksBeats,
+  createWorksTicker,
+} from "@/components/sections/WorksJourney";
+import { worksAnchor, scrollToWorks } from "@/components/sections/worksAnchor";
 
 // Hero scene tweak panel (🎛 FAB, incl. the Footer Glow group). PERMANENTLY
 // mounted but dev-gated: in `next dev` NODE_ENV==="development" so the panel
@@ -40,9 +46,16 @@ const HeroControls =
  *     phrase 2 ("I TURN IDEAS—INTO CODE") scrolls in and stay through phrase 3
  *     ("DESIGNING THE AGE OF INTELLIGENCE"). Blank at rest (no labels); the
  *     CASES/PLAYS panel content appears on hover only.
+ *  4. Works chapter (WorksJourney.tsx) — after phrase 3 recedes the SAME pin
+ *     keeps going: "HERE'S SOME OF MY WORK", then five project-node beats play
+ *     over the untouched tunnel (an orange energy node rides the snake path to
+ *     the lens and morphs into the white case-study window). The old white
+ *     horizontal gallery + circle wipe are gone; the pin hands off straight
+ *     into the dark footer.
  *
  * Reduced motion: no pin, no scrub — first phrase renders statically, curves
- * peek in via their CSS fallback, extra phrases stay display:none.
+ * peek in via their CSS fallback, extra phrases stay display:none, and the
+ * works chapter is served by WorksIndexStatic (page.tsx) instead.
  */
 
 const PHRASES: readonly (readonly string[])[] = [
@@ -216,10 +229,6 @@ export function Hero() {
         gsap.set(introsOf(0), { yPercent: 120 });
         if (items.length) gsap.set(items, { opacity: 0, y: 18 });
 
-        // circle wipe: centered via xPercent/yPercent (NOT the CSS translate,
-        // which GSAP's scale tween would clobber), hidden at scale 0.
-        gsap.set("[data-circle-wipe]", { xPercent: -50, yPercent: -50, scale: 0 });
-
         const reveal = () => {
           const tl = gsap.timeline();
           tl.to(introsOf(0), {
@@ -347,37 +356,11 @@ export function Hero() {
           gsap.set(p.querySelectorAll("[data-line]"), { yPercent: 120 });
         });
 
-        // Progress at which the curves have spawned. The scrub timeline is:
-        //   p1→2 (dur 1) + waves-in ("<") ... the waves finish early in the run.
-        // Total ≈ 4.4 units; the waves are present from ~0.9 → arm at 0.22 to
-        // cover the sliver appearing, with margin so phrase 1 never shows them.
-        const ARM_AT = 0.22;
-
+        // The timeline is built FIRST (phrases + works chapter), THEN pinned —
+        // ScrollTrigger.create below sizes the pin from the finished duration,
+        // keeping the original scroll-per-beat pacing however many beats exist.
         const scrub = gsap.timeline({
           defaults: { duration: 1, stagger: 0.08 },
-          scrollTrigger: {
-            trigger: root,
-            start: "top top",
-            // ends right as the circle finishes filling white — no dead white
-            // hold before the gallery takes over (was +=320%, which left ~1
-            // viewport of pinned full-white before unpin).
-            end: "+=235%",
-            pin: true,
-            scrub: 0.8,
-            anticipatePin: 1,
-            // hero is first on the page → refresh before the gallery pin so
-            // pin-spacing stacks in document order (higher number = first)
-            refreshPriority: 1,
-            // drive the 3D scene's travel along the snake path from the SAME
-            // scroll progress as the phrase cycle (see hero3d/heroScroll.ts),
-            // and arm the CASES/PLAYS curves only once they've spawned (~phrase
-            // 1→2). Progress-driven so it's correct at any scroll position and
-            // in both directions — including a scroll-back to the top.
-            onUpdate: (self) => {
-              heroScroll.progress = self.progress;
-              armCurves(self.progress >= ARM_AT);
-            },
-          },
         });
 
         // Every segment is an explicit fromTo (immediateRender off) so the
@@ -445,35 +428,94 @@ export function Hero() {
             "<0.35",
           )
           .to({}, { duration: 0.35 }) // brief hold on phrase 3
-          // phrase 3 recedes as the circle wipe swallows the screen to white
+          .addLabel("outro")
+          // phrase 3 recedes into the tunnel — the dark scene STAYS (no white
+          // wipe anymore); the works chapter takes the stage next
           .fromTo(
             linesOf(2),
             { yPercent: 0 },
             { yPercent: -40, opacity: 0, ease: "power2.in", immediateRender: false },
-            "circle",
+            "outro",
           )
+          // the CASES/PLAYS slivers withdraw so the project beats own the frame
           .fromTo(
-            "[data-circle-wipe]",
-            { scale: 0, xPercent: -50, yPercent: -50 },
-            {
-              // fills the viewport EXACTLY at the tween's end (pin unpin) — a
-              // 40vmax dot needs ~scale 4 to cover the screen; power2.in keeps
-              // it accelerating into fullness so there's no early full-white
-              // that then just sits there while the pin runs out.
-              scale: 4.2,
-              ease: "power2.in",
-              duration: 2.0,
-              immediateRender: false,
-            },
-            "circle",
+            waves,
+            { scaleX: REST_TIP },
+            { scaleX: 0, duration: 0.6, ease: "power2.in", immediateRender: false },
+            "outro",
           );
-        // (no trailing hold — hero unpins the instant white fills, so the gallery
-        //  assembly picks up immediately with no blank-white dead scroll)
+
+        // curves are hoverable only while their scene is on stage: from the
+        // phrase-1→2 spawn until the works chapter takes over.
+        const ARM_T = 1.27; // ≈ the old ARM_AT (0.22 × 5.75 timeline units)
+        const DISARM_T = scrub.labels["outro"] + 0.6;
+
+        // --- 3. works chapter — project nodes summoned over the tunnel ------
+        const { worksStart, drivers } = addWorksBeats(scrub, root);
+
+        // the nodes ride the SAME snake path as the tunnel instances, per
+        // frame (scroll flies them in; idle travel keeps them swaying)
+        const tick = createWorksTicker(drivers);
+        gsap.ticker.add(tick);
+
+        // Pin length: preserve the original scroll-per-timeline-unit (the old
+        // hero was 235% of viewport across 5.75 units), so the phrase pacing —
+        // and, via the progress scale in onUpdate, the tunnel's world-units-
+        // per-scroll — are IDENTICAL to the pre-works build.
+        const OLD_UNITS = 5.75;
+        const OLD_END_VH = 2.35;
+        const unitPx = () => (window.innerHeight * OLD_END_VH) / OLD_UNITS;
+
+        ScrollTrigger.create({
+          animation: scrub,
+          trigger: root,
+          start: "top top",
+          end: () => "+=" + Math.round(scrub.duration() * unitPx()),
+          pin: true,
+          scrub: 0.8,
+          anticipatePin: 1,
+          invalidateOnRefresh: true,
+          // hero is first on the page → refresh before any later pins so
+          // pin-spacing stacks in document order (higher number = first)
+          refreshPriority: 1,
+          // drive the 3D scene's travel along the snake path from the SAME
+          // scroll progress as the beats (see hero3d/heroScroll.ts). The
+          // duration/OLD_UNITS scale keeps world-units-per-scroll constant, so
+          // the tunnel feels exactly as before while the journey lasts longer.
+          // Progress-driven so it's correct at any scroll position and in both
+          // directions — including a scroll-back to the top.
+          onUpdate: (self) => {
+            heroScroll.progress = self.progress * (scrub.duration() / OLD_UNITS);
+            const t = self.progress * scrub.duration();
+            armCurves(t >= ARM_T && t < DISARM_T);
+          },
+          // /#work glides INTO the pin (no #work element exists on this path) —
+          // publish where the chapter intro finishes rising, refreshed with the
+          // pin geometry.
+          onRefresh: (self) => {
+            worksAnchor.y =
+              self.start +
+              ((worksStart + 0.9) / scrub.duration()) * (self.end - self.start);
+          },
+        });
+
+        // deep-link /#work: the browser can't hash-jump to a pinned beat, so
+        // glide there once the page is interactive (post-loader on cold loads).
+        const goWorks = () => requestAnimationFrame(() => scrollToWorks());
+        if (window.location.hash === "#work") {
+          if (document.body.classList.contains("is-loading")) {
+            window.addEventListener(LOADER_DONE_EVENT, goWorks, { once: true });
+          } else {
+            goWorks();
+          }
+        }
 
         return () => {
           window.removeEventListener(LOADER_DONE_EVENT, reveal);
+          window.removeEventListener(LOADER_DONE_EVENT, goWorks);
           cancelAnimationFrame(revealRaf1);
           cancelAnimationFrame(revealRaf2);
+          gsap.ticker.remove(tick);
           curveCleanups.forEach((fn) => fn());
         };
       });
@@ -499,16 +541,10 @@ export function Hero() {
         <CurvePanel key={c.title} curve={c} />
       ))}
 
-      {/* circle wipe — grows from center at the tail of the pin and floods the
-          screen white, handing off into the (white) WORK gallery below. Starts
-          as a 0-scale dot; the scrub timeline expands it. */}
-      <div
-        data-circle-wipe
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[40vmax] w-[40vmax] rounded-full bg-white"
-        style={{ willChange: "transform" }}
-      />
-
+      {/* works chapter — "HERE'S SOME OF MY WORK" + the five project-node
+          beats, summoned OVER the tunnel after the phrases (WorksJourney.tsx).
+          Placed after the curves in DOM so its windows paint above them. */}
+      <WorksOverlay />
 
       {/* content layer — centered headline block, coords/portfolio pinned */}
       <div className="relative z-10 flex flex-1 flex-col justify-center px-[var(--gutter)]">

@@ -19,6 +19,7 @@ import {
   EnergyNodes,
   Fragments,
 } from "@/components/hero3d/worldObjects";
+import { WorksProjectNode } from "@/components/hero3d/WorksNode";
 import { markHeroVideoReady } from "@/components/motion/heroReady";
 import { tweak, subscribeTweak, getRevision } from "@/components/hero3d/tweakConfig";
 
@@ -75,6 +76,10 @@ export default function Scene({ active }: { active: boolean }) {
       <Particles state={state} />
       <EnergyNodes state={state} />
       <Fragments state={state} />
+
+      {/* the works chapter's summoned project node — a real energy cuboid
+          driven by the DOM works ticker via heroScroll.worksNode */}
+      <WorksProjectNode state={state} />
 
       <PostFX />
     </Canvas>

@@ -48,17 +48,30 @@ export type MattersItem = {
   body: string;
 };
 
-/* A design-decision cluster: heading + the green ("gave up / why") card and
-   the orange ("tempting option / what I gave up") card, plus optional figure. */
+/* A design-decision cluster. The cards themselves are pre-rendered Figma SVG
+   exports (copy baked in). `row` = the two small (368-wide) side-by-side cards
+   (orange "tempting option" + its counter card); `wide` = the full-width
+   reasoning card(s) below ("why I gave it up"). Optional supporting
+   screenshots follow. */
+/** A row of supporting images laid out together (bare, resized, no frame). */
+export type MediaRow = {
+  /** image srcs shown side by side in this row. */
+  imgs: string[];
+  /** columns across (defaults to imgs.length). Use to force e.g. 3-up phones. */
+  cols?: number;
+  /** optional caption beneath the row. */
+  caption?: string;
+};
+
 export type DecisionCluster = {
   n: string;
   heading: string;
-  /** Orange card — the seductive shortcut. */
-  tempting: { label: string; body: string };
-  /** Green card — the reasoning / what was traded. */
-  chose: { label: string; body: string };
-  /** Optional supporting figure(s). */
-  media?: MediaSlot[];
+  /** Two small side-by-side card SVGs (tempting + counter). */
+  row: [string, string];
+  /** Full-width reasoning card SVG(s), stacked below the row. */
+  wide: string[];
+  /** Supporting screenshots grouped into explicit rows (exact layout control). */
+  mediaRows?: MediaRow[];
 };
 
 /* ── Content blocks (the narrative stream within a section) ──────────────── */
@@ -81,6 +94,18 @@ export type Block =
   | { t: "media"; slot: MediaSlot; wide?: boolean; caption?: string }
   // "Here's the gap" — centered blue heading flanked by two blue bars.
   | { t: "gapHeading"; text: string }
+  // the orange "gap conclusion" card (Figma SVG, copy baked in) — the CEO
+  // scenario, shown as a full-width orange panel right after "Here's the gap".
+  | { t: "gapConclusion"; src: string }
+  // "Here's the gap" text that MORPHS full-viewport into the orange gap-
+  // conclusion box — one continuous pinned scene (the text scales/fades, then
+  // the box takes over the viewport).
+  | { t: "gapMorph"; heading: string; src: string }
+  // a 16:9 video placeholder frame (a real <video>/embed drops in here later).
+  | { t: "video"; label: string }
+  // full-viewport scene break — the following block group scrubs into an
+  // otherwise-empty viewport (gives a beat its own scene inside a chapter).
+  | { t: "sceneBreak" }
   // centered paragraph block (e.g. the CEO scenario under "Here's the gap").
   | { t: "centerP"; text: string }
   // isolated/hanging illustration — no container box, transparent, centered.
@@ -89,7 +114,29 @@ export type Block =
   | { t: "matters"; items: MattersItem[] }
   | { t: "gapCards"; scene: string; roles: string } // the two amber "here's the gap" cards
   | { t: "auditNotes"; notes: OutlineNote[] }
-  | { t: "designMd"; body: string; images: MediaSlot[] }; // the design.md subsection
+  | { t: "designMd"; body: string; images: MediaSlot[] } // the design.md subsection
+  // a bold white heading — a subsection title in the reading column.
+  | { t: "heading"; text: string }
+  // a smaller white subhead (e.g. "Confused?", "What This Achieved").
+  | { t: "subhead"; text: string }
+  // before/after comparison — a draggable left-to-right wipe slider between two
+  // images, spawned as-is. Optional caption below.
+  | { t: "beforeAfter"; before: string; after: string; caption?: string }
+  // asymmetric editorial row: prose on one side, a bare image on the other.
+  // `side` = which side the IMAGE sits on. `body` is a stream of mini-blocks
+  // (heading / subhead / rich paragraph) so the text column matches the design.
+  | {
+      t: "splitRow";
+      side: "left" | "right";
+      img: string;
+      imgAlt: string;
+      body: (
+        | { k: "heading"; text: string }
+        | { k: "subhead"; text: string }
+        | { k: "p"; text: string }
+        | { k: "richP"; spans: Span[] }
+      )[];
+    };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
 
@@ -115,10 +162,17 @@ export type Section =
       n: string;
       heading: string;
       features: {
+        /** cream #FFE2B1 tagline pill above the row (full width). */
+        tagline: string;
         title: string;
         constraintLabel?: string;
         constraint?: string;
+        /** body paragraphs — sit in the FIXED text column beside the images. */
         body: string;
+        body2?: string;
+        /** which side the fixed text column sits on (images take the other). */
+        textSide?: "left" | "right";
+        /** images: 2+ scroll horizontally past the fixed text; 1 = static. */
         media: MediaSlot[];
       }[];
     }
@@ -267,13 +321,14 @@ export const LIR_DESIGN: LirDesign = {
       n: "02",
       heading: "Problem",
       blocks: [
-        // full-viewport quote flash (all grey) — plays after the PROBLEM flash,
-        // then goes away as the scenario image appears.
+        // SCENE 1 — full-viewport quote flash (all grey), its own pinned beat.
         {
           t: "quoteFlash",
           text: "“During an emergency, intelligence exists, it just can't reach the person who needs it.”",
         },
-        // the scenario photo, shown as-is, with its caption centered beneath.
+        // spacer so the quote flash's pin fully releases before the next scene
+        { t: "sceneBreak" },
+        // SCENE 2 — the scenario photo, shown as-is, with its caption beneath.
         {
           t: "media",
           wide: true,
@@ -286,13 +341,11 @@ export const LIR_DESIGN: LirDesign = {
           caption:
             "A warehouse catches fire. The drone-in-a-box on the roof launches automatically and starts streaming thermal and visual feeds. The intelligence is already in the air — where the fire is hottest, whether anyone's inside, where to position the ladder truck.",
         },
-        // "Here's the gap" — blue heading flanked by two bars.
+        // SCENE 3 — "Here's the gap" bars, then the orange CEO gap-conclusion
+        // box BELOW it, both as plain stacked blocks in normal flow (NOT a
+        // pinned morph — that overlapped the image above). Simple, correct order.
         { t: "gapHeading", text: "Here’s the gap" },
-        // the CEO scenario, centered.
-        {
-          t: "centerP",
-          text: "The CEO of the company whose building is on fire and the fire captain standing in the parking lot doesn't have a FlytBase account. Doesn't know what FlytBase is. Has a phone in one hand, a radio in the other, and needs answers now.",
-        },
+        { t: "gapConclusion", src: "/case-study/gap-conclusion.svg" },
       ],
     },
 
@@ -316,6 +369,8 @@ export const LIR_DESIGN: LirDesign = {
           t: "p",
           text: 'Read it again. It sounds like a video call. The complexity revealed itself in layers — and each layer moved this from "a feature" to "a coordinated situation room."',
         },
+        // SCENE break — the "…matters" list comes up on its own beat.
+        { t: "sceneBreak" },
         {
           t: "matters",
           items: [
@@ -345,12 +400,8 @@ export const LIR_DESIGN: LirDesign = {
           t: "lede",
           text: "The vision for the final product had to be a single room per incident — sharing the same map, same feed and same annotations, synced across users.",
         },
-        {
-          t: "diagram",
-          which: "personaSplit",
-          caption:
-            "One session, three fundamentally different experiences — Operator, Guest, and Guest Viewer, each at a different level of control.",
-        },
+        // SCENE break — the "before designing anything new" audit is its own beat.
+        { t: "sceneBreak" },
         {
           t: "p",
           text: "Before designing anything new, I audited what already existed. This is basic UX hygiene, but it's also where the builder dimension starts adding value: I wasn't just auditing the interface, I was auditing the data.",
@@ -384,38 +435,81 @@ export const LIR_DESIGN: LirDesign = {
           text: "Once the API specs, tech architecture and data points were fixed, I started crafting the user flow of the webapp.",
         },
         {
-          t: "diagram",
-          which: "onboardingFlow",
-          caption: "fig. User flow — onboarding",
+          t: "figure",
+          src: "/case-study/user-flow.svg",
+          alt: "Onboarding user flow — operator creates a session, invite paths (email → direct join, or link → waiting room → approve), into the session view.",
+          maxW: 760,
         },
         {
-          t: "diagram",
-          which: "stakeholderActions",
-          caption: "fig. User flows during incident response",
+          t: "figure",
+          src: "/case-study/stakeholder-actions.svg",
+          alt: "User flows during incident response — drone pilot, VP/facility owner, and firefighter acting on one shared live session.",
+          maxW: 620,
         },
+        // ── "How I Got AI to Follow Our Design System" subsection (Figma
+        //    229:3 composition). Intro copy → before/after slider → two
+        //    asymmetric editorial rows. ──────────────────────────────────────
+        { t: "sceneBreak" },
+        { t: "heading", text: "How I Got AI to Follow Our Design System" },
         {
-          t: "designMd",
-          body: "The FlytBase F design system lives in Figma — colors, typography, spacing, icons, component patterns. The AI tools I was building with don't open Figma files. They write Tailwind classes and React components. The design system needed to cross that gap without losing fidelity.",
-          images: [
-            {
-              id: "05-designmd",
-              label:
-                "Design.md — the FlytBase design system translated into a machine-readable spec for the AI build tools (tokens, type scale, spacing, component rules).",
-            },
-            {
-              id: "05-ascii-planning",
-              label:
-                "ASCII layout planning with Claude — blocking out structure in a language both a human and an LLM can read before generating any component.",
-            },
-          ],
+          t: "p",
+          text: "When you use AI build tools to write code, the AI is eager to please. Too eager. Ask it to build a dashboard and it will produce something that looks fine generic Tailwind defaults, reasonable spacing, acceptable typography. It looks like software. It doesn't look like your software.",
         },
         {
           t: "p",
           text: "The first time I pointed Claude Code at a Live Incident Response screen and said \"build this,\" it came back with its own interpretation of a drone operations interface. Random blues, default border-radius values, spacing that felt approximately right but matched nothing in the FlytBase design system. The telemetry overlay used a font stack the AI picked from its training data. The buttons had shadows that don't exist anywhere in FlytBase's component library.",
         },
+        // before/after slider (spawned as-is, not embedded in a frame)
         {
-          t: "note",
-          text: "Every AI-generated component on Live Incident Response follows the F design system. The colors match. The typography matches. The icons are the same library. Put LIR next to the core FlytBase dashboard and they look like they came from the same team — because they follow the same rules. The design system survived the build because it was written in the AI's language before the first component was generated.",
+          t: "beforeAfter",
+          before: "/case-study/before-ui.png",
+          after: "/case-study/image-1.png",
+          caption: "fig. after and before first prompt and final shipped screen",
+        },
+        // Row 1 — text LEFT, design-system image RIGHT.
+        {
+          t: "splitRow",
+          side: "right",
+          img: "/case-study/design-system.png",
+          imgAlt:
+            "Design.md — the FlytBase F design system in Figma, translated into a machine-readable spec for the AI build tools.",
+          body: [
+            { k: "heading", text: "Design.md from the figma MCP" },
+            {
+              k: "richP",
+              spans: [
+                { text: "The FlytBase F design system", bold: true },
+                {
+                  text: " lives in Figma colors, typography, spacing, icons, component patterns.",
+                },
+              ],
+            },
+            {
+              k: "p",
+              text: "The AI tools I was building with don't open Figma files. They write Tailwind classes and React components. The design system needed to cross that gap without losing fidelity.",
+            },
+          ],
+        },
+        // Row 2 — ASCII image LEFT, text RIGHT.
+        {
+          t: "splitRow",
+          side: "left",
+          img: "/case-study/ascii-layout.png",
+          imgAlt:
+            "ASCII layout planning with Claude — blocking out screen structure in a language both a human and an LLM can read before generating any component.",
+          body: [
+            { k: "heading", text: "ASCII layout planning with claude" },
+            { k: "subhead", text: "Confused?" },
+            {
+              k: "p",
+              text: "I was too, but while planning with an AI tool its important to understand structure in a language both you and the LLM understands.",
+            },
+            { k: "subhead", text: "What This Achieved" },
+            {
+              k: "p",
+              text: "Every AI-generated component on Live Incident Response follows the F design system. The colors match. The typography matches. The icons are the same library. Put LIR next to the core FlytBase dashboard and they look like they came from the same team because they follow the same rules. The design system survived the build because it was written in the AI's language before the first component was generated.",
+            },
+          ],
         },
       ],
     },
@@ -431,51 +525,47 @@ export const LIR_DESIGN: LirDesign = {
       clusters: [
         {
           n: "01",
-          heading: "Every map action is on the surface. Nothing hides behind a right-click.",
-          tempting: {
-            label: "The tempting option:",
-            body: "A right-click context menu. It's the standard map-tool pattern — clean canvas, actions tucked into a menu that appears where you click. Less visual clutter, more map visible, familiar to anyone who's used Google Maps or a design tool.",
-          },
-          chose: {
-            label: "Why I gave it up?:",
-            body: "A right-click menu assumes two things a panicked first-timer doesn't have — the knowledge that the menu exists, and the calm to remember it's a right-click and not a tap-hold or a double-tap. Hidden interactions are a memory tax. In an emergency, anything that isn't visible effectively doesn't exist. So the actions — Danger, Go Here, On My Way, Look Here, Custom — live on a permanent rail, pre-labeled, one tap to arm, then drop on the map. The trade was screen space for zero discovery cost. The guest never has to find the action; it's already looking at them.",
-          },
-          media: [
-            {
-              id: "06-map-actions",
-              label:
-                "The permanent annotation rail on the map — pre-labeled action buttons (Danger, Go Here, On My Way, Look Here, Custom).",
-            },
+          heading:
+            "Every map action is on the surface. Nothing hides behind a right-click.",
+          row: ["/case-study/dd1-tempting.svg", "/case-study/dd1-gaveup.svg"],
+          wide: ["/case-study/dd1-why.svg"],
+          mediaRows: [
+            { imgs: ["/case-study/dd1-img-1.png", "/case-study/dd1-img-2.png"] },
+            { imgs: ["/case-study/dd1-img-3.png"] },
           ],
         },
         {
           n: "02",
           heading: "Session-based with invites and open links.",
-          tempting: {
-            label: "The tempting option:",
-            body: "Persistent, account-based access — the model the rest of the platform already used. Consistent with the existing auth, no new concepts, guests get a lasting login they can reuse.",
-          },
-          chose: {
-            label: "Why I gave it up?:",
-            body: "Because a firefighter who got looped in during the fire does not have the time to set up auth for getting the critical information that drones can provide. Email invites don't need permission to join — as soon as an email invite goes out, a single click gets the user in with their configured role. Only random link invites need permission, so that some level of moderation is maintained.",
-          },
+          row: ["/case-study/dd2-tempting.svg", "/case-study/dd2-gaveup.svg"],
+          wide: ["/case-study/dd2-shortcut.svg", "/case-study/dd2-why.svg"],
+          mediaRows: [{ imgs: ["/case-study/dd2-img-1.png"] }],
         },
         {
           n: "03",
           heading: "Mobile version is a different persona.",
-          tempting: {
-            label: "The tempting option:",
-            body: "Responsive. Shrink the desktop, add breakpoints, ship one codebase. It's faster, it's less to maintain, and it worked — v1 responsive passed every device test.",
-          },
-          chose: {
-            label: "Why I gave it up?:",
-            body: "A shrunk command center is still a command center. It asks you to scan, compare, and choose between things — the exact cognitive load a person in crisis can't carry. The trade wasn't \"responsive vs. native,\" it was \"cheap to build vs. usable under panic.\" I paid the expensive side because the user who matters most is the one least able to absorb a bad layout.",
-          },
-          media: [
+          row: ["/case-study/dd3-tempting.svg", "/case-study/dd3-gaveup.svg"],
+          // "Why I gave it up" (green) first, then "What it cost me" (salmon) below.
+          wide: ["/case-study/dd3-why.svg", "/case-study/dd3-shortcut.svg"],
+          mediaRows: [
+            // the mobile section concludes with the 3 tall phone shots side by side
             {
-              id: "06-mobile-modes",
-              label:
-                "Mobile is a different product, not a smaller one — a state-machine of full-screen modes: Feed, Map, Annotation, Chat, Landscape.",
+              imgs: [
+                "/case-study/dd3-img-1.png",
+                "/case-study/dd3-img-2.png",
+                "/case-study/dd3-img-3.png",
+              ],
+              cols: 3,
+              caption: "Phone collaborators can share their live camera feed",
+            },
+            // then the operator vs. guest persona UIs
+            {
+              imgs: ["/case-study/dd3-img-4.png"],
+              caption: "fig. UI for the operator and guests who will perform actions",
+            },
+            {
+              imgs: ["/case-study/dd3-img-5.png"],
+              caption: "fig. UI for Jean who just wants to see information",
             },
           ],
         },
@@ -489,44 +579,50 @@ export const LIR_DESIGN: LirDesign = {
       n: "08",
       heading: "Features",
       features: [
+        // 1 — annotation: cream pill, 2 images scroll left, text fixed right (Figma 240:42)
         {
+          tagline: "Annotate on the live feed → freeze the frame → drop it in chat.",
           title: "Live video feed collaboration",
-          body: "A collaborator draws directly on a moving video feed — circles the crane, marks the hazard. The instant they finish, the system captures that exact frame with the drawing burned in and posts it to the chat as a card: the annotated still, which feed it came from, and two actions — Focus Feed, Track on Map. The feed is live, so the thing you're pointing at is gone a second later. Freezing the frame at the moment of annotation turns a fleeting gesture into a shared, permanent reference.",
+          textSide: "right",
+          body: "A collaborator draws directly on a moving video feed — circles the crane, marks the hazard. The instant they finish, the system captures that exact frame with the drawing burned in and posts it to the chat as a card: the annotated still, which feed it came from, and two actions — Focus Feed, Track on Map.",
+          body2:
+            "The feed is live, so the thing you're pointing at is gone a second later. A raw annotation on moving video points at nothing. Freezing the frame at the moment of annotation turns a fleeting gesture into a shared, permanent reference — everyone sees the same still, tied to the same feed, and can jump to it. The annotation stops being “look, over there, now” and becomes a record anyone can act on ten seconds or ten minutes later.",
           media: [
-            {
-              id: "07-annotate-feed",
-              label:
-                "Annotation mode — a collaborator circles a hazard on the live feed; the frame freezes and posts to chat as a reference card.",
-            },
+            { id: "features-1", src: "/case-study/features-1.png", label: "Annotation mode — a collaborator circles a hazard on the live feed." },
+            { id: "features-2", src: "/case-study/features-2.png", label: "The frozen annotated frame posted to chat as a shared reference card." },
           ],
         },
+        // 2 — translation: 1 image, so no scroll; text fixed right
         {
-          title: "Translation on read, not on send — everyone talks in their own language.",
-          constraintLabel: "Constraint",
-          constraint:
-            "No budget for a paid translation API or per-message LLM inference — either would meter every message in a session, and incidents are chatty.",
-          body: "Select French, and every message in the session arrives in French — no matter what language it was typed in. The sender writes in theirs, you read in yours, and neither of you does anything. I wrote a Supabase Edge Function that translates server-side through a free endpoint, and built the production logic a raw API call doesn't give you: names are tokenized out so \"Rudy\" survives intact, ops abbreviations (ETA, GPS, SITREP) are preserved instead of mangled, @mentions are excluded, and every result is cached per message:language so scrolling never re-translates. The edge function is the seam that let a zero-cost translation path behave like a paid one.",
+          tagline: "Translation on read, not on send — everyone talks in their own language.",
+          title: "Constraint",
+          textSide: "right",
+          body: "No budget for a paid translation API or per-message LLM inference — either would meter every message in a session, and incidents are chatty. So I wrote a Supabase Edge Function that translates server-side through a free endpoint, and built the production logic a raw API call doesn't give you.",
+          body2:
+            "Names are tokenized out so \"Rudy\" survives intact, ops abbreviations (ETA, GPS, SITREP) are preserved instead of mangled, @mentions are excluded, and every result is cached per message:language so scrolling never re-translates. Select French, and every message in the session arrives in French — no matter what language it was typed in. The sender writes in theirs, you read in yours, and neither of you does anything.",
           media: [
-            {
-              id: "07-translation",
-              label:
-                "Chat with per-reader translation — a message typed in Spanish arrives in the reader's chosen language.",
-            },
+            { id: "features-3", src: "/case-study/features-3.png", label: "Chat with per-reader translation — a message arrives in the reader's chosen language." },
           ],
         },
+        // 3 — session creation (2-click): 2 images scroll, text NEXT TO images (right)
         {
-          title: "Session creation with team and pre-defined collaborator invite option.",
-          body: "Session creation is a 2-click process for operators — and it also lets you mass-invite team members. Select the drones, name the incident, and pull in a pre-defined set of collaborators in one pass so the room is populated the moment it opens.",
+          tagline: "Session creation with team and pre-defined collaborator invite option",
+          title: "Session creation is a 2 click process for operators",
+          textSide: "right",
+          body: "Select the drones, name the incident — the room is created. Two clicks and the operator is live.",
           media: [
-            {
-              id: "07-session-create",
-              label:
-                "Session creation — the operator's 2-click flow: pick drones, name the incident, mass-invite the team.",
-            },
-            {
-              id: "07-mass-invite",
-              label: "Mass-invite — pre-defined collaborators added in one step.",
-            },
+            { id: "features-5", src: "/case-study/features-5.png", label: "Step 1 — name your incident." },
+            { id: "features-6", src: "/case-study/features-6.png", label: "Step 2 — pick the drones for the session." },
+          ],
+        },
+        // 4 — mass invite: 2 images scroll, text NEXT TO images (right)
+        {
+          tagline: "",
+          title: "Session creation also lets you mass invite",
+          textSide: "right",
+          body: "Pull in a pre-defined set of collaborators in one pass so the room is populated the moment it opens — no chasing people one invite at a time.",
+          media: [
+            { id: "features-7", src: "/case-study/features-7.png", label: "Mass-invite — pre-defined collaborators added in one step." },
           ],
         },
       ],
@@ -540,14 +636,16 @@ export const LIR_DESIGN: LirDesign = {
       heading: "IMPACT",
       lede: "I used PostHog to track usage and user data across my webapp.",
       dashboard: {
-        id: "08-posthog-overview",
+        id: "impact-1",
+        src: "/case-study/impact-1.png",
         label:
           "PostHog web analytics — visitors, page views, sessions, session duration and bounce rate across the app.",
       },
       dashboardCaption:
         "Ensuring a steady flow of users helped me pinpoint scaling issues and potential drop-offs by watching their in-app walkthroughs recorded via PostHog.",
       growth: {
-        id: "08-growth",
+        id: "impact-2",
+        src: "/case-study/impact-2.png",
         label:
           "Growth chart — steady increase in usage as releases and updates shipped.",
       },
@@ -556,7 +654,8 @@ export const LIR_DESIGN: LirDesign = {
       closer:
         "As a solo designer I shipped an entire web app that security teams across the globe use and find value in.",
       closerMedia: {
-        id: "08-closer",
+        id: "impact-3",
+        src: "/case-study/impact-3.png",
         label: "The live product in the field — the situation room in real use.",
       },
     },

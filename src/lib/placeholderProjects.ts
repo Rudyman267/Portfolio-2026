@@ -1,10 +1,11 @@
 /**
- * Placeholder work for the home "MY WORKS." gallery while Sanity is empty.
+ * Placeholder work for the home works journey (WorksJourney.tsx project-node
+ * beats) while Sanity is empty.
  *
  * Shaped to line up with PROJECT_CARD (queries.ts): title / slug / summary /
- * year / tags. When real content lands, WorkGallery can map the Sanity result
- * onto GalleryProject and drop this file. `size` is a layout hint the gallery
- * uses to vary thumbnail scale (Figma 101:20 alternates large/small blocks).
+ * year / tags. When real content lands, WorksJourney can map the Sanity result
+ * onto GalleryProject and drop this file. `size` is a legacy layout hint from
+ * the removed horizontal gallery (kept so the type still round-trips).
  */
 export type GalleryProject = {
   title: string;

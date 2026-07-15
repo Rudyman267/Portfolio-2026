@@ -93,25 +93,25 @@
 }
 
 /* ============================================================================
-   LIR CASE-STUDY SCOPE — the "Live Incidence Response" case study (Figma
-   172:56) is a light, editorial layout: pure-white canvas, near-black text,
-   an electric-blue accent, and TANKER display headings. Scoped tokens so the
-   page reads clean without touching the site's warm-neutral global theme.
-   Decision cards use fixed green / orange washes from the Figma (kept as raw
-   values in the component, not tokens — they're semantic to that block).
+   LIR CASE-STUDY SCOPE — the "Live Incidence Response" case study, DARK
+   editorial rebuild (Figma 229:3). Same structure/type/geometry as the earlier
+   light build; only the palette flips: the About/hero canvas #06080c, pure-
+   white headings, #B4B4B4 body, and a signal ORANGE #FF8D3B accent + TANKER
+   display headings. Scoped tokens so nothing leaks into the global theme.
+   Decision cards keep fixed green / orange washes semantic to that block.
    ========================================================================== */
 
 .lir {
-  --color-bg: 255 255 255;          /* pure white canvas */
-  --color-surface: 255 255 255;
-  --color-surface-2: 247 248 250;   /* faint inset for meta/nav cards */
-  --color-fg: 17 17 19;             /* near-black text */
-  --color-muted: 90 96 106;         /* secondary text (slate) */
-  --color-faint: 140 146 156;       /* tertiary / captions */
-  --color-accent: 18 145 224;       /* #1291e0 — the signal blue */
-  --color-accent-fg: 255 255 255;
-  --color-border: 228 231 236;      /* hairlines / card outlines */
-  --color-ring: 18 145 224;
+  --color-bg: 6 8 12;               /* #06080c — the About/hero dark canvas */
+  --color-surface: 13 16 22;        /* slightly-lifted card fill */
+  --color-surface-2: 16 20 27;      /* figure/inset fill */
+  --color-fg: 255 255 255;          /* #ffffff — headings / primary text */
+  --color-muted: 180 180 180;       /* #b4b4b4 — body / secondary text */
+  --color-faint: 122 128 138;       /* tertiary / captions */
+  --color-accent: 255 141 59;       /* #ff8d3b — the signal orange */
+  --color-accent-fg: 6 8 12;
+  --color-border: 255 255 255;      /* white hairlines — alpha applied per-use */
+  --color-ring: 255 141 59;
 
   /* ── Type scale — EXACT Figma values (1920 frame), px ÷ 16 = rem. Fixed on
         desktop so it's pixel-accurate to the design; clamp only scales the two

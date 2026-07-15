@@ -11,6 +11,7 @@ import { Magnetic } from "@/components/motion/Magnetic";
 import { scrollToTop } from "@/components/motion/lenisBridge";
 import { DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
+import { scrollToWorks } from "@/components/sections/worksAnchor";
 
 // Ambient particle/energy-blob glow behind the footer — a whisper of the hero
 // ecosystem (same palette/shapes/motion). Client-only; skips itself on
@@ -215,6 +216,11 @@ export function Footer({
                       if (target !== pathname) {
                         e.preventDefault();
                         hardNavigate(item.href);
+                      } else if (item.href === "/#work") {
+                        // works chapter lives inside the hero pin — glide to
+                        // its stored offset (no #work element on this path)
+                        e.preventDefault();
+                        scrollToWorks();
                       }
                     }}
                     className="group inline-flex items-center gap-1.5 text-fg/70 transition-colors hover:text-fg"

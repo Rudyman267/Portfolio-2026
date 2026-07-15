@@ -93,6 +93,9 @@ export function SceneController({ state }: { state: SceneState }) {
     const target = heroScroll.progress * tw.scene.scrollTravel;
     trav.scroll += (target - trav.scroll) * Math.min(1, dt * 3.0);
     u.uTravel.value = trav.idle + trav.scroll;
+    // publish the eased travel for THREE-free DOM riders (works project nodes)
+    heroScroll.travel = u.uTravel.value;
+    heroScroll.sceneLive = true;
 
     const intensityTarget =
       tw.scene.intensity + THREE.MathUtils.clamp(Math.abs(s.vel) / 2600, 0, 0.45);
