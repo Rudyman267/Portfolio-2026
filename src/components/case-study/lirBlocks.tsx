@@ -605,7 +605,10 @@ export function DemoVideo({
       <div
         className={cn(
           "absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-8 transition-opacity",
-          playing ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100" : "opacity-100",
+          // touch has no hover — keep the bar visible while playing there
+          playing
+            ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            : "opacity-100",
         )}
       >
         <button
@@ -871,11 +874,14 @@ export function DecisionCluster({
             const cols = r.cols ?? r.imgs.length;
             // taller box for a single full-width shot; shorter for 2-3 up.
             // `tight` scales the frames up and pulls the columns together.
+            // Below sm the fixed Figma row heights would letterbox a ~110px-
+            // wide column inside a 300px-tall box — phones get natural aspect
+            // (h-auto) instead; the clamps only bind from sm up.
             const rowH = r.tight
-              ? "h-[clamp(300px,32vw,470px)]"
+              ? "h-auto sm:h-[clamp(300px,32vw,470px)]"
               : cols === 1
-                ? "h-[clamp(240px,26vw,444px)]"
-                : "h-[clamp(190px,20vw,310px)]";
+                ? "h-auto sm:h-[clamp(240px,26vw,444px)]"
+                : "h-auto sm:h-[clamp(190px,20vw,310px)]";
             return (
               <figure key={i}>
                 <div

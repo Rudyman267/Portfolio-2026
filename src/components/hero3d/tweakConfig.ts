@@ -206,6 +206,48 @@ function clone(c: HeroTweakConfig): HeroTweakConfig {
 /** The single live config the whole scene reads from. */
 export const tweak: HeroTweakConfig = clone(DEFAULT_TWEAK);
 
+/* ── Mobile quality profile ──────────────────────────────────────────────────
+   Phones run the REAL scene now (no more video fallback on touch), but a phone
+   GPU can't push the desktop preset. This overlays reduced counts onto `tweak`
+   before the scene/footer meshes first build, and flags the React side to run
+   a cheaper pipeline (lower DPR cap, no DoF / chromatic-aberration passes).
+
+   The path amplitudes are also narrowed: a portrait phone's horizontal FOV is
+   ~a third of desktop's, so the desktop snake bend (±9 world units) would swing
+   the tunnel almost entirely off-screen. pathMath.ts reads the same live
+   values, so the DOM works-journey riders bend along the identical curve. */
+
+let mobileProfile = false;
+
+export function isMobileProfile() {
+  return mobileProfile;
+}
+
+/** Idempotent — Hero and Footer canvases both call this on coarse-pointer
+ *  devices; the first call wins. Must run before the meshes first build. */
+export function applyMobileProfile() {
+  if (mobileProfile) return;
+  mobileProfile = true;
+
+  // instance counts ≈ halved (or better) — the look survives, the load doesn't
+  tweak.fibers.count = 54;
+  tweak.particles.count = 520;
+  tweak.nodes.count = 64;
+  tweak.fragments.count = 32;
+
+  // narrow the snake bend to the portrait FOV (see note above)
+  tweak.path.a1 = 2.7;
+  tweak.path.a2 = 2.3;
+  tweak.path.ay = 2.2;
+
+  // footer glow: same idea, sparser field
+  tweak.footer.particleCount = 150;
+  tweak.footer.nodeCount = 12;
+
+  generation++;
+  emit();
+}
+
 /**
  * `generation` bumps whenever a rebuild-class value changes (counts, scatter
  * ranges, world depth). worldObjects key their meshes on it so React re-creates

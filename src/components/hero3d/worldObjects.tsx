@@ -22,6 +22,7 @@ import {
   tweak,
   subscribeTweak,
   getGeneration,
+  isMobileProfile,
 } from "@/components/hero3d/tweakConfig";
 
 /**
@@ -171,7 +172,11 @@ export function Particles({ state }: { state: SceneState }) {
 
     const mat = makeMaterial(state, particleVertex, particleFragment, {
       uPixelRatio: {
-        value: typeof window !== "undefined" ? Math.min(window.devicePixelRatio, 1.75) : 1,
+        // matches the Canvas dpr cap (Scene.tsx: 1.3 on the mobile profile)
+        value:
+          typeof window !== "undefined"
+            ? Math.min(window.devicePixelRatio, isMobileProfile() ? 1.3 : 1.75)
+            : 1,
       },
       uDrift: { value: tweak.particles.drift },
     });

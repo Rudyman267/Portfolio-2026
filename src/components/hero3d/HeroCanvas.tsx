@@ -4,12 +4,15 @@ import dynamic from "next/dynamic";
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { VideoBackground } from "@/components/motion/VideoBackground";
 import { markHeroVideoReady } from "@/components/motion/heroReady";
+import { applyMobileProfile } from "@/components/hero3d/tweakConfig";
 
 /**
  * HeroCanvas — chooses the richest background the device can honor:
  *
- *   1. WebGL2-capable fine-pointer desktop → the living 3D scene (R3F)
- *   2. touch devices / no WebGL2 / runtime crash → the light-trails VIDEO
+ *   1. WebGL2-capable device (desktop AND mobile) → the living 3D scene (R3F).
+ *      Touch devices get the mobile quality profile (fewer instances, lower
+ *      DPR cap, no DoF/CA) so the real shaders run instead of the old video.
+ *   2. no WebGL2 / runtime crash → the light-trails VIDEO
  *      (VideoBackground — which itself falls back to poster for reduced motion)
  *   3. reduced motion → VideoBackground's poster still
  *
@@ -40,7 +43,6 @@ class SceneErrorBoundary extends Component<
 
 function supportsScene(): boolean {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-  if (window.matchMedia("(pointer: coarse)").matches) return false;
   try {
     const canvas = document.createElement("canvas");
     return !!canvas.getContext("webgl2");
@@ -56,6 +58,9 @@ export function HeroCanvas() {
   const [active, setActive] = useState(true);
 
   useEffect(() => {
+    // coarse pointer → overlay the mobile quality profile BEFORE the scene
+    // mounts, so the meshes first build at the reduced counts
+    if (window.matchMedia("(pointer: coarse)").matches) applyMobileProfile();
     setMode(supportsScene() ? "scene" : "video");
     // failsafe: never let the door loader hang on us
     const t = window.setTimeout(markHeroVideoReady, 8000);

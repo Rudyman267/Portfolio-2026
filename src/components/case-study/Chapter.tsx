@@ -165,7 +165,9 @@ export function Chapter({
       {/* chapter title panel — a full viewport of real canvas; doubles as the
           breathing room between this chapter and the previous one */}
       <FlashPanel>
-        <span className="display text-center text-[clamp(3.5rem,3rem+9vw,11rem)] uppercase leading-none text-accent">
+        {/* phone floor lowered (2.75rem) + a steeper vw ramp so long titles
+            ("DESIGN DECISIONS") fit a 390px viewport — desktop size unchanged */}
+        <span className="display text-center text-[clamp(2.75rem,1rem+11vw,11rem)] uppercase leading-none text-accent">
           {title}
         </span>
       </FlashPanel>

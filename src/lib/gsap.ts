@@ -16,6 +16,12 @@ import { useGSAP } from "@gsap/react";
 // Register once. Safe to call repeatedly; GSAP de-dupes.
 gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
 
+// Mobile browsers collapse/expand the address bar while scrolling, firing
+// resize events mid-scroll. Re-measuring the pinned hero/chapter triggers on
+// every one of those causes visible jumps — only refresh on orientation-class
+// resizes instead (ScrollTrigger's documented mobile guidance).
+ScrollTrigger.config({ ignoreMobileResize: true });
+
 // Durations in seconds (CSS tokens are in ms).
 export const duration = {
   fast: 0.18,

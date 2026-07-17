@@ -10,6 +10,8 @@ import {
   tweak,
   getGeneration,
   subscribeTweak,
+  applyMobileProfile,
+  isMobileProfile,
 } from "@/components/hero3d/tweakConfig";
 import { useSyncExternalStore } from "react";
 
@@ -239,7 +241,12 @@ function GlowSystems() {
         uAlpha: { value: tweak.particles.alpha },
         uDrift: { value: tweak.particles.drift },
         uPixelRatio: {
-          value: typeof window !== "undefined" ? Math.min(window.devicePixelRatio, 1.75) : 1,
+          // must match the Canvas dpr cap (1.3 on the mobile profile) or the
+          // point sprites render at the wrong size relative to the buffer
+          value:
+            typeof window !== "undefined"
+              ? Math.min(window.devicePixelRatio, isMobileProfile() ? 1.3 : 1.75)
+              : 1,
         },
       },
       transparent: true,
@@ -355,10 +362,14 @@ export function FooterGlow() {
   const [visible, setVisible] = useState(false);
 
   // gate: capable device + motion OK. The footer is complete without it.
+  // Touch devices run it too (matching the hero) — on the mobile quality
+  // profile, so the counts drop before the meshes first build. This page may
+  // not have a hero (e.g. a case study), so the profile is applied here as
+  // well; applyMobileProfile is idempotent.
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const coarse = window.matchMedia("(pointer: coarse)").matches;
-    if (!reduced && !coarse && supportsWebGL2()) setEnabled(true);
+    if (window.matchMedia("(pointer: coarse)").matches) applyMobileProfile();
+    if (!reduced && supportsWebGL2()) setEnabled(true);
   }, []);
 
   // render only while the footer is on screen
@@ -382,7 +393,7 @@ export function FooterGlow() {
         <GlowErrorBoundary>
           <Canvas
             camera={{ position: [0, 0, 20], fov: 50 }}
-            dpr={[1, 1.75]}
+            dpr={[1, isMobileProfile() ? 1.3 : 1.75]}
             frameloop={visible ? "always" : "never"}
             gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
             style={{ background: "transparent" }}

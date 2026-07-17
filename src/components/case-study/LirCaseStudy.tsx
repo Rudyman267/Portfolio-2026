@@ -326,10 +326,13 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </dl>
             </div>
 
-            {/* contents nav — lifted dark surface, faint white hairline */}
+            {/* contents nav — lifted dark surface, faint white hairline.
+                Hidden below lg: without the sticky rail it's just a wall of
+                links pushing the study down a full screen, and the scroll-spy
+                highlight is never visible mid-read on a phone. */}
             <nav
               aria-label="Contents"
-              className="mt-3 rounded-[10px] border border-white/12 bg-surface px-3.5 py-4"
+              className="mt-3 hidden rounded-[10px] border border-white/12 bg-surface px-3.5 py-4 lg:block"
             >
               <p className="text-[length:var(--lir-rail-nav)] font-semibold uppercase tracking-wide text-fg">
                 Contents
@@ -376,7 +379,7 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
 
             {/* headline (46px ExtraBold, LH 80%) with the drone mark to its left */}
             <Reveal delay={0.06}>
-              <div className="mt-[3.75rem] flex items-center gap-[35px]">
+              <div className="mt-[3.75rem] flex items-center gap-5 sm:gap-[35px]">
                 <DroneMark
                   size={86}
                   className="w-[52px] shrink-0 sm:w-[86px]"

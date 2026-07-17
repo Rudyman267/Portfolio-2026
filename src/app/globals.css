@@ -92,6 +92,16 @@
   color: rgb(var(--color-fg));
 }
 
+/* The CASES / PLAYS edge curves are a hover interaction — on touch there is no
+   hover and the resting white slivers just eat into the narrow viewport, so
+   they don't exist there at all (the GSAP scrub tweening a display:none element
+   is harmless). */
+@media (pointer: coarse) {
+  [data-curve] {
+    display: none;
+  }
+}
+
 /* ============================================================================
    LIR CASE-STUDY SCOPE — the "Live Incidence Response" case study, DARK
    editorial rebuild (Figma 229:3). Same structure/type/geometry as the earlier
