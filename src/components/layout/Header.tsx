@@ -29,8 +29,11 @@ export function Header({
   const [overHero, setOverHero] = useState(false);
 
   // Dark-theme pages: the SOLID header inverts (page-hex bar, white nav)
-  // instead of falling back to the white bar. /about is a full-dark route.
-  const darkPage = pathname === "/about";
+  // instead of falling back to the white bar. /about is a full-dark route, and
+  // so is every case study (/work/<slug>) — without this they fell through to
+  // the white bar, so the nav sat as bare text over dark scrolling copy.
+  const darkPage =
+    pathname === "/about" || /^\/work\/[^/]+$/.test(pathname ?? "");
 
   useEffect(() => {
     const zones = Array.from(

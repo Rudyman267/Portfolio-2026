@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Users,
   Monitor,
   Clock,
   Languages,
   ArrowLeft,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
@@ -261,6 +265,84 @@ export function BeforeAfter({
    "one after another" and can be swiped/scrolled through; the sticky text stays
    put beside them. With a single image there is no strip — it just sits there.
    No GSAP pin (that fought the chapter/column layout); pure CSS, robust. */
+/* ── ImageCycle — a feature's images swap in place every 2s.
+   Replaces the horizontal scroll strip: the reader shouldn't have to drag a
+   scrollbar to see the second shot. All frames stack in ONE box (no added
+   frame or rounding — the screenshots carry their own chrome) and crossfade,
+   so the box holds a single set of dimensions throughout. The box is sized by
+   the FIRST image in normal flow; the rest are absolutely positioned over it,
+   which keeps the layout from jumping between frames of differing height.
+   Pauses when off-screen and respects reduced motion. ───────────────────── */
+const CYCLE_MS = 2000;
+
+function ImageCycle({ imgs }: { imgs: MediaSlot[] }) {
+  const root = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+
+  useGSAP(
+    () => {
+      const el = root.current;
+      if (!el) return;
+      const frames = gsap.utils.toArray<HTMLElement>(el.querySelectorAll("[data-cyc]"));
+      if (frames.length < 2) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        let i = 0;
+        let timer: ReturnType<typeof setInterval> | undefined;
+        const show = (next: number) => {
+          gsap.to(frames[i], { autoAlpha: 0, duration: 0.5, ease: "power1.inOut" });
+          gsap.to(frames[next], { autoAlpha: 1, duration: 0.5, ease: "power1.inOut" });
+          i = next;
+          setActive(next);
+        };
+        const start = () => {
+          if (timer) return;
+          timer = setInterval(() => show((i + 1) % frames.length), CYCLE_MS);
+        };
+        const stop = () => {
+          clearInterval(timer);
+          timer = undefined;
+        };
+        // only cycle while the box is actually on screen
+        const st = ScrollTrigger.create({
+          trigger: el,
+          start: "top bottom",
+          end: "bottom top",
+          onToggle: (self) => (self.isActive ? start() : stop()),
+        });
+        return () => {
+          stop();
+          st.kill();
+        };
+      });
+    },
+    { scope: root },
+  );
+
+  return (
+    <div ref={root} className="relative w-full">
+      {imgs.map((m, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={m.id}
+          data-cyc
+          src={m.src}
+          alt={m.label}
+          loading="eager"
+          className={cn(
+            "h-auto w-full",
+            // first frame holds the box open; the rest overlay it exactly
+            i > 0 && "absolute inset-0",
+          )}
+          style={i > 0 ? { opacity: 0, visibility: "hidden" } : undefined}
+          aria-hidden={i !== active}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function FeatureRow({
   tagline,
   title,
@@ -284,33 +366,22 @@ export function FeatureRow({
       <h3 className="text-[length:var(--lir-title)] font-semibold leading-tight tracking-[-0.01em] text-fg">
         {title}
       </h3>
-      <p className="text-[length:var(--lir-body-sm)] leading-relaxed text-[#d2d2d2]">
+      {/* --lir-note (14px) — feature prose reads as body copy beside the
+          screenshots, not caption-scale secondary text. */}
+      <p className="text-[length:var(--lir-note)] leading-relaxed text-[#d2d2d2]">
         {body}
       </p>
       {body2 && (
-        <p className="text-[length:var(--lir-body-sm)] leading-relaxed text-[#d2d2d2]">
+        <p className="text-[length:var(--lir-note)] leading-relaxed text-[#d2d2d2]">
           {body2}
         </p>
       )}
     </div>
   );
 
-  // image column: horizontal scroll-snap strip (2+) or a single bare image.
+  // image column: 2+ images cycle in place every 2s; a single image sits bare.
   const imgCol = multi ? (
-    <div className="-mx-[var(--gutter)] px-[var(--gutter)]">
-      <div className="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-3 [scrollbar-width:thin]">
-        {imgs.map((m) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={m.id}
-            src={m.src}
-            alt={m.label}
-            className="h-auto w-[min(82vw,480px)] shrink-0 snap-start"
-            loading="eager"
-          />
-        ))}
-      </div>
-    </div>
+    <ImageCycle imgs={imgs} />
   ) : (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={imgs[0]?.src} alt={imgs[0]?.label} className="h-auto w-full" loading="eager" />
@@ -351,7 +422,7 @@ export function FeatureRow({
 export function OutlineNote({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-[var(--radius-lg)] border border-accent/45 px-6 py-5">
-      <p className="text-[length:var(--lir-body-sm)] leading-relaxed text-accent">
+      <p className="text-[length:var(--lir-note)] leading-relaxed text-accent">
         {children}
       </p>
     </div>
@@ -428,24 +499,326 @@ export function GapCards({ scene, roles }: { scene: string; roles: string }) {
    2-up in fixed-aspect frames (hairline border, cropped) and any wide map spans
    full width. Sizing the images down is the whole point — they must never
    render at their native full scale. ────────────────────────────────────────── */
+/* ── DemoVideo — the case-study demo player.
+   The audio carries part of the story, so this ships real sound controls:
+   click-to-play, a mute toggle and a volume slider, plus a scrub bar.
+   Autoplay is deliberately NOT used — browsers only permit it when muted, and
+   a muted autoplay would silently drop the narration this video depends on.
+   Serves VP9/Opus first with an H.264/AAC fallback (same pair the About page
+   videos ship as). ───────────────────────────────────────────────────────── */
+export function DemoVideo({
+  src,
+  poster,
+  label,
+}: {
+  src: string;
+  poster?: string;
+  label: string;
+}) {
+  const vid = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [dur, setDur] = useState(0);
+
+  const toggle = () => {
+    const v = vid.current;
+    if (!v) return;
+    if (v.paused) {
+      void v.play();
+    } else {
+      v.pause();
+    }
+  };
+
+  const setVol = (n: number) => {
+    const v = vid.current;
+    setVolume(n);
+    if (!v) return;
+    v.volume = n;
+    // dragging the slider up from zero should also lift a mute
+    if (n > 0 && v.muted) {
+      v.muted = false;
+      setMuted(false);
+    }
+  };
+
+  const toggleMute = () => {
+    const v = vid.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+  };
+
+  const seek = (pct: number) => {
+    const v = vid.current;
+    if (!v || !v.duration) return;
+    v.currentTime = (pct / 100) * v.duration;
+    setProgress(pct);
+  };
+
+  const fmt = (s: number) =>
+    `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  return (
+    <figure className="group relative overflow-hidden rounded-[var(--radius-lg)] border border-white/12 bg-black">
+      <video
+        ref={vid}
+        poster={poster}
+        playsInline
+        preload="metadata"
+        className="block h-auto w-full cursor-pointer"
+        style={{ aspectRatio: "16 / 9" }}
+        onClick={toggle}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onVolumeChange={(e) => {
+          setMuted(e.currentTarget.muted);
+          setVolume(e.currentTarget.volume);
+        }}
+        onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
+        onTimeUpdate={(e) => {
+          const v = e.currentTarget;
+          if (v.duration) setProgress((v.currentTime / v.duration) * 100);
+        }}
+      >
+        <source src={`${src}.webm`} type="video/webm" />
+        <source src={`${src}.mp4`} type="video/mp4" />
+      </video>
+
+      {/* big centred play affordance — only while paused */}
+      {!playing && (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Play demo video"
+          className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors hover:bg-black/15"
+        >
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/90 text-black">
+            <Play size={26} fill="currentColor" className="ml-1" />
+          </span>
+        </button>
+      )}
+
+      {/* control bar — always available once playing, on hover otherwise */}
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-8 transition-opacity",
+          playing ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100" : "opacity-100",
+        )}
+      >
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Pause" : "Play"}
+          className="shrink-0 text-white/90 transition-colors hover:text-white"
+        >
+          {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+        </button>
+
+        {/* scrub */}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={0.1}
+          value={progress}
+          onChange={(e) => seek(Number(e.target.value))}
+          aria-label="Seek"
+          className="h-1 min-w-0 flex-1 cursor-pointer accent-[rgb(var(--color-accent))]"
+        />
+
+        <span className="shrink-0 tabular-nums text-[11px] text-white/70">
+          {fmt((progress / 100) * (dur || 0))} / {fmt(dur || 0)}
+        </span>
+
+        {/* mute + volume — the audio matters here, so both are first-class */}
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? "Unmute" : "Mute"}
+          className="shrink-0 text-white/90 transition-colors hover:text-white"
+        >
+          {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={muted ? 0 : volume}
+          onChange={(e) => setVol(Number(e.target.value))}
+          aria-label="Volume"
+          className="h-1 w-16 shrink-0 cursor-pointer accent-[rgb(var(--color-accent))]"
+        />
+      </div>
+      <figcaption className="sr-only">{label}</figcaption>
+    </figure>
+  );
+}
+
+/* ── ProseReveal — the minimal text entrance used across the case study.
+   Children rise a few px and fade in, staggered line by line, when the block
+   scrolls into view. Deliberately understated: this page's motion budget is
+   spent on the chapter flashes, so body copy just needs to arrive rather than
+   perform. One-shot (not scrubbed), so it never adds scroll of its own; it
+   reverses if you scroll back above it. ──────────────────────────────────── */
+export function ProseReveal({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      const el = root.current;
+      if (!el) return;
+      const lines = Array.from(el.children) as HTMLElement[];
+      if (!lines.length) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo(
+          lines,
+          { autoAlpha: 0, y: 14 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.6,
+            ease: "power2.out",
+            stagger: 0.08,
+            scrollTrigger: {
+              trigger: el,
+              start: "top 82%",
+              toggleActions: "play none none reverse",
+            },
+          },
+        );
+      });
+      mm.add("(prefers-reduced-motion: reduce)", () => {
+        gsap.set(lines, { autoAlpha: 1, y: 0 });
+      });
+    },
+    { scope: root },
+  );
+  return (
+    <div ref={root} className={className}>
+      {children}
+    </div>
+  );
+}
+
+/* Width a card is exported at when it spans the full 765px content column.
+   Anything narrower (368/373) is a SMALL card and belongs in a 2-up row —
+   stretching it across the column is what blew its baked-in text up ~2x. */
+const WIDE_CARD_DESIGN_W = 700;
+
+/* ── CardRows — lays reasoning cards out at the scale they were drawn for.
+   Full-width exports (>= WIDE_CARD_DESIGN_W) each span the column; runs of
+   small exports pair up 2-per-row (the Figma 2x2 for dd2). Widths are read
+   from the files themselves, so nothing is hardcoded per card. ───────────── */
+function CardRows({ srcs }: { srcs: string[] }) {
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const note = (src: string, w: number) =>
+    setWidths((prev) => (prev[src] === w ? prev : { ...prev, [src]: w }));
+
+  // Until widths are known, render each card full-width (the old behaviour) —
+  // measurement lands on the first paint, before any of this is scrolled to.
+  const measured = srcs.every((s) => widths[s]);
+  const groups: string[][] = [];
+  if (measured) {
+    let pair: string[] = [];
+    const flush = () => {
+      if (pair.length) {
+        groups.push(pair);
+        pair = [];
+      }
+    };
+    for (const src of srcs) {
+      if (widths[src] >= WIDE_CARD_DESIGN_W) {
+        flush();
+        groups.push([src]);
+      } else {
+        pair.push(src);
+        if (pair.length === 2) flush();
+      }
+    }
+    flush();
+  } else {
+    srcs.forEach((s) => groups.push([s]));
+  }
+
+  return (
+    <>
+      {groups.map((g, i) => (
+        <div
+          key={i}
+          className={cn("grid gap-5", g.length === 2 && "md:grid-cols-2")}
+        >
+          {g.map((src) => (
+            <CardImg key={src} src={src} onWidth={(w) => note(src, w)} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** A single card SVG that reports its intrinsic width once loaded. */
+function CardImg({
+  src,
+  onWidth,
+}: {
+  src: string;
+  onWidth: (w: number) => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  // naturalWidth must also be read on mount: an already-cached image never
+  // fires onLoad, which would leave the layout stuck in its fallback.
+  const read = () => {
+    const w = ref.current?.naturalWidth;
+    if (w) onWidth(w);
+  };
+  useEffect(read);
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      ref={ref}
+      src={src}
+      alt=""
+      loading="eager"
+      onLoad={read}
+      className="h-auto w-full rounded-[var(--radius-lg)]"
+    />
+  );
+}
+
 export function DecisionCluster({
   n,
   heading,
   row,
   wide,
+  note,
   mediaRows,
 }: {
   n: string;
   heading: string;
   row: [string, string];
   wide: string[];
+  note?: { heading: string; body: string[] };
   mediaRows?: MediaRow[];
 }) {
   return (
     <div>
-      <h3 className="max-w-[40ch] text-[length:var(--lir-lede)] font-bold leading-tight tracking-[-0.01em] text-fg">
-        <span className="text-accent">{n}</span> {heading}
-      </h3>
+      <ProseReveal>
+        <h3 className="max-w-[40ch] text-[length:var(--lir-lede)] font-bold leading-tight tracking-[-0.01em] text-fg">
+          <span className="text-accent">{n}</span> {heading}
+        </h3>
+      </ProseReveal>
       {/* two small cards side by side */}
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         {row.map((src) => (
@@ -453,30 +826,74 @@ export function DecisionCluster({
           <img key={src} src={src} alt="" className="h-auto w-full rounded-[var(--radius-lg)]" loading="eager" />
         ))}
       </div>
-      {/* wide reasoning card(s) stacked below */}
+      {/* Reasoning card(s) below the first row.
+
+          A card exported at the full column width (765) spans it; cards
+          exported at the SMALL size (368/373) are laid out 2-up instead —
+          that's dd2, which is a 2x2 grid in Figma (239:27 / ref), not a stack
+          of full-width cards. Forcing those into the wide slot stretched them
+          ~2x and ballooned their baked-in text. Grouping is derived from each
+          file's intrinsic width, so re-exporting a card at a different size
+          re-flows it automatically. */}
       <div className="mt-5 space-y-5">
-        {wide.map((src) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={src} src={src} alt="" className="h-auto w-full rounded-[var(--radius-lg)]" loading="eager" />
-        ))}
+        <CardRows srcs={wide} />
       </div>
 
-      {/* supporting screenshots — resized DOWN and spawned as-is: bare full
-          images (no frame, no crop). Each row lays its images out side by side
-          per its `cols` (e.g. the 3 phone shots 3-up). (Figma 239:27 / 240:xx) */}
+      {/* The cluster's thesis, stated plainly on the canvas between the cards
+          and the screenshots — same register as the reading column: white
+          heading, muted body, measure-capped. Scroll-revealed by ProseReveal. */}
+      {note && (
+        <ProseReveal className="mt-16 max-w-[var(--lir-measure)]">
+          <h4 className="text-[clamp(1.4rem,1.05rem+1.2vw,1.9rem)] font-semibold leading-[1.15] tracking-[-0.01em] text-fg">
+            {note.heading}
+          </h4>
+          {note.body.map((p, i) => (
+            // --lir-note (14px), same as the outlined audit callouts — this is
+            // standalone prose on the canvas, not caption-scale secondary text.
+            <p
+              key={i}
+              className="mt-4 text-[length:var(--lir-note)] leading-relaxed text-[#d2d2d2]"
+            >
+              {p}
+            </p>
+          ))}
+        </ProseReveal>
+      )}
+
+      {/* Supporting screenshots. Figma (239:27) gives every media row a FIXED
+          height inside the 765 column — a 2-up row is 310 tall, the full-width
+          shot 443 — so tall phone shots sit compactly side by side instead of
+          rendering at their natural height and towering over the layout.
+          `tight` rows (the 3-up phones) get a bigger box + a closer gutter. */}
       {mediaRows && mediaRows.length > 0 && (
         <div className="mt-8 space-y-6">
           {mediaRows.map((r, i) => {
             const cols = r.cols ?? r.imgs.length;
+            // taller box for a single full-width shot; shorter for 2-3 up.
+            // `tight` scales the frames up and pulls the columns together.
+            const rowH = r.tight
+              ? "h-[clamp(300px,32vw,470px)]"
+              : cols === 1
+                ? "h-[clamp(240px,26vw,444px)]"
+                : "h-[clamp(190px,20vw,310px)]";
             return (
               <figure key={i}>
                 <div
-                  className="grid items-start gap-5"
+                  className={cn("grid items-start", r.tight ? "gap-2" : "gap-5")}
                   style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
                 >
                   {r.imgs.map((src) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={src} src={src} alt="" className="h-auto w-full" loading="eager" />
+                    <img
+                      key={src}
+                      src={src}
+                      alt=""
+                      // contain, not cover: these are screenshots — cropping a
+                      // tall phone shot to a short box would cut the UI being
+                      // shown. Contain scales the whole frame down to fit.
+                      className={cn("w-full object-contain", rowH)}
+                      loading="eager"
+                    />
                   ))}
                 </div>
                 {r.caption && (

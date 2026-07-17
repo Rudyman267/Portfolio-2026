@@ -5,46 +5,49 @@ import type { ReactNode } from "react";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 
 /* ============================================================================
-   CHAPTER TRANSITION — a scroll-scrubbed "chapter card" for a case-study
-   section. As you scroll toward the chapter, its Tanker name flashes up to
-   FILL the viewport (pinned, centered), then disappears as you continue; the
-   chapter's content elements then spawn in, scrubbed to scroll. Everything is
-   mapped to scroll position, so scrolling back UP replays the flash in reverse.
+   CHAPTER TRANSITION — viewport-driven, zero dead scroll.
 
-   A chapter can contain ADDITIONAL flash panels in its content stream (e.g. a
-   full-viewport pull-quote that plays then clears as the next block appears) —
-   every [data-flash-runway] gets the same pinned scrub treatment.
+   Each chapter head (and any in-chapter quote flash) is a REAL full-viewport
+   panel in normal document flow: the title owns one screen of the canvas and
+   scrolls with it like any other content. When the panel enters the viewport,
+   its reveal plays itself (a one-shot animation, not scrubbed and not pinned);
+   scrolling on simply carries the panel away with the canvas.
+
+   Why no pins/fixed layers: pinning inserts spacer scroll the reader must
+   cross after the scene has already peaked, and fixed overlays fight the
+   natural canvas (clipped titles, black holes between scenes). In-flow panels
+   make dead scrolling structurally impossible — every pixel of travel moves
+   real content — while the enter-triggered timeline keeps the cinematic
+   reveal. Scrolling back up above a panel reverses it, so the reveal replays
+   on the way back down.
    ============================================================================ */
 
-/** One pinned full-viewport flash: `content` holds on an empty screen while you
- *  scroll its runway, fading + scaling in then out. Use for chapter titles and
- *  in-chapter quote flashes alike.
- *
- *  The flash sits on an OPAQUE page-colored backdrop at a high z-index, so while
- *  it holds nothing behind or after it can ghost through; the backdrop fades
- *  with the flash so the content underneath is revealed cleanly. */
+/* ── PACING DIALS ─────────────────────────────────────────────────────────── */
+// Where in the viewport a panel's reveal fires: when the panel's top crosses
+// this line, the title plays. Lower % = fires later (panel more fully on
+// screen); higher % = earlier.
+const FLASH_START = "top 55%";
+// Small breathing gaps between a chapter's pieces. The flash panel itself is
+// the separator between chapters now, so these stay minimal.
+const POST_FLASH = "h-[8vh]"; // after the title panel, before content
+const TRAILING = "h-[10vh]"; // after the chapter's content
+
+/** One full-viewport flash panel: a real in-flow screen of canvas holding the
+ *  chapter title (or an in-chapter quote) centered. Its reveal self-plays when
+ *  the panel scrolls into view; it scrolls off naturally with the page. */
 export function FlashPanel({ children }: { children: ReactNode }) {
   return (
     <div
-      data-flash-runway
-      className="relative flex h-screen w-full items-center justify-center overflow-hidden"
+      data-flash-panel
+      className="relative flex h-svh w-full items-center justify-center overflow-hidden px-6"
     >
-      {/* opaque FIXED backdrop — while the flash holds it covers the WHOLE
-          viewport (not just this runway box), so neither the previous chapter's
-          trailing content nor the next chapter's leading content can ever show
-          through or ghost. Toggled solid only while the flash pin is active. */}
-      <div
-        data-flash-bg
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-[40] bg-bg"
-        style={{ opacity: 0, visibility: "hidden" }}
-      />
-      <div
-        data-flash
-        aria-hidden
-        className="pointer-events-none relative z-[41] flex items-center justify-center px-6"
-      >
-        {children}
+      {/* two wrappers so the two animations never fight over one element:
+          [data-flash-exit] carries the scrubbed departure (outer), [data-flash]
+          carries the one-shot entrance (inner). Opacities multiply cleanly. */}
+      <div data-flash-exit className="flex items-center justify-center">
+        <div data-flash className="flex items-center justify-center text-center">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -69,49 +72,61 @@ export function Chapter({
         const el = root.current;
         if (!el) return;
 
-        // ── Every flash panel (title + any in-chapter quote flash) is pinned
-        // and reserves its own scroll length, so it holds centered on an empty
-        // screen while scrubbing, then clears before the next block. ──
-        const runways = gsap.utils.toArray<HTMLElement>(
-          el.querySelectorAll("[data-flash-runway]"),
-        );
-        runways.forEach((runway) => {
-          const flash = runway.querySelector<HTMLElement>("[data-flash]");
-          const bg = runway.querySelector<HTMLElement>("[data-flash-bg]");
-          if (!flash) return;
-          gsap.set(flash, { autoAlpha: 0, scale: 0.9 });
-          // backdrop is opaque for the WHOLE pin (set once, on enter/leave via
-          // toggle) so nothing behind the pinned flash can ever ghost through;
-          // only the flash text itself fades in/out.
-          if (bg) gsap.set(bg, { autoAlpha: 0 });
-          gsap
-            .timeline({
-              scrollTrigger: {
-                trigger: runway,
-                start: "top top",
-                end: "+=110%",
-                scrub: true,
-                pin: runway,
-                anticipatePin: 1,
-                // hard on/off for the opaque backdrop at the pin edges — it is
-                // fully solid the entire time the flash scene owns the viewport.
-                onToggle: (self) => {
-                  if (bg) gsap.set(bg, { autoAlpha: self.isActive ? 1 : 0 });
+        // ── Flash panels: the reveal plays itself once the panel enters the
+        // viewport. No pin, no scrub — the panel is ordinary content, so the
+        // canvas keeps moving with the scroll while the title animates. ──
+        gsap.utils
+          .toArray<HTMLElement>(el.querySelectorAll("[data-flash-panel]"))
+          .forEach((panel) => {
+            const flash = panel.querySelector<HTMLElement>("[data-flash]");
+            const exit = panel.querySelector<HTMLElement>("[data-flash-exit]");
+            if (!flash) return;
+            // ENTRANCE — one-shot, plays itself when the panel comes into view.
+            gsap.fromTo(
+              flash,
+              { autoAlpha: 0, scale: 0.9, yPercent: 10 },
+              {
+                autoAlpha: 1,
+                scale: 1,
+                yPercent: 0,
+                duration: 0.8,
+                ease: "power3.out",
+                scrollTrigger: {
+                  trigger: panel,
+                  start: FLASH_START,
+                  // onEnter / onLeave / onEnterBack / onLeaveBack — reverse
+                  // only when leaving backwards, so re-entering replays it.
+                  toggleActions: "play none none reverse",
                 },
               },
-            })
-            .to(flash, { autoAlpha: 1, scale: 1, ease: "power1.out", duration: 0.42 }, 0)
-            .to(flash, { autoAlpha: 1, duration: 0.16 })
-            .to(flash, {
-              autoAlpha: 0,
-              scale: 1.08,
-              yPercent: -6,
-              ease: "power1.in",
-              duration: 0.42,
-            });
-        });
+            );
+            // DEPARTURE — scrubbed to the panel scrolling out the top: the
+            // title lifts, scales and dissolves in lockstep with the canvas.
+            // Scrub here costs no dead scroll — it rides travel the reader is
+            // already making — and it auto-reverses when scrolling back down.
+            if (exit) {
+              gsap.fromTo(
+                exit,
+                { autoAlpha: 1, yPercent: 0, scale: 1 },
+                {
+                  autoAlpha: 0,
+                  yPercent: -30,
+                  scale: 1.08,
+                  ease: "none",
+                  scrollTrigger: {
+                    trigger: panel,
+                    start: "top top",
+                    end: "center top",
+                    scrub: true,
+                  },
+                },
+              );
+            }
+          });
 
-        // ── Content elements spawn in, each scrubbed as it arrives ──
+        // ── Content elements spawn in — each plays itself once it crosses the
+        // threshold, so a block completes its entrance without the reader
+        // having to keep scrolling to drive it. ──
         gsap.utils
           .toArray<HTMLElement>(el.querySelectorAll("[data-spawn]"))
           .forEach((node) => {
@@ -121,26 +136,25 @@ export function Chapter({
               {
                 autoAlpha: 1,
                 y: 0,
-                ease: "none",
+                ease: "power2.out",
+                duration: 0.7,
                 scrollTrigger: {
                   trigger: node,
-                  start: "top 92%",
-                  end: "top 62%",
-                  scrub: true,
+                  start: "top 85%",
+                  toggleActions: "play none none reverse",
                 },
               },
             );
           });
       });
 
-      // Reduced motion: everything visible, no flash panels.
+      // Reduced motion: the title panel is real content now (not an overlay),
+      // so it must stay VISIBLE — hiding it would leave a blank screen.
       mm.add("(prefers-reduced-motion: reduce)", () => {
         const el = root.current;
         if (!el) return;
         gsap.set(el.querySelectorAll("[data-spawn]"), { autoAlpha: 1, y: 0 });
-        gsap.set(el.querySelectorAll("[data-flash]"), { autoAlpha: 0 });
-        // collapse the runway spacers so reduced-motion users don't scroll empty screens
-        gsap.set(el.querySelectorAll("[data-flash-runway]"), { height: 0 });
+        gsap.set(el.querySelectorAll("[data-flash]"), { autoAlpha: 1 });
       });
     },
     { scope: root },
@@ -148,32 +162,27 @@ export function Chapter({
 
   return (
     <section ref={root} id={id} data-section className="scroll-mt-28">
-      {/* lead-in — lets the previous chapter's last element scroll fully out
-          before the title flash pins, so they don't share the screen */}
-      <div className="h-[55vh]" aria-hidden />
-
-      {/* chapter title flash */}
+      {/* chapter title panel — a full viewport of real canvas; doubles as the
+          breathing room between this chapter and the previous one */}
       <FlashPanel>
         <span className="display text-center text-[clamp(3.5rem,3rem+9vw,11rem)] uppercase leading-none text-accent">
           {title}
         </span>
       </FlashPanel>
 
-      {/* gap so the title flash fully clears before content spawns — prevents
-          the big title ghosting behind the first blocks */}
-      <div className="h-[30vh]" aria-hidden />
+      {/* small gap so the title isn't kissing the first content block */}
+      <div className={POST_FLASH} aria-hidden />
 
       {/* chapter content — flash panels + spawned blocks */}
       <div>{children}</div>
 
-      {/* trailing gap — the chapter's last content scrolls fully out before the
-          NEXT chapter's lead-in + title flash, so sections never overlap */}
-      <div className="h-[45vh]" aria-hidden />
+      {/* trailing gap before the next chapter's title panel */}
+      <div className={TRAILING} aria-hidden />
     </section>
   );
 }
 
-/** Wrap a chapter element so it spawns in (scrubbed) as it scrolls into view. */
+/** Wrap a chapter element so it spawns in (self-playing) as it enters view. */
 export function Spawn({
   children,
   className,

@@ -59,6 +59,8 @@ export type MediaRow = {
   imgs: string[];
   /** columns across (defaults to imgs.length). Use to force e.g. 3-up phones. */
   cols?: number;
+  /** larger frames + a tighter gutter (the 3-up phone shots — Figma ref). */
+  tight?: boolean;
   /** optional caption beneath the row. */
   caption?: string;
 };
@@ -70,6 +72,9 @@ export type DecisionCluster = {
   row: [string, string];
   /** Full-width reasoning card SVG(s), stacked below the row. */
   wide: string[];
+  /** A prose beat between the cards and the screenshots — the cluster's thesis
+   *  stated plainly on the canvas (e.g. dd3's "Mobile is a different product"). */
+  note?: { heading: string; body: string[] };
   /** Supporting screenshots grouped into explicit rows (exact layout control). */
   mediaRows?: MediaRow[];
 };
@@ -92,17 +97,19 @@ export type Block =
   // then goes away as the next block appears — e.g. the "During an emergency" quote.
   | { t: "quoteFlash"; text: string }
   | { t: "media"; slot: MediaSlot; wide?: boolean; caption?: string }
-  // "Here's the gap" — centered blue heading flanked by two blue bars.
-  | { t: "gapHeading"; text: string }
   // the orange "gap conclusion" card (Figma SVG, copy baked in) — the CEO
-  // scenario, shown as a full-width orange panel right after "Here's the gap".
+  // scenario, shown as a full-width orange panel right after the warehouse
+  // scenario. Pops in via GapReveal's spring-in.
   | { t: "gapConclusion"; src: string }
-  // "Here's the gap" text that MORPHS full-viewport into the orange gap-
-  // conclusion box — one continuous pinned scene (the text scales/fades, then
-  // the box takes over the viewport).
-  | { t: "gapMorph"; heading: string; src: string }
-  // a 16:9 video placeholder frame (a real <video>/embed drops in here later).
-  | { t: "video"; label: string }
+  // a 16:9 video. With `src` it renders the real player (audio matters here —
+  // it ships with mute/volume controls); without, the labelled placeholder.
+  | {
+      t: "video";
+      label: string;
+      /** basename under /case-study/video (both .webm + .mp4 are served). */
+      src?: string;
+      poster?: string;
+    }
   // full-viewport scene break — the following block group scrubs into an
   // otherwise-empty viewport (gives a beat its own scene inside a chapter).
   | { t: "sceneBreak" }
@@ -240,7 +247,7 @@ export const LIR_DESIGN: LirDesign = {
 
   cover: {
     id: "00-cover",
-    src: "/case-study/image-1.png",
+    src: "/case-study/image-1.webp",
     label:
       "The Live Incident Response session view — operator console: participant rail, multi-drone live feed grid, and a shared map with drone markers.",
   },
@@ -280,7 +287,7 @@ export const LIR_DESIGN: LirDesign = {
         // isolated drone illustration, centered + hanging above the body text
         {
           t: "figure",
-          src: "/case-study/drone-diagram.png",
+          src: "/case-study/drone-diagram.webp",
           alt: "A drone in flight, tracing a dashed path back to its launch point.",
           maxW: 560,
         },
@@ -288,26 +295,16 @@ export const LIR_DESIGN: LirDesign = {
           t: "richP",
           lead: "“Drones are operational infrastructure now.”",
           spans: [
-            { text: "Security companies", bold: true },
-            { text: " use them to patrol perimeters around the clock. " },
-            { text: "Railways", bold: true },
-            { text: " use them to survey hundreds of kilometres of track daily. " },
-            { text: "Solar farms", bold: true },
-            { text: " use them to inspect thousands of panels in a single shift. " },
-            { text: "Oil refineries", bold: true },
+            { text: "FlytBase", bold: true },
             {
-              text: " use them to detect heat signatures and potential failures before they become incidents. ",
-            },
-            { text: "Agricultural operations", bold: true },
-            {
-              text: " use them to monitor crops across regions that no ground crew could cover in the same time.",
+              text: " is an enterprise platform that enables organizations to deploy, manage, and automate fleets of autonomous drones at scale. From remote inspections to emergency response, it acts as the software layer that connects drones, docks, operators, and the people making decisions on the ground.",
             },
           ],
         },
         // isolated dock illustration, centered + hanging below the body text
         {
           t: "figure",
-          src: "/case-study/dock-diagram.png",
+          src: "/case-study/dock-diagram.webp",
           alt: "The autonomous drone-in-a-box dock, with a dashed flight path returning to it.",
           maxW: 620,
         },
@@ -334,17 +331,17 @@ export const LIR_DESIGN: LirDesign = {
           wide: true,
           slot: {
             id: "02-warehouse-fire",
-            src: "/case-study/scenario.png",
+            src: "/case-study/scenario.webp",
             label:
               "A warehouse fire — the command centre watching drone feeds while a firefighter on the ground gets the same live view on a tablet.",
           },
           caption:
             "A warehouse catches fire. The drone-in-a-box on the roof launches automatically and starts streaming thermal and visual feeds. The intelligence is already in the air — where the fire is hottest, whether anyone's inside, where to position the ladder truck.",
         },
-        // SCENE 3 — "Here's the gap" bars, then the orange CEO gap-conclusion
-        // box BELOW it, both as plain stacked blocks in normal flow (NOT a
-        // pinned morph — that overlapped the image above). Simple, correct order.
-        { t: "gapHeading", text: "Here’s the gap" },
+        // SCENE 3 — the orange CEO gap-conclusion box pops in right after the
+        // warehouse scenario. (The "Here's the gap" heading + its morph into
+        // this box were removed — the morph never read cleanly; the box lands
+        // on its own via GapReveal's spring-in.)
         { t: "gapConclusion", src: "/case-study/gap-conclusion.svg" },
       ],
     },
@@ -462,15 +459,15 @@ export const LIR_DESIGN: LirDesign = {
         // before/after slider (spawned as-is, not embedded in a frame)
         {
           t: "beforeAfter",
-          before: "/case-study/before-ui.png",
-          after: "/case-study/image-1.png",
+          before: "/case-study/before-ui.webp",
+          after: "/case-study/image-1.webp",
           caption: "fig. after and before first prompt and final shipped screen",
         },
         // Row 1 — text LEFT, design-system image RIGHT.
         {
           t: "splitRow",
           side: "right",
-          img: "/case-study/design-system.png",
+          img: "/case-study/design-system.webp",
           imgAlt:
             "Design.md — the FlytBase F design system in Figma, translated into a machine-readable spec for the AI build tools.",
           body: [
@@ -494,7 +491,7 @@ export const LIR_DESIGN: LirDesign = {
         {
           t: "splitRow",
           side: "left",
-          img: "/case-study/ascii-layout.png",
+          img: "/case-study/ascii-layout.webp",
           imgAlt:
             "ASCII layout planning with Claude — blocking out screen structure in a language both a human and an LLM can read before generating any component.",
           body: [
@@ -530,8 +527,8 @@ export const LIR_DESIGN: LirDesign = {
           row: ["/case-study/dd1-tempting.svg", "/case-study/dd1-gaveup.svg"],
           wide: ["/case-study/dd1-why.svg"],
           mediaRows: [
-            { imgs: ["/case-study/dd1-img-1.png", "/case-study/dd1-img-2.png"] },
-            { imgs: ["/case-study/dd1-img-3.png"] },
+            { imgs: ["/case-study/dd1-img-1.webp", "/case-study/dd1-img-2.webp"] },
+            { imgs: ["/case-study/dd1-img-3.webp"] },
           ],
         },
         {
@@ -539,7 +536,7 @@ export const LIR_DESIGN: LirDesign = {
           heading: "Session-based with invites and open links.",
           row: ["/case-study/dd2-tempting.svg", "/case-study/dd2-gaveup.svg"],
           wide: ["/case-study/dd2-shortcut.svg", "/case-study/dd2-why.svg"],
-          mediaRows: [{ imgs: ["/case-study/dd2-img-1.png"] }],
+          mediaRows: [{ imgs: ["/case-study/dd2-img-1.webp"] }],
         },
         {
           n: "03",
@@ -547,25 +544,26 @@ export const LIR_DESIGN: LirDesign = {
           row: ["/case-study/dd3-tempting.svg", "/case-study/dd3-gaveup.svg"],
           // "Why I gave it up" (green) first, then "What it cost me" (salmon) below.
           wide: ["/case-study/dd3-why.svg", "/case-study/dd3-shortcut.svg"],
+          // the mobile thesis — sits between "What it cost me" and the phone shots.
+          note: {
+            heading: "Mobile is a different product, not a smaller one.",
+            body: [
+              "Mobile is going to be used by people on ground during the emergency.",
+              "They don’t need everything simultaneously. They need one thing at a time, done well. This led to a state-machine architecture: Feed Mode, Map Mode, Annotation Mode, Chat Mode, Landscape Mode. Each mode owns the full screen and is optimized for its specific task.",
+            ],
+          },
           mediaRows: [
-            // the mobile section concludes with the 3 tall phone shots side by side
+            // the mobile section concludes with the 3 tall phone shots side by
+            // side — larger and tighter than a default row (Figma ref).
             {
               imgs: [
-                "/case-study/dd3-img-1.png",
-                "/case-study/dd3-img-2.png",
-                "/case-study/dd3-img-3.png",
+                "/case-study/dd3-img-1.webp",
+                "/case-study/dd3-img-2.webp",
+                "/case-study/dd3-img-3.webp",
               ],
               cols: 3,
+              tight: true,
               caption: "Phone collaborators can share their live camera feed",
-            },
-            // then the operator vs. guest persona UIs
-            {
-              imgs: ["/case-study/dd3-img-4.png"],
-              caption: "fig. UI for the operator and guests who will perform actions",
-            },
-            {
-              imgs: ["/case-study/dd3-img-5.png"],
-              caption: "fig. UI for Jean who just wants to see information",
             },
           ],
         },
@@ -588,8 +586,8 @@ export const LIR_DESIGN: LirDesign = {
           body2:
             "The feed is live, so the thing you're pointing at is gone a second later. A raw annotation on moving video points at nothing. Freezing the frame at the moment of annotation turns a fleeting gesture into a shared, permanent reference — everyone sees the same still, tied to the same feed, and can jump to it. The annotation stops being “look, over there, now” and becomes a record anyone can act on ten seconds or ten minutes later.",
           media: [
-            { id: "features-1", src: "/case-study/features-1.png", label: "Annotation mode — a collaborator circles a hazard on the live feed." },
-            { id: "features-2", src: "/case-study/features-2.png", label: "The frozen annotated frame posted to chat as a shared reference card." },
+            { id: "features-1", src: "/case-study/features-1.webp", label: "Annotation mode — a collaborator circles a hazard on the live feed." },
+            { id: "features-2", src: "/case-study/features-2.webp", label: "The frozen annotated frame posted to chat as a shared reference card." },
           ],
         },
         // 2 — translation: 1 image, so no scroll; text fixed right
@@ -601,7 +599,7 @@ export const LIR_DESIGN: LirDesign = {
           body2:
             "Names are tokenized out so \"Rudy\" survives intact, ops abbreviations (ETA, GPS, SITREP) are preserved instead of mangled, @mentions are excluded, and every result is cached per message:language so scrolling never re-translates. Select French, and every message in the session arrives in French — no matter what language it was typed in. The sender writes in theirs, you read in yours, and neither of you does anything.",
           media: [
-            { id: "features-3", src: "/case-study/features-3.png", label: "Chat with per-reader translation — a message arrives in the reader's chosen language." },
+            { id: "features-3", src: "/case-study/features-3.webp", label: "Chat with per-reader translation — a message arrives in the reader's chosen language." },
           ],
         },
         // 3 — session creation (2-click): 2 images scroll, text NEXT TO images (right)
@@ -611,8 +609,8 @@ export const LIR_DESIGN: LirDesign = {
           textSide: "right",
           body: "Select the drones, name the incident — the room is created. Two clicks and the operator is live.",
           media: [
-            { id: "features-5", src: "/case-study/features-5.png", label: "Step 1 — name your incident." },
-            { id: "features-6", src: "/case-study/features-6.png", label: "Step 2 — pick the drones for the session." },
+            { id: "features-5", src: "/case-study/features-5.webp", label: "Step 1 — name your incident." },
+            { id: "features-6", src: "/case-study/features-6.webp", label: "Step 2 — pick the drones for the session." },
           ],
         },
         // 4 — mass invite: 2 images scroll, text NEXT TO images (right)
@@ -622,7 +620,7 @@ export const LIR_DESIGN: LirDesign = {
           textSide: "right",
           body: "Pull in a pre-defined set of collaborators in one pass so the room is populated the moment it opens — no chasing people one invite at a time.",
           media: [
-            { id: "features-7", src: "/case-study/features-7.png", label: "Mass-invite — pre-defined collaborators added in one step." },
+            { id: "features-7", src: "/case-study/features-7.webp", label: "Mass-invite — pre-defined collaborators added in one step." },
           ],
         },
       ],
@@ -637,7 +635,7 @@ export const LIR_DESIGN: LirDesign = {
       lede: "I used PostHog to track usage and user data across my webapp.",
       dashboard: {
         id: "impact-1",
-        src: "/case-study/impact-1.png",
+        src: "/case-study/impact-1.webp",
         label:
           "PostHog web analytics — visitors, page views, sessions, session duration and bounce rate across the app.",
       },
@@ -645,7 +643,7 @@ export const LIR_DESIGN: LirDesign = {
         "Ensuring a steady flow of users helped me pinpoint scaling issues and potential drop-offs by watching their in-app walkthroughs recorded via PostHog.",
       growth: {
         id: "impact-2",
-        src: "/case-study/impact-2.png",
+        src: "/case-study/impact-2.webp",
         label:
           "Growth chart — steady increase in usage as releases and updates shipped.",
       },
@@ -655,7 +653,7 @@ export const LIR_DESIGN: LirDesign = {
         "As a solo designer I shipped an entire web app that security teams across the globe use and find value in.",
       closerMedia: {
         id: "impact-3",
-        src: "/case-study/impact-3.png",
+        src: "/case-study/impact-3.webp",
         label: "The live product in the field — the situation room in real use.",
       },
     },

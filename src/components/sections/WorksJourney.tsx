@@ -86,7 +86,7 @@ const EXIT = 0.6;
 
 // real window thumbnails, per slug (the rest stay clean white for now)
 const THUMB_SRC: Record<string, string> = {
-  "live-incident-response": "/case-study/image-1.png",
+  "live-incident-response": "/case-study/image-1.webp",
 };
 
 /* ------------------------------------------------------------- markup ---- */

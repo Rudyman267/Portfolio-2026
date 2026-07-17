@@ -10,6 +10,7 @@ import {
   CountUp,
   Figure,
   BeforeAfter,
+  DemoVideo,
   FeatureRow,
   OutlineNote,
   PullQuote,
@@ -61,82 +62,6 @@ const flytbaseLogo = (
     />
   </span>
 );
-
-/* ── GapMorph — one pinned full-viewport scene: the "Here's the gap" text
-   holds centered, then morphs (scales up + fades) as the orange gap-conclusion
-   box scales in from the center to fill the frame. Scrubbed to scroll, so it
-   plays forward on the way down and reverses on the way up. Reduced motion:
-   the box simply shows, text hidden. ─────────────────────────────────────── */
-function GapMorph({ heading, src }: { heading: string; src: string }) {
-  const root = useRef<HTMLDivElement>(null);
-  useGSAP(
-    () => {
-      const el = root.current;
-      if (!el) return;
-      const runway = el.querySelector<HTMLElement>("[data-gm-runway]");
-      const text = el.querySelector<HTMLElement>("[data-gm-text]");
-      const box = el.querySelector<HTMLElement>("[data-gm-box]");
-      if (!runway || !text || !box) return;
-
-      const mm = gsap.matchMedia();
-      mm.add("(prefers-reduced-motion: no-preference)", () => {
-        gsap.set(text, { autoAlpha: 0, scale: 0.85 });
-        gsap.set(box, { autoAlpha: 0, scale: 0.3, transformOrigin: "50% 50%" });
-        gsap
-          .timeline({
-            scrollTrigger: {
-              trigger: runway,
-              start: "top top",
-              end: "+=160%",
-              scrub: true,
-              pin: runway,
-              anticipatePin: 1,
-            },
-          })
-          // text rises + holds
-          .to(text, { autoAlpha: 1, scale: 1, ease: "power2.out", duration: 0.5 })
-          .to(text, { duration: 0.3 })
-          // text blows out as the box scales up through it to fill the frame
-          .to(text, { autoAlpha: 0, scale: 1.4, ease: "power2.in", duration: 0.5 }, ">-0.1")
-          .to(box, { autoAlpha: 1, scale: 1, ease: "power3.out", duration: 0.7 }, "<");
-      });
-      mm.add("(prefers-reduced-motion: reduce)", () => {
-        gsap.set(text, { autoAlpha: 0 });
-        gsap.set(box, { autoAlpha: 1, scale: 1 });
-        gsap.set(runway, { height: "auto" });
-      });
-    },
-    { scope: root },
-  );
-
-  return (
-    <div ref={root} data-section-scene>
-      <div
-        data-gm-runway
-        className="relative flex h-screen w-full items-center justify-center overflow-hidden"
-      >
-        {/* the "Here's the gap" bars/title SVG, centered */}
-        <div data-gm-text className="pointer-events-none absolute px-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/case-study/heres-the-gap.svg"
-            alt={heading}
-            className="mx-auto h-auto w-full max-w-[620px]"
-          />
-        </div>
-        {/* the orange gap-conclusion box that fills the frame */}
-        <div data-gm-box className="absolute w-full max-w-[var(--lir-measure)] px-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt="The CEO whose building is on fire and the fire captain in the parking lot don't have a FlytBase account, don't know what FlytBase is — a phone in one hand, a radio in the other, and they need answers now."
-            className="mx-auto h-auto w-full rounded-[21px]"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ── GapReveal — the orange "gap conclusion" card, revealed with a spring-in
    (scale + rise + a soft orange glow that pulses on arrival). Reduced motion:
@@ -338,9 +263,14 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
              bg) and simply scrolls up and over it, covering the thumbnail from
              below as it rises to fill the viewport. No opacity crossfade, so the
              two never ghost through each other. ─────────────────────────── */}
+      {/* NOTE: deliberately NOT data-header-dark. This cover is `fixed
+          inset-0`, so its rect overlaps the header strip at EVERY scroll
+          position — marking it dark pinned the header transparent for the
+          whole page, leaving the nav as bare text colliding with the case
+          study copy. The page is a dark route (see Header's darkPage), so the
+          bar is solid dark over the intro anyway. */}
       <div
         data-intro
-        data-header-dark
         aria-hidden
         className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden bg-black"
       >
@@ -495,34 +425,15 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </p>
             </Reveal>
 
-            {/* Demo video — closes the Overview. A real demo video drops into
-                this 16:9 placeholder frame later. */}
+            {/* Demo video — closes the Overview. Audio is part of the story,
+                so the player ships mute + volume controls and never autoplays
+                (autoplay would force muting and drop the narration). */}
             <Reveal className="mt-16 max-w-[var(--lir-measure)]">
-              <div
-                className="relative flex items-center justify-center overflow-hidden rounded-[var(--radius-lg)] border border-white/12 bg-surface-2"
-                style={{ aspectRatio: "16 / 9" }}
-              >
-                <div
-                  aria-hidden
-                  className="absolute inset-0 opacity-[0.5]"
-                  style={{
-                    backgroundImage:
-                      "radial-gradient(rgb(var(--color-fg) / 0.10) 1px, transparent 1px)",
-                    backgroundSize: "22px 22px",
-                  }}
-                />
-                <div className="relative flex flex-col items-center gap-3 text-center">
-                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/15 text-accent">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </span>
-                  <p className="max-w-[40ch] text-[13px] text-muted">
-                    Demo video — a 60-second walkthrough of Live Incident
-                    Response in a real session.
-                  </p>
-                </div>
-              </div>
+              <DemoVideo
+                src="/case-study/video/lir-demo"
+                poster="/case-study/video/lir-demo-poster.jpg"
+                label="Demo video — a walkthrough of Live Incident Response in a real session."
+              />
             </Reveal>
 
             {/* the spine */}
@@ -825,30 +736,20 @@ function ProseBody({
                 <Figure slot={b.slot} fig={nextFig()} />
               </W>
             );
-          case "gapHeading":
-            // the "Here's the gap" composition (blue bars + text) as the Figma
-            // SVG, scaled to the reading measure.
-            return (
-              <W key={i} className="py-6">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/case-study/heres-the-gap.svg"
-                  alt={b.text}
-                  className="mx-auto h-auto w-full max-w-[620px]"
-                />
-              </W>
-            );
           case "gapConclusion":
-            // the orange gap-conclusion card (copy baked into the SVG) — follows
-            // "Here's the gap". Given its own spring-in animation via GapReveal.
+            // the orange gap-conclusion card (copy baked into the SVG) — pops
+            // in after the warehouse scenario via GapReveal's spring-in.
             return (
               <GapReveal key={i} src={b.src} />
             );
-          case "gapMorph":
-            // "Here's the gap" text → morphs full-viewport into the orange box.
-            return <GapMorph key={i} heading={b.heading} src={b.src} />;
           case "video":
-            // 16:9 video placeholder frame — a real demo video drops in here.
+            // real player when a src is set; labelled placeholder otherwise.
+            if (b.src)
+              return (
+                <W key={i} className="max-w-[var(--lir-measure)]">
+                  <DemoVideo src={b.src} poster={b.poster} label={b.label} />
+                </W>
+              );
             return (
               <W key={i} className="max-w-[var(--lir-measure)]">
                 <div
@@ -876,9 +777,11 @@ function ProseBody({
               </W>
             );
           case "sceneBreak":
-            // a full-viewport beat so the NEXT block group scrubs into an empty
-            // frame — gives a paragraph group its own scene inside a chapter.
-            return <div key={i} aria-hidden className="h-[70vh]" />;
+            // a breathing beat so the NEXT block group arrives into a clear
+            // frame. Kept short: blocks now self-play on threshold rather than
+            // being scrubbed, so this no longer has to be a full empty
+            // viewport of scrolling to let a scene finish.
+            return <div key={i} aria-hidden className="h-[30vh]" />;
           case "centerP":
             return (
               <W key={i}>
@@ -1009,7 +912,7 @@ function ProseBody({
               />
             );
             return (
-              <W key={i} className="mt-4">
+              <W key={i} className="mt-[2.125rem]">
                 <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-14">
                   {imgFirst ? (
                     <>

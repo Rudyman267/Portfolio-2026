@@ -124,6 +124,7 @@
   --lir-stat:      2.25rem;     /* 36px  stat number (display, unchanged) */
   --lir-body:      1rem;        /* 16px  reading body (Figma 20 − 4) */
   --lir-body-sm:   0.75rem;     /* 12px  secondary (16 − 4) */
+  --lir-note:      0.875rem;    /* 14px  audit callouts + decision notes */
   --lir-label:     0.5625rem;   /* 9px   captions / small labels (13 − 4) */
   --lir-nav:       0.75rem;     /* 12px  Contents entries (16 − 4) */
   --lir-stat-label: 0.75rem;    /* 12px  stat label + sub (16 − 4) */
