@@ -272,6 +272,11 @@ export type BeatDriver = {
   scatter: { x: number; y: number };
 };
 
+/** A snap span (timeline units): if the scroll settles with the playhead
+ *  inside [from, to), the Hero's ScrollTrigger snap glides it to `rest` —
+ *  so a beat can never sit half-morphed (see Hero's snap config). */
+export type SnapSpan = { from: number; to: number; rest: number };
+
 /**
  * Appends the works chapter to the Hero's scrub timeline. Returns the chapter
  * start time (for the /#work anchor) and the per-beat drivers the ticker
@@ -280,8 +285,9 @@ export type BeatDriver = {
  */
 export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
   const drivers: BeatDriver[] = [];
+  const snapSpans: SnapSpan[] = [];
   const layer = root.querySelector<HTMLElement>("[data-works-layer]");
-  if (!layer) return { worksStart: tl.duration(), drivers };
+  if (!layer) return { worksStart: tl.duration(), drivers, snapSpans };
 
   const worksStart = tl.duration();
 
@@ -307,6 +313,18 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         { yPercent: -120, duration: 0.7, ease: "power2.in", immediateRender: false },
       )
       .to(intro, { autoAlpha: 0, duration: 0.2 }, "-=0.2");
+    // resting mid-intro settles on the fully-risen line (hold runs 0.9→1.4);
+    // resting mid-EXIT carries the line out to the clean tunnel (1.4→2.1)
+    snapSpans.push({
+      from: worksStart + 0.15,
+      to: worksStart + 1.35,
+      rest: worksStart + 1.1,
+    });
+    snapSpans.push({
+      from: worksStart + 1.35,
+      to: worksStart + 2.1,
+      rest: worksStart + 2.1,
+    });
   }
 
   // --- five project beats ---------------------------------------------------
@@ -345,6 +363,13 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
     const T = tl.duration() + (i === 0 ? 0.1 : 0.25); // breath between beats
     const M = T + SPAWN - 0.1; // morph begins right as the node docks
     const E = M + MORPH + HOLD; // exit
+
+    // Handhold spans: settle anywhere in the flight/morph → auto-glide to the
+    // fully-dressed window (just before the exit tween); settle mid-exit →
+    // carry the departure through to the clean tunnel. A beat can never be
+    // left half-morphed on screen (the mobile half-scroll complaint).
+    snapSpans.push({ from: T + 0.05, to: E, rest: E - 0.07 });
+    snapSpans.push({ from: E, to: E + EXIT, rest: E + EXIT });
 
     tl
       // summon: beat becomes visible, node fades/deblurs in while the ticker
@@ -455,7 +480,7 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
       .to(beat, { autoAlpha: 0, duration: 0.1 }, E + EXIT - 0.1);
   });
 
-  return { worksStart, drivers };
+  return { worksStart, drivers, snapSpans };
 }
 
 /* ---------------------------------------------------- per-frame flight ---- */

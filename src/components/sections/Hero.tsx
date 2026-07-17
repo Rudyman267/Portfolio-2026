@@ -451,7 +451,7 @@ export function Hero() {
         const DISARM_T = scrub.labels["outro"] + 0.6;
 
         // --- 3. works chapter — project nodes summoned over the tunnel ------
-        const { worksStart, drivers } = addWorksBeats(scrub, root);
+        const { worksStart, drivers, snapSpans } = addWorksBeats(scrub, root);
 
         // the nodes ride the SAME snake path as the tunnel instances, per
         // frame (scroll flies them in; idle travel keeps them swaying)
@@ -475,6 +475,30 @@ export function Hero() {
           scrub: 0.8,
           anticipatePin: 1,
           invalidateOnRefresh: true,
+          // HANDHOLD — when the scroll settles inside a works-beat span, glide
+          // to that beat's resting state (window fully formed, or the exit
+          // carried through) so the reader never sits on a half-morphed frame.
+          // A key mobile affordance: thumb-flick scrolling always lands short
+          // or long, and every beat stage is scrubbed. Outside the spans the
+          // value is returned untouched, so the phrases/tunnel scroll freely.
+          snap: {
+            snapTo: (value: number) => {
+              const t = value * scrub.duration();
+              for (const s of snapSpans) {
+                if (t >= s.from && t < s.to) return s.rest / scrub.duration();
+              }
+              return value;
+            },
+            // inertia:false = snapTo receives the CURRENT progress, not a
+            // velocity-projected landing. With projection, a fast flick (or a
+            // programmatic jump) reports a position far past the real one and
+            // the "no snap here" return value still tweens the page there —
+            // teleporting the reader. Positional-only is the safe behavior.
+            inertia: false,
+            duration: { min: 0.35, max: 1.1 },
+            delay: 0.12,
+            ease: "power2.inOut",
+          },
           // hero is first on the page → refresh before any later pins so
           // pin-spacing stacks in document order (higher number = first)
           refreshPriority: 1,
