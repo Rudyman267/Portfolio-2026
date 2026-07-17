@@ -203,12 +203,79 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 15)
+## 6. Current State (as of Session 16)
 
-**Status (as of Session 15): HOME "WORKS JOURNEY" + LIR DARK-MODE REBUILD SHIPPED. Two big bodies
-of work this session (see "WORKS JOURNEY — Session 15" and "LIR DARK REBUILD — Session 15" below).
-Prod `npm run build` clean (29.6s Turbopack, 13 pages incl. /work/live-incident-response).
-Everything from Session 14 (nav/about) still live. All committed on a Session-15 branch.**
+**Status (as of Session 16): LIR CASE-STUDY POLISH + PERF PASS SHIPPED TO PROD.
+Committed `9aff22d` and pushed to `main` → Vercel auto-deploy. Prod `npm run build` clean
+(51s, 13 pages incl. /work/live-incident-response). Live site responds 200. Dev server + headless
+Chrome stopped at session end. NO mobile responsiveness work done yet — see Next Steps (a mobile
+request was raised this session but explicitly deferred). Everything from Session 15 still live.**
+
+### LIR POLISH + PERF — Session 16 (all shipped in `9aff22d`)
+Iterative polish on the LIR case study, driven by the user screenshot-by-screenshot, plus a real
+perf pass. All verified via the raw-CDP headless-Chrome harness (scratchpad `verify*.mjs`; run FROM
+project dir so `ws` resolves; dismiss egg loader by clicking `button[aria-label="Click to enter the
+site"]`; CONNECT TO A PAGE TARGET not the browser endpoint; scroll THEN measure since images are
+eager). typecheck + prod build clean.
+- **Chapter flashes rebuilt to VIEWPORT-DRIVEN, zero dead scroll** (`Chapter.tsx`). Earlier passes
+  went scrubbed-pin → self-play-pin → **final: in-flow full-viewport panels**. Each flash is a real
+  `h-svh` panel in normal flow: `[data-flash]` = one-shot ENTRANCE (plays on enter, `toggleActions:
+  "play none none reverse"`), `[data-flash-exit]` (outer wrapper) = SCRUBBED departure (lifts/scales/
+  dissolves as the panel scrolls off, `start:"top top" end:"center top"`). Two wrappers so the two
+  tweens never fight one element. NO pins, NO fixed overlays — those clipped titles + made black
+  holes + forced empty scrolling (the user's exact complaint). Page height 49k→~30k px. Dial:
+  `FLASH_START` ("top 55%"). Content blocks + `ProseReveal` also self-play on enter.
+- **"Here's the gap" morph REMOVED.** `GapMorph` component + `gapMorph`/`gapHeading` block types
+  deleted; `heres-the-gap.svg` no longer referenced. The orange CEO box now just pops in after the
+  warehouse scenario via `GapReveal`'s spring-in (block type `gapConclusion`, unchanged).
+- **Decision cards (`lirBlocks.tsx` `DecisionCluster` + new `CardRows`/`CardImg`):** dd2 was
+  rendering its two "wide" cards stretched ~2.3x — they were exported at the SMALL 368/373px size,
+  not 765. `CardRows` reads each SVG's intrinsic width and lays small ones 2-up (the Figma 2x2 for
+  dd2, node 239:27), full-width ones span. Derived from file width, so re-exporting reflows with no
+  code change. `WIDE_CARD_DESIGN_W = 700` is the threshold. **`CardImg` reads naturalWidth on mount
+  AND onLoad — a cached image never fires onLoad** (this bit twice; the fix is load-agnostic now).
+- **Media rows height-capped** (Figma fixed boxes): `tight` rows (dd3 3-up phones) `h-[clamp(300px,
+  32vw,470px)]` + `gap-2`; single full-width `clamp(...444px)`; 2-3up `clamp(...310px)`. `object-
+  contain` (NOT cover — cropping a tall phone shot cuts the UI). Fixes towering screenshots.
+- **dd3 content edits (`lirDesign.ts`):** added `note` type on a cluster ("Mobile is a different
+  product, not a smaller one." + 2 body lines) rendered between the cards and the phone shots;
+  REMOVED the two persona figures (`dd3-img-4/5` "fig. UI for Jean" / "operator and guests"); phone
+  row now `tight`.
+- **Body copy +2px across the study** via the shared **`--lir-note` (14px)** token (created in a
+  prior step for audit callouts): audit callouts, the dd3 note, AND all Features body paragraphs
+  (`FeatureRow` body/body2) now 14px. `--lir-body-sm` (12px) UNCHANGED — captions/back-link/overview
+  notes stay small. Token drives 3 things now; change it in globals.css `:root` to move all together.
+- **Feature images CYCLE in place** (`ImageCycle`): the horizontal scroll-snap strip is GONE. 2+
+  images stack in ONE box (first in flow sizes it, rest `absolute inset-0`) and crossfade every
+  **2s** (`CYCLE_MS`), GSAP, pauses off-screen (ScrollTrigger onToggle), reduced-motion shows frame 1.
+  No added frame/rounding — screenshots carry their own chrome.
+- **Minimal GSAP text reveals** (`ProseReveal` in `lirBlocks.tsx`): children rise 14px + fade,
+  stagger 0.08, one-shot on enter (`top 82%`), reverse on scroll-up. Applied to cluster headings +
+  the dd3 note. Deliberately understated — motion budget is spent on the chapter flashes.
+- **DEMO VIDEO player** (`DemoVideo` in `lirBlocks.tsx`) replaces the 16:9 placeholder that closed
+  the Overview. Real controls: click/tap play, PAUSE, MUTE toggle, VOLUME slider, SCRUB bar, time
+  readout. **Never autoplays** — browsers force-mute autoplay, which would drop the narration the
+  user said matters. Serves `.webm` (VP9/Opus) then `.mp4` (H.264/AAC) + poster. `video` block type
+  gained optional `src`/`poster` (renders player when set, placeholder otherwise).
+- **VIDEO ENCODING (ffmpeg, kept audio):** source `case-study-assets/flytbase-project-1/LIR_V1.mp4`
+  (41.8MB, H.264/AAC, 1920x1080, 100s) → **`public/case-study/video/lir-demo.{webm,mp4}`** +
+  `lir-demo-poster.jpg`. webm = libvpx-vp9 crf34 + libopus 96k (11MB); mp4 = libx264 crf26 + aac 128k
+  (13.8MB); both scaled to 1600w, stereo audio PRESERVED, `+faststart` on mp4. Range requests work
+  (HTTP 206 → seeking). Source stays in gitignored `case-study-assets/`.
+- **IMAGE PERF — PNG→WebP:** `public/case-study` was **~70MB**; PNGs were 4K-wide (e.g. before-ui
+  4173x2167) rendering in an 860px column. Converted ALL case-study PNGs → **resized WebP** (ffmpeg
+  libwebp, cap width 1600 lanczos, quality 82): scenario 13.6MB→173KB, image-1 5.1MB→103KB, etc.
+  **Dir now ~31MB.** All 24 code refs updated to `.webp` (0 `.png` refs remain, all resolve). PNGs
+  deleted. Sources stay in gitignored `case-study-assets/`. NOTE: images are still `loading="eager"`
+  (deliberate — fixes a ScrollTrigger measurement bug per Session 15; weight solved via compression
+  not lazy-loading).
+- **HEADER on case-study routes (`Header.tsx`):** case studies were falling through to the WHITE bar
+  (nav = bare black text colliding with dark scrolling copy). Fix: `darkPage` now matches `/about`
+  OR `/^\/work\/[^/]+$/` → solid `#06080c` bar + white nav. ALSO the LIR thumbnail intro
+  (`LirCaseStudy.tsx`, `fixed inset-0`) was marked `data-header-dark`, so its rect overlapped the
+  header strip at EVERY scroll pos → pinned the header transparent for the whole page. Removed that
+  attr. Verified: solid `rgb(6,8,12)` at every depth, transparent only at footer. Home/about
+  unchanged.
 
 ### WORKS JOURNEY — Session 15 (home work showcase moved INTO the hero tunnel)
 The white horizontal "MY WORKS." gallery is GONE (`WorkGallery.tsx` deleted; `page.tsx` now renders
@@ -801,7 +868,20 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0. **BUILD THE `/play` PAGE** — the About page's game card links to `/play` (currently the styled
+0. **⭐ MOBILE RESPONSIVENESS (user's next request — raised Session 16, DEFERRED that session by
+   the user's own call to "ship what we have first, no mobile changes today").** The user's full ask
+   (verbatim intent): make the **hero page** and the **first case study (LIR)** mobile-responsive;
+   want the **interactive scroll shaders to work on phone** (open question they flagged: *will it
+   lag?* — needs a real perf check on-device, and a decision on whether to run the R3F scene or fall
+   back); the **footer** should match the desktop shaders on mobile too; and once the phone shader
+   path works, **REMOVE the mobile fallback VIDEO** that currently plays on phones. Also on mobile
+   there should be **no left/right white gutters** (the hero's curved side masks — see the user's
+   hero screenshot). NONE of this is started. Touchpoints: `Hero.tsx` (+ `hero3d/*`, the WebGL2/
+   touch gates), `WorksJourney.tsx`, `FooterGlow.tsx`, `LirCaseStudy.tsx`/`lirBlocks.tsx` layouts.
+   Remember Lenis is disabled on coarse-pointer + GSAP is `matchMedia`-gated — verify the mobile
+   breakpoints of all the Session-16 case-study work (cards, media rows, cycle boxes, video player).
+
+0b. **BUILD THE `/play` PAGE** — the About page's game card links to `/play` (currently the styled
    404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
    in gitignored `the-other-hand project/`; DO NOT commit it — it's a separate Vite app).
    Also `#play` + `#resume` nav anchors still have no destinations.
@@ -816,12 +896,12 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    c. **LIR case study** — the chapter flashes, the before/after slider drag, the features
       horizontal image strips. Confirm no section overlap on a real GPU (the lazy-load fix should
       hold, but the bug was GPU-timing-sensitive).
-2. **LIR — remaining polish (user drives).** The DARK rebuild + real assets + scroll scenes are
-   DONE (see Current State §6 "LIR DARK REBUILD"). Left:
-   a. **Fill the demo VIDEO** — the overview has a 16:9 video-placeholder frame (after the build
-      statement) awaiting the real walkthrough video.
-   b. **Verify per-image placement** — features (7 imgs / 3-4 features) and dd3 (5 imgs) were mapped
-      by best guess of order; user to confirm none land in the wrong slot.
+2. **LIR — remaining polish (user drives).** The DARK rebuild + real assets + scroll scenes + the
+   Session-16 polish/perf pass are DONE (see Current State §6). Left:
+   a. ✅ **Demo VIDEO — DONE (Session 16).** Real player w/ audio+volume controls shipped; encoded
+      to webm/mp4 in `public/case-study/video/`. (dd3 persona figs removed, phone shots re-laid-out.)
+   b. **Verify per-image placement** — features (7 imgs / 3-4 features) and dd3 (now 3 phone imgs)
+      were mapped by best guess of order; user to confirm none land in the wrong slot.
    c. **Derive the 4 thinner studies** later (Flytbase 2/3, ORO, self) as their own `lirDesign`-shaped
       files in the `STUDIES` registry. Must name employer.
    d. **Later:** migrate to Sanity (add `sectionHeading` block to `richContent`, `npm run typegen`)
@@ -843,6 +923,37 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 16 — 2026-07-17
+**LIR case-study polish + perf pass, then SHIPPED to prod. Full detail in Current State §6
+("LIR POLISH + PERF — Session 16"). Committed `9aff22d`, pushed to `main` → Vercel auto-deploy;
+local `npm run build` clean (51s, 13 pages); live site 200.** Iterative, screenshot-by-screenshot:
+1. **Chapter flashes → in-flow viewport-driven panels** (`Chapter.tsx`) to KILL the dead scroll the
+   user kept hitting. Went scrubbed-pin → self-play-pin → final in-flow (`[data-flash]` one-shot
+   entrance + `[data-flash-exit]` scrubbed departure, no pins/fixed). Page 49k→~30k px.
+2. **Removed "Here's the gap" morph** (`GapMorph` + `gapMorph`/`gapHeading` types deleted); orange
+   box now pops in after the warehouse via `GapReveal`.
+3. **Decision-card + media-row layout fixes** — dd2 renders 2x2 (was stretched ~2.3x; `CardRows`
+   groups by intrinsic width), media rows height-capped + `object-contain`, dd3 phones larger/tighter.
+   Added dd3 `note` ("Mobile is a different product…"), removed the 2 persona figs.
+4. **Body copy +2px** via shared `--lir-note` (14px): audit callouts + dd3 note + all Features bodies.
+5. **Feature images cycle in place** every 2s (`ImageCycle`) instead of a scroll strip; minimal
+   `ProseReveal` GSAP text reveals added.
+6. **Demo VIDEO player** (`DemoVideo`) with play/pause/MUTE/VOLUME/scrub, never autoplays (audio
+   matters). Encoded `LIR_V1.mp4` 41.8MB → webm 11MB + mp4 13.8MB + poster (audio kept), in
+   `public/case-study/video/`.
+7. **PERF: PNG→WebP** — `public/case-study` ~70MB → ~31MB (ffmpeg libwebp, cap 1600w, q82; 4K sources
+   were rendering in an 860px column). All 24 code refs → `.webp`; PNGs deleted; sources safe in
+   gitignored `case-study-assets/`.
+8. **Header on case-study routes** — now a solid dark bar (`darkPage` matches `/work/<slug>`); removed
+   `data-header-dark` from the LIR fixed thumbnail intro that had pinned the nav transparent all page
+   (nav text was colliding with dark copy). Verified solid at every depth, transparent only at footer.
+- **Deferred by the user:** a mobile-responsiveness request (hero + LIR + footer shaders on phone,
+  remove mobile fallback video, kill hero side gutters) was raised but explicitly pushed to next
+  session — user said ship first. See Next Steps §0. **NOT felt on real GPU** (headless only).
+- **Session end:** dev server + headless Chrome stopped. Perf note for the user: local lag this
+  session was the dev environment (node ~2.5GB, RAM 77%) — NOT the shipped site; the WebP/video pass
+  is the real-visitor win.
 
 ### Session 15 — 2026-07-14 → 07-16
 **Two big bodies of work; details in Current State §6 ("WORKS JOURNEY" + "LIR DARK REBUILD").**
