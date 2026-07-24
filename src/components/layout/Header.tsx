@@ -27,6 +27,10 @@ export function Header({
   // hero, and re-arms on client navigation since the Header persists in layout.
   const pathname = usePathname();
   const [overHero, setOverHero] = useState(false);
+  // When the footer (the closing scene) is on screen, its own Index column
+  // already lists the nav — so the header nav collapses to just the Rudyman
+  // brand to avoid duplicating it.
+  const [atFooter, setAtFooter] = useState(false);
 
   // Dark-theme pages: the SOLID header inverts (page-hex bar, white nav)
   // instead of falling back to the white bar. /about is a full-dark route, and
@@ -39,18 +43,30 @@ export function Header({
     const zones = Array.from(
       document.querySelectorAll<HTMLElement>("[data-header-dark]"),
     );
+    // the closing footer scene (Footer.tsx id="contact") — nav hides once any
+    // part of it is on screen.
+    const footer = document.getElementById("contact");
     if (!zones.length) {
       setOverHero(false);
-      return;
     }
     const update = () => {
       // transparent while ANY dark section overlaps the header strip
-      setOverHero(
-        zones.some((z) => {
-          const r = z.getBoundingClientRect();
-          return r.top < 80 && r.bottom > 16;
-        }),
-      );
+      if (zones.length) {
+        setOverHero(
+          zones.some((z) => {
+            const r = z.getBoundingClientRect();
+            return r.top < 80 && r.bottom > 16;
+          }),
+        );
+      }
+      // desktop nav collapses to the brand once the footer enters the
+      // viewport (the mobile hamburger stays — see below)
+      if (footer) {
+        const r = footer.getBoundingClientRect();
+        setAtFooter(r.top < window.innerHeight && r.bottom > 0);
+      } else {
+        setAtFooter(false);
+      }
     };
     update();
     window.addEventListener("scroll", update, { passive: true });
@@ -122,10 +138,15 @@ export function Header({
           {brand}
         </Link>
 
-        <Nav
-          items={nav}
-          className="hidden items-center gap-8 text-[14px] font-semibold tracking-[-0.42px] sm:flex"
-        />
+        {/* desktop nav row hides over the footer (its Index column already
+            lists these links) — only the Rudyman brand stays. The mobile
+            hamburger menu STAYS in all cases. */}
+        {!atFooter && (
+          <Nav
+            items={nav}
+            className="hidden items-center gap-8 text-[14px] font-semibold tracking-[-0.42px] sm:flex"
+          />
+        )}
 
         <button
           type="button"

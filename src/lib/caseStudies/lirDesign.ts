@@ -61,6 +61,9 @@ export type MediaRow = {
   cols?: number;
   /** larger frames + a tighter gutter (the 3-up phone shots — Figma ref). */
   tight?: boolean;
+  /** no gutter between images — the row's OUTER edges then align with a
+   *  full-width row above/below it (dd1's two maps over the marker panel). */
+  flush?: boolean;
   /** optional caption beneath the row. */
   caption?: string;
 };
@@ -121,6 +124,14 @@ export type Block =
   | { t: "matters"; items: MattersItem[] }
   | { t: "gapCards"; scene: string; roles: string } // the two amber "here's the gap" cards
   | { t: "auditNotes"; notes: OutlineNote[] }
+  // the "code architecture" Q&A beats on a vertical accent rail: each beat is a
+  // question about a moving piece → the constraint → the answer landed on.
+  | {
+      t: "archTimeline";
+      intro?: string;
+      outro?: string;
+      beats: { question: string; problem: string; answer: string }[];
+    }
   | { t: "designMd"; body: string; images: MediaSlot[] } // the design.md subsection
   // a bold white heading — a subsection title in the reading column.
   | { t: "heading"; text: string }
@@ -397,8 +408,18 @@ export const LIR_DESIGN: LirDesign = {
           t: "lede",
           text: "The vision for the final product had to be a single room per incident — sharing the same map, same feed and same annotations, synced across users.",
         },
-        // SCENE break — the "before designing anything new" audit is its own beat.
-        { t: "sceneBreak" },
+      ],
+    },
+
+    /* ── 05 PROCESS ──────────────────────────────────────────────────────── */
+    {
+      kind: "prose",
+      id: "process",
+      n: "05",
+      heading: "Process",
+      blocks: [
+        // The "before designing anything new" audit opens Process — it's the
+        // hand-off from reframing the problem into building against the data.
         {
           t: "p",
           text: "Before designing anything new, I audited what already existed. This is basic UX hygiene, but it's also where the builder dimension starts adding value: I wasn't just auditing the interface, I was auditing the data.",
@@ -417,16 +438,30 @@ export const LIR_DESIGN: LirDesign = {
             },
           ],
         },
-      ],
-    },
-
-    /* ── 05 PROCESS ──────────────────────────────────────────────────────── */
-    {
-      kind: "prose",
-      id: "process",
-      n: "05",
-      heading: "Process",
-      blocks: [
+        { t: "sceneBreak" },
+        {
+          t: "archTimeline",
+          intro: "Then I had to start building the code architecture.",
+          beats: [
+            {
+              question: "How would the drone feed work? Where does it come from?",
+              problem:
+                "The current Agora Stream (3rd party streaming service) API of flytbase only allows RTSP stream links to come for 1 drone, the API would not give one sharing link for multiple drone streams and even on ground cameras.",
+              answer:
+                "After discussing options with Claude the conclusion was to use a Supabase edge function that bundles each individual drone video feed's links into one container link that could be shared to my product's endpoint and we have multi-drone feed share figured out.",
+            },
+            {
+              question: "How would a live chat box work? With 7 to 11 language support?",
+              problem:
+                "Company denied purchasing a translation model API for this as the whole point of building this is to test if the market would pay for this product. So I had to figure out a free alternative that would work.",
+              answer:
+                "After exploring a few approaches with Claude, we landed on a Supabase Edge Function that handles translation server-side. Messages are stored once in the language they're written in and translated at read time, meaning every participant sees the conversation in their own language without creating duplicate copies.",
+            },
+          ],
+          outro:
+            "And similarly every other moving piece in this product needed a plan.",
+        },
+        { t: "sceneBreak" },
         {
           t: "p",
           text: "Once the API specs, tech architecture and data points were fixed, I started crafting the user flow of the webapp.",
@@ -527,7 +562,12 @@ export const LIR_DESIGN: LirDesign = {
           row: ["/case-study/dd1-tempting.svg", "/case-study/dd1-gaveup.svg"],
           wide: ["/case-study/dd1-why.svg"],
           mediaRows: [
-            { imgs: ["/case-study/dd1-img-1.webp", "/case-study/dd1-img-2.webp"] },
+            // the two maps sit flush so their outer edges line up with the
+            // full-width marker panel below.
+            {
+              imgs: ["/case-study/dd1-img-1.webp", "/case-study/dd1-img-2.webp"],
+              flush: true,
+            },
             { imgs: ["/case-study/dd1-img-3.webp"] },
           ],
         },

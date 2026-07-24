@@ -13,6 +13,7 @@ import {
   DemoVideo,
   FeatureRow,
   OutlineNote,
+  ArchTimeline,
   PullQuote,
   MattersList,
   GapCards,
@@ -450,15 +451,6 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               ))}
             </div>
 
-            {/* close */}
-            <Reveal className="mt-20 border-t border-white/12 pt-10">
-              <p className="text-[var(--lir-label)] font-bold uppercase tracking-widest text-faint">
-                End of case study
-              </p>
-              <p className="mt-3 max-w-[var(--lir-measure)] text-[var(--lir-body-sm)] text-muted">
-                The contact + next-project handoff continues in the footer below.
-              </p>
-            </Reveal>
           </div>
         </div>
       </div>
@@ -827,6 +819,17 @@ function ProseBody({
                   </W>
                 ))}
               </div>
+            );
+          case "archTimeline":
+            // manages its own rail-draw + per-beat reveals, so it isn't wrapped
+            // in the generic spawn/reveal <W>.
+            return (
+              <ArchTimeline
+                key={i}
+                intro={b.intro}
+                outro={b.outro}
+                beats={b.beats}
+              />
             );
           case "heading":
             // bold white subsection title (2-line, tight) — Figma 229:3.

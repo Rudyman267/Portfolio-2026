@@ -574,14 +574,6 @@ export function Hero() {
       <div className="relative z-10 flex flex-1 flex-col justify-center px-[var(--gutter)]">
         {/* centered headline + pill */}
         <div className="relative mx-auto w-full max-w-[var(--container-wide)]">
-          {/* coordinates — tucked to the upper-right of the headline block */}
-          <p
-            data-hero-item
-            className="mb-3 text-right text-[clamp(0.85rem,1.2vw,1.2rem)] font-medium tracking-tight text-fg/85"
-          >
-            18.5544° N , 73.7759°
-          </p>
-
           {/* headline stack — phrase 0 in flow, the rest overlaid on top.
               Tanker (the site display face) — single weight, so no font-bold,
               and its natural tracking instead of the old tight Jakarta set. */}

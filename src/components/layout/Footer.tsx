@@ -153,11 +153,8 @@ export function Footer({
       {/* ambient hero-DNA particles rising from below the fold, behind ALL text */}
       <FooterGlow />
 
-      {/* top row — bookends the hero's labels */}
-      <div className="relative z-[1] flex items-start justify-between px-[var(--gutter)] pt-24 text-[13px] font-medium tracking-wide text-fg/60">
-        <span data-footer-item>( Contact )</span>
-        <span data-footer-item>18.5544° N , 73.7759°</span>
-      </div>
+      {/* spacer where the ( Contact ) / coordinates label row used to sit */}
+      <div className="pt-24" aria-hidden />
 
       {/* middle — the ask + the channels */}
       <div className="relative z-[1] flex flex-1 flex-col justify-center gap-14 px-[var(--gutter)] py-16 lg:flex-row lg:items-end lg:justify-between lg:gap-8">

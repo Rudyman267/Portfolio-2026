@@ -150,18 +150,21 @@ export function WorksProjectNode({ state }: { state: SceneState }) {
     const cam = camera as THREE.PerspectiveCamera;
     const tanY = Math.tan((cam.fov * Math.PI) / 360);
     const dockH = (DOCK_PX_H * 2 * d * tanY) / size.height;
-    const settle = 1 - Math.pow(1 - wn.p, 1.6);
+    // exponent matches flightXY's arrival curve (2.2) so scale and position
+    // decelerate together in one continuous glide.
+    const settle = 1 - Math.pow(1 - wn.p, 2.2);
     const breathe = 1 + 0.05 * (1 - wn.m) * Math.sin(t * 0.8);
     mesh.scale.setScalar(
       ((FLIGHT_H + (dockH - FLIGHT_H) * settle) / GEO_H) * breathe,
     );
 
-    // slow tumble in flight, settling face-on for the window handoff
+    // lazy drift-rotation in flight (half the old rates — the fast 3-axis
+    // tumble read as "flipping"), settling face-on for the window handoff
     const free = (1 - settle) * (1 - wn.m);
     mesh.rotation.set(
-      free * (t * 0.45 + 0.9) + 0.05 * (1 - wn.m) * Math.sin(t * 0.7),
-      free * (t * 0.6 + 2.1),
-      free * (t * 0.3),
+      free * (t * 0.22 + 0.9) + 0.05 * (1 - wn.m) * Math.sin(t * 0.7),
+      free * (t * 0.28 + 2.1),
+      free * (t * 0.14),
     );
   });
 

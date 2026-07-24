@@ -714,6 +714,184 @@ export function ProseReveal({
   );
 }
 
+/* ── ArchTimeline — the "code architecture" Q&A beats on a vertical rail.
+   Each beat = a question (what needed solving) → the constraint (muted) → the
+   answer we landed on (brighter). A single accent rail runs the whole column
+   and DRAWS IN as you scroll it (scaleY scrub, top-anchored), with a node dot
+   per beat that pops as the beat arrives. Intro/outro framing lines top & tail
+   it. Motion stays in the study's understated budget — the rail draw is the
+   one flourish; text just rises + fades (ProseReveal idiom). ─────────────── */
+export function ArchTimeline({
+  intro,
+  outro,
+  beats,
+}: {
+  intro?: string;
+  outro?: string;
+  beats: { question: string; problem: string; answer: string }[];
+}) {
+  const root = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      const el = root.current;
+      if (!el) return;
+      const mm = gsap.matchMedia();
+
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        // Rail draws top→bottom as the section scrolls through the viewport.
+        const rail = el.querySelector<HTMLElement>("[data-arch-rail]");
+        if (rail) {
+          gsap.fromTo(
+            rail,
+            { scaleY: 0 },
+            {
+              scaleY: 1,
+              ease: "none",
+              scrollTrigger: {
+                trigger: el,
+                start: "top 70%",
+                end: "bottom 75%",
+                scrub: true,
+              },
+            },
+          );
+        }
+
+        // Each beat: dot pops, then its lines rise + fade (staggered).
+        gsap.utils
+          .toArray<HTMLElement>(el.querySelectorAll("[data-arch-beat]"))
+          .forEach((beat) => {
+            const dot = beat.querySelector<HTMLElement>("[data-arch-dot]");
+            const lines = Array.from(
+              beat.querySelectorAll<HTMLElement>("[data-arch-line]"),
+            );
+            const tl = gsap.timeline({
+              scrollTrigger: {
+                trigger: beat,
+                start: "top 78%",
+                toggleActions: "play none none reverse",
+              },
+            });
+            if (dot) {
+              tl.fromTo(
+                dot,
+                { scale: 0, autoAlpha: 0 },
+                { scale: 1, autoAlpha: 1, duration: 0.45, ease: "back.out(2)" },
+                0,
+              );
+            }
+            tl.fromTo(
+              lines,
+              { autoAlpha: 0, y: 16 },
+              {
+                autoAlpha: 1,
+                y: 0,
+                duration: 0.6,
+                ease: "power2.out",
+                stagger: 0.09,
+              },
+              0.1,
+            );
+          });
+
+        // Framing lines (intro / outro) just rise + fade on their own.
+        gsap.utils
+          .toArray<HTMLElement>(el.querySelectorAll("[data-arch-frame]"))
+          .forEach((line) => {
+            gsap.fromTo(
+              line,
+              { autoAlpha: 0, y: 14 },
+              {
+                autoAlpha: 1,
+                y: 0,
+                duration: 0.6,
+                ease: "power2.out",
+                scrollTrigger: {
+                  trigger: line,
+                  start: "top 84%",
+                  toggleActions: "play none none reverse",
+                },
+              },
+            );
+          });
+      });
+
+      mm.add("(prefers-reduced-motion: reduce)", () => {
+        gsap.set(
+          el.querySelectorAll(
+            "[data-arch-rail],[data-arch-dot],[data-arch-line],[data-arch-frame]",
+          ),
+          { autoAlpha: 1, scale: 1, scaleY: 1, y: 0 },
+        );
+      });
+    },
+    { scope: root },
+  );
+
+  return (
+    <div ref={root} className="max-w-[var(--lir-measure)]">
+      {intro && (
+        <p
+          data-arch-frame
+          className="text-[length:var(--lir-body)] leading-relaxed text-muted"
+        >
+          {intro}
+        </p>
+      )}
+
+      {/* rail column: a thin accent line down the left, beats hang off it */}
+      <div className="relative mt-10 pl-9">
+        {/* the rail — origin-top so it draws downward */}
+        <span
+          data-arch-rail
+          aria-hidden
+          className="absolute left-[3px] top-2 bottom-2 w-px origin-top bg-accent/50"
+        />
+        <div className="space-y-16">
+          {beats.map((b, i) => (
+            <div key={i} data-arch-beat className="relative">
+              {/* node dot sitting on the rail, aligned to the question */}
+              <span
+                data-arch-dot
+                aria-hidden
+                className="absolute -left-9 top-[0.55rem] block h-[9px] w-[9px] rounded-full bg-accent shadow-[0_0_0_4px_rgba(255,141,59,0.15)]"
+              />
+              <h4
+                data-arch-line
+                className="text-[clamp(1.35rem,1.05rem+1.1vw,1.75rem)] font-semibold leading-[1.2] tracking-[-0.01em] text-fg"
+              >
+                {b.question}
+              </h4>
+              <p
+                data-arch-line
+                className="mt-4 text-[length:var(--lir-note)] leading-relaxed text-muted"
+              >
+                {b.problem}
+              </p>
+              <p
+                data-arch-line
+                className="mt-4 text-[length:var(--lir-note)] leading-relaxed text-[#e6e6e6]"
+              >
+                {b.answer}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {outro && (
+        <p
+          data-arch-frame
+          className="mt-12 text-[length:var(--lir-body)] leading-relaxed text-fg"
+        >
+          {outro}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* Width a card is exported at when it spans the full 765px content column.
    Anything narrower (368/373) is a SMALL card and belongs in a 2-up row —
    stretching it across the column is what blew its baked-in text up ~2x. */
@@ -877,15 +1055,30 @@ export function DecisionCluster({
             // Below sm the fixed Figma row heights would letterbox a ~110px-
             // wide column inside a 300px-tall box — phones get natural aspect
             // (h-auto) instead; the clamps only bind from sm up.
-            const rowH = r.tight
-              ? "h-auto sm:h-[clamp(300px,32vw,470px)]"
-              : cols === 1
-                ? "h-auto sm:h-[clamp(240px,26vw,444px)]"
-                : "h-auto sm:h-[clamp(190px,20vw,310px)]";
+            // `flush` rows size by WIDTH (h-auto): each image fills its half of
+            // the column so the pair's outer edges line up with the full-width
+            // row below, instead of shrinking to fit a fixed short height and
+            // leaving inset margins.
+            const rowH = r.flush
+              ? "h-auto"
+              : r.tight
+                ? "h-auto sm:h-[clamp(300px,32vw,470px)]"
+                : cols === 1
+                  ? "h-auto sm:h-[clamp(240px,26vw,444px)]"
+                  : "h-auto sm:h-[clamp(190px,20vw,310px)]";
             return (
               <figure key={i}>
                 <div
-                  className={cn("grid items-start", r.tight ? "gap-2" : "gap-5")}
+                  className={cn(
+                    "grid",
+                    // flush = small gutter + STRETCH so both columns share the
+                    // shorter image's height; the taller one crops its overflow
+                    // (object-cover below) so their BOTTOMS line up. The grid
+                    // also keeps the gap BETWEEN the 1fr columns, not outside,
+                    // so the row's outer edges still match a full-width row.
+                    // Other rows top-align (contain-fit, no crop).
+                    r.flush ? "items-stretch gap-2" : r.tight ? "items-start gap-2" : "items-start gap-5",
+                  )}
                   style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
                 >
                   {r.imgs.map((src) => (
@@ -894,10 +1087,11 @@ export function DecisionCluster({
                       key={src}
                       src={src}
                       alt=""
-                      // contain, not cover: these are screenshots — cropping a
-                      // tall phone shot to a short box would cut the UI being
-                      // shown. Contain scales the whole frame down to fit.
-                      className={cn("w-full object-contain", rowH)}
+                      // A flush row equalizes height and CROPS the overflow
+                      // (object-cover) so the two shots' bottoms align. Other
+                      // rows keep contain (no crop) — cropping a tall phone shot
+                      // to a short box would cut the UI being shown.
+                      className={cn("w-full", r.flush ? "h-full object-cover" : cn("object-contain", rowH))}
                       loading="eager"
                     />
                   ))}

@@ -51,19 +51,21 @@ const MOTE_D_FAR = 44;
 const MOTE_D_NEAR = 2.6;
 
 // per-beat lateral scatter (world units) — where the node lives OFF the path
-// spine before converging onto it, like the instanced boxes' scatter
+// spine before converging onto it, like the instanced boxes' scatter.
+// Kept moderate: big offsets made the approach swing wildly across the frame
+// ("overwhelming"); these read as a drift in from the side, not a slingshot.
 const SCATTER = [
-  { x: -11, y: 4.5 },
-  { x: 10, y: -5 },
-  { x: -8.5, y: -6 },
-  { x: 12, y: 3.5 },
-  { x: -12, y: 5.5 },
+  { x: -7, y: 3 },
+  { x: 6.5, y: -3.2 },
+  { x: -5.5, y: -3.8 },
+  { x: 7.5, y: 2.2 },
+  { x: -7.5, y: 3.5 },
 ];
 const MOTE_SCATTER = [
-  { x: -17, y: 8 },
-  { x: 14, y: -9 },
-  { x: 19, y: 5 },
-  { x: -13, y: -10 },
+  { x: -12, y: 5.5 },
+  { x: 10, y: -6.3 },
+  { x: 13, y: 3.5 },
+  { x: -9, y: -7 },
 ];
 
 // the resting energy-node size (before it morphs into the window)
@@ -78,10 +80,15 @@ const frameW = () => {
 };
 const frameH = () => Math.round(frameW() * 0.5625); // 16:9
 
-// beat rhythm (timeline units — the Hero pins ~0.41 viewport per unit)
-const SPAWN = 1.15;
-const MORPH = 0.8;
-const HOLD = 0.45;
+// beat rhythm (timeline units — the Hero pins ~0.41 viewport per unit).
+// The flight breathes a little longer; the morph is QUICK and starts while
+// the node is still gliding in (see MORPH_LEAD) so the cuboid never parks as
+// a bare orange rectangle waiting to become the window — shape → project is
+// one continuous gesture.
+const SPAWN = 1.3;
+const MORPH = 0.5;
+const MORPH_LEAD = 0.35; // how far before dock the morph begins
+const HOLD = 0.6;
 const EXIT = 0.6;
 
 // real window thumbnails, per slug (the rest stay clean white for now)
@@ -268,6 +275,8 @@ export type BeatDriver = {
   proxy: { p: number; m: number };
   wrap: HTMLElement;
   frame: HTMLElement;
+  /** the orange energy surface — ticker-owned (hidden on the live 3D path). */
+  skin: HTMLElement;
   motes: HTMLElement[];
   scatter: { x: number; y: number };
 };
@@ -355,13 +364,14 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
       proxy: { p: 0, m: 0 },
       wrap,
       frame,
+      skin,
       motes,
       scatter: SCATTER[i % SCATTER.length],
     };
     drivers.push(driver);
 
     const T = tl.duration() + (i === 0 ? 0.1 : 0.25); // breath between beats
-    const M = T + SPAWN - 0.1; // morph begins right as the node docks
+    const M = T + SPAWN - MORPH_LEAD; // morph begins during the arrival glide
     const E = M + MORPH + HOLD; // exit
 
     // Handhold spans: settle anywhere in the flight/morph → auto-glide to the
@@ -432,36 +442,35 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         },
         M,
       )
-      .fromTo(
-        skin,
-        { opacity: 1 },
-        { opacity: 0, duration: MORPH * 0.7, ease: "power2.in", immediateRender: false },
-        M + MORPH * 0.25,
-      )
+      // NOTE: no skin tween here — the orange energy skin belongs to the NODE,
+      // not the window. The ticker owns it exclusively: hidden on the live 3D
+      // path (the cuboid carries the orange), a fading stand-in on the video
+      // fallback. A timeline tween would fight those per-frame writes.
       .fromTo(
         glow,
         { opacity: 1, scale: 1.1 },
-        { opacity: 0, scale: 1.4, duration: 0.6, ease: "power2.out", immediateRender: false },
-        M + 0.2,
+        { opacity: 0, scale: 1.4, duration: 0.5, ease: "power2.out", immediateRender: false },
+        M + 0.1,
       )
-      // window dressing: index, title, summary, tags
+      // window dressing: index, title, summary, tags — compressed to the
+      // quicker morph so the window is fully dressed well before the exit
       .fromTo(
         pindex,
         { opacity: 0, y: 12 },
-        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out", immediateRender: false },
-        M + 0.3,
+        { opacity: 1, y: 0, duration: 0.35, ease: "power2.out", immediateRender: false },
+        M + 0.15,
       )
       .fromTo(
         title,
         { yPercent: 120 },
-        { yPercent: 0, duration: 0.65, ease: "power3.out", immediateRender: false },
-        M + 0.35,
+        { yPercent: 0, duration: 0.55, ease: "power3.out", immediateRender: false },
+        M + 0.2,
       )
       .fromTo(
         [desc, tags],
         { opacity: 0, y: 16 },
-        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out", immediateRender: false },
-        M + 0.5,
+        { opacity: 1, y: 0, duration: 0.45, stagger: 0.08, ease: "power2.out", immediateRender: false },
+        M + 0.3,
       )
       // exit: the whole composition blows past the camera
       .fromTo(
@@ -504,7 +513,10 @@ function flightXY(
   tanX: number,
   tanY: number,
 ) {
-  const d = dNear + (dFar - dNear) * Math.pow(1 - p, 1.6);
+  // exponent 2.2 (was 1.6): the node covers most of the distance early and
+  // spends the tail of the flight in a long decelerating glide — a calm,
+  // organic arrival instead of a rush that stops dead at the lens.
+  const d = dNear + (dFar - dNear) * Math.pow(1 - p, 2.2);
   const off = pathOffset(travel, d);
   const decay = Math.pow(Math.max(d - dNear, 0) / (dFar - dNear), 0.7);
   const wx = off.x + scatter.x * decay;
@@ -532,6 +544,7 @@ export function createWorksTicker(drivers: BeatDriver[]) {
     s: gsap.quickSetter(d.wrap, "scale") as (v: number) => void,
     r: gsap.quickSetter(d.wrap, "rotation", "deg") as (v: number) => void,
     f: gsap.quickSetter(d.frame, "opacity") as (v: number) => void,
+    k: gsap.quickSetter(d.skin, "opacity") as (v: number) => void,
     motes: d.motes.map((m) => ({
       x: gsap.quickSetter(m, "x", "px") as (v: number) => void,
       y: gsap.quickSetter(m, "y", "px") as (v: number) => void,
@@ -565,8 +578,8 @@ export function createWorksTicker(drivers: BeatDriver[]) {
       );
       st.x(pos.x * damp);
       st.y(pos.y * damp);
-      st.s(0.14 + 0.86 * (1 - Math.pow(1 - p, 2)));
-      st.r((pos.x / vw) * 16 * (1 - m)); // a whisper of bank into the turn
+      st.s(0.14 + 0.86 * (1 - Math.pow(1 - p, 2.2)));
+      st.r((pos.x / vw) * 8 * (1 - m)); // a whisper of bank into the turn
 
       // While the 3D scene renders the cuboid, the DOM frame exists only for
       // the morph — it crossfades in over the fading mesh. On the video
@@ -575,6 +588,11 @@ export function createWorksTicker(drivers: BeatDriver[]) {
         ? Math.min(1, Math.max(0, m / 0.35))
         : Math.min(1, Math.max(0, p / 0.3));
       st.f(frameAlpha);
+      // the orange skin never tints the 2D window on the live path — the
+      // cuboid carries all the orange and burns off behind the white window.
+      // Fallback (no 3D node): the skin IS the node through the flight, then
+      // burns off across the morph.
+      st.k(live ? 0 : 1 - Math.min(1, Math.max(0, (m - 0.05) / 0.4)));
       // never leave an invisible link hovering over the tunnel
       b.frame.style.pointerEvents = frameAlpha > 0.5 ? "auto" : "none";
 
