@@ -38,6 +38,11 @@ export function Header({
   // the white bar, so the nav sat as bare text over dark scrolling copy.
   const darkPage =
     pathname === "/about" || /^\/work\/[^/]+$/.test(pathname ?? "");
+  // The mobile menu panel needs a dark fill on every dark-canvas route — that
+  // includes the HOME page (dark hero) even though its header bar itself starts
+  // transparent-over-hero (so `darkPage` above excludes it). Without this the
+  // home menu opened white over the dark hero.
+  const darkMenu = darkPage || pathname === "/";
 
   useEffect(() => {
     const zones = Array.from(
@@ -159,11 +164,26 @@ export function Header({
         </button>
       </Container>
 
+      {/* Mobile menu panel — rendered as a FIXED top-layer overlay, NOT a child
+          in the sticky header's flow. On the home page the hero is PINNED
+          (position:fixed on touch) and, together with the header's -mb-16
+          negative margin, the old in-flow panel opened behind the pinned hero
+          canvas — so the links were invisible/untappable (the "hamburger does
+          nothing on home; renders behind the page" bug). A fixed overlay at
+          z-[110] (above the hero's z-20 and the sticky header's z-50, below the
+          loader's z-100 curtain only during load) can never be covered. */}
       <div
         ref={panelRef}
         className={cn(
-          "overflow-hidden sm:hidden",
-          darkPage ? "bg-[#06080c]" : "bg-white",
+          "fixed inset-x-0 top-16 z-[110] overflow-hidden sm:hidden",
+          "border-t",
+          // `hero-dark` scope on the dark panel so the Nav's text-fg/text-muted
+          // tokens invert to white/grey (the panel sits OUTSIDE any dark section,
+          // so without this the links render in the light theme's near-black and
+          // vanish on the #06080c fill).
+          darkMenu
+            ? "hero-dark border-white/10 bg-[#06080c]"
+            : "border-black/10 bg-white",
           "hidden", // starts closed; GSAP toggles display
         )}
       >

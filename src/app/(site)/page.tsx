@@ -1,5 +1,6 @@
 import { Hero } from "@/components/sections/Hero";
 import { WorksIndexStatic } from "@/components/sections/WorksJourney";
+import { HomeDarkBody } from "@/app/(site)/HomeDarkBody";
 
 export default async function HomePage() {
   // The work showcase lives INSIDE the hero's pinned journey now (project-node
@@ -14,6 +15,7 @@ export default async function HomePage() {
   // this page, so the light /work index and other routes are untouched.
   return (
     <div className="bg-[#06080c]">
+      <HomeDarkBody />
       <Hero />
       <WorksIndexStatic />
     </div>

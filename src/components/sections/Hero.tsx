@@ -15,6 +15,7 @@ import {
   createWorksTicker,
 } from "@/components/sections/WorksJourney";
 import { worksAnchor, scrollToWorks } from "@/components/sections/worksAnchor";
+import { HeroDebug } from "@/components/sections/HeroDebug";
 
 // Hero scene tweak panel (🎛 FAB, incl. the Footer Glow group). PERMANENTLY
 // mounted but dev-gated: in `next dev` NODE_ENV==="development" so the panel
@@ -230,6 +231,8 @@ export function Hero() {
         if (items.length) gsap.set(items, { opacity: 0, y: 18 });
 
         const reveal = () => {
+          // marker for the ?herodebug probe: proves reveal() actually ran.
+          root.setAttribute("data-revealed", "1");
           const tl = gsap.timeline();
           tl.to(introsOf(0), {
             yPercent: 0,
@@ -249,36 +252,54 @@ export function Hero() {
         // rAF ids for the deferred client-nav reveal (cancelled in cleanup).
         let revealRaf1 = 0;
         let revealRaf2 = 0;
-        // Self-healing guard: reveal() must run exactly once, no matter which
-        // path fires. On iOS Safari the [data-intro] layer was staying parked
-        // at yPercent:120 (off-screen, so "only the shader shows, no text") when
-        // the loader hand-off timing lined up badly with the pinned scene mount.
-        // A latched wrapper + a hard failsafe timer make it impossible for the
-        // headline to stay hidden — whichever trigger wins, the text comes in.
+        // ── REVEAL ROBUSTNESS (iOS "only the shader, no text" bug) ───────────
+        // The headline + Portfolio mark are hidden by the gsap.set above and
+        // brought back by reveal(). On iOS the previous approach (wait for the
+        // one-shot LOADER_DONE_EVENT, with a timer failsafe) still stranded them
+        // hidden: the loader's hand-off can fire BEFORE this effect subscribes,
+        // so the event is missed, and any effect re-run / early cleanup cancels
+        // the timer. Result: hidden forever. Fixes:
+        //   1. `instantReveal` — if the loader is ALREADY done when we mount
+        //      (is-loading absent), reveal without waiting for an event.
+        //   2. A POLL (not a single timeout) that watches is-loading clear, so a
+        //      missed event still triggers the reveal on the next tick.
+        //   3. A hard timeout ceiling as the last resort.
+        //   4. Cleanup FORCE-SHOWS the elements — if we tear down before the
+        //      reveal ran, they must never be left invisible.
         let revealed = false;
+        const forceShow = () => {
+          // snap to the visible state without animating (last-resort recovery)
+          gsap.set(introsOf(0), { yPercent: 0, clearProps: "opacity,visibility" });
+          if (items.length) gsap.set(items, { opacity: 1, y: 0 });
+        };
         const revealOnce = () => {
           if (revealed) return;
           revealed = true;
+          window.clearInterval(revealPoll);
+          window.clearTimeout(revealCeiling);
           reveal();
         };
-        // no matter what, the headline is on screen within ~1.4s of mount.
-        const revealFailsafe = window.setTimeout(revealOnce, 1400);
 
-        if (document.body.classList.contains("is-loading")) {
-          // fresh full load → wait for the loader to hand off, then reveal.
-          window.addEventListener(LOADER_DONE_EVENT, revealOnce, { once: true });
-        } else {
-          // client-side nav (e.g. clicking "Rudyman" from another page) — no
-          // loader runs. The SmoothScrollProvider queues a ScrollTrigger.refresh
-          // on the next frame to re-measure this page's pins; running reveal()
-          // synchronously here collides with that refresh, whose pin re-layout
-          // interrupts the tween and STRANDS the headline part-way down (the
-          // "text doesn't load" glitch). Defer past the refresh so the reveal
-          // animates cleanly on stable layout. Double rAF: frame 1 = provider's
-          // refresh, frame 2 = us.
+        // (2) poll: the moment the loader clears is-loading, reveal.
+        const revealPoll = window.setInterval(() => {
+          if (!document.body.classList.contains("is-loading")) revealOnce();
+        }, 120);
+        // (3) hard ceiling: reveal no matter what within 2.5s of mount.
+        const revealCeiling = window.setTimeout(revealOnce, 2500);
+
+        if (!document.body.classList.contains("is-loading")) {
+          // (1) loader already finished (event long gone) OR client-side nav —
+          // reveal on a deferred frame so it doesn't collide with the
+          // SmoothScrollProvider's queued ScrollTrigger.refresh (that refresh's
+          // pin re-layout would interrupt the tween and strand the headline).
+          // Double rAF: frame 1 = provider's refresh, frame 2 = us.
           revealRaf1 = requestAnimationFrame(() => {
             revealRaf2 = requestAnimationFrame(revealOnce);
           });
+        } else {
+          // fresh full load, loader still running → the event is the happy path;
+          // the poll/ceiling above are the safety nets if it's missed.
+          window.addEventListener(LOADER_DONE_EVENT, revealOnce, { once: true });
         }
 
         // --- curve hover open/close (blank wave → full panel + content) -----
@@ -497,8 +518,15 @@ export function Hero() {
           start: "top top",
           end: () => "+=" + Math.round(scrub.duration() * unitPx()),
           pin: true,
+          // Force FIXED pinning on touch. Left to auto-detect, ScrollTrigger
+          // uses transform-based pinning on mobile, which — together with
+          // anticipatePin — briefly exposes the pin-spacer for a frame at scroll
+          // start (the "white gap that spawns then snaps to full-viewport
+          // shader" on Android). Fixed pinning + no anticipation removes that
+          // flash. Desktop keeps the default (transform) pin + anticipatePin.
+          pinType: isCoarse ? "fixed" : undefined,
+          anticipatePin: isCoarse ? 0 : 1,
           scrub: 0.8,
-          anticipatePin: 1,
           invalidateOnRefresh: true,
           // HANDHOLD — when the scroll settles inside a works-beat span, glide
           // to that beat's resting state (window fully formed, or the exit
@@ -562,9 +590,14 @@ export function Hero() {
         return () => {
           window.removeEventListener(LOADER_DONE_EVENT, revealOnce);
           window.removeEventListener(LOADER_DONE_EVENT, goWorks);
-          window.clearTimeout(revealFailsafe);
+          window.clearInterval(revealPoll);
+          window.clearTimeout(revealCeiling);
           cancelAnimationFrame(revealRaf1);
           cancelAnimationFrame(revealRaf2);
+          // if we tear down before the reveal ran, DON'T leave the headline +
+          // Portfolio mark stranded invisible (the iOS failure mode) — snap them
+          // visible. A fresh mount will re-hide + re-reveal cleanly.
+          if (!revealed) forceShow();
           gsap.ticker.remove(tick);
           curveCleanups.forEach((fn) => fn());
         };
@@ -579,6 +612,9 @@ export function Hero() {
       data-header-dark
       className="hero-dark relative flex min-h-dvh flex-col overflow-hidden"
     >
+      {/* TEMP on-device diagnostics — only renders with ?herodebug in the URL */}
+      <HeroDebug />
+
       {/* living 3D ecosystem (video/poster fallback inside) */}
       <HeroCanvas />
 
