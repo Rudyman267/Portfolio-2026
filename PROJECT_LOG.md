@@ -203,13 +203,70 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 16)
+## 6. Current State (as of Session 17)
 
-**Status (as of Session 16): LIR CASE-STUDY POLISH + PERF PASS SHIPPED TO PROD.
-Committed `9aff22d` and pushed to `main` → Vercel auto-deploy. Prod `npm run build` clean
-(51s, 13 pages incl. /work/live-incident-response). Live site responds 200. Dev server + headless
-Chrome stopped at session end. NO mobile responsiveness work done yet — see Next Steps (a mobile
-request was raised this session but explicitly deferred). Everything from Session 15 still live.**
+**Status (as of Session 17): MOBILE HERO PASS + LIR CONTENT/READABILITY SHIPPED TO PROD.
+Two commits this session — `e94238f` (LIR Process reorder + code-architecture timeline) and
+`a682c1c` (mobile hero adaptation + video-fallback removal + LIR text-SVG widening) — both pushed to
+`main` → Vercel auto-deploy. Prod `npm run build` clean (13 pages incl. /work/live-incident-response).
+Dev server + headless Chrome stopped at session end. First real mobile work landed (hero journey +
+LIR readability); still NOT device-verified on real iOS Safari — see Next Steps. Everything from
+Session 16 still live; the hero background VIDEO fallback is now GONE (see below).**
+
+### MOBILE HERO + VIDEO REMOVAL — Session 17 (shipped in `a682c1c`)
+First real cross-device pass on the home hero, driven by user bug reports (Android empty drag-scrolls
++ white flash at bottom; iOS showed only the shader, no headline text). All desktop-affecting logic is
+gated on `pointer: coarse` so **desktop is byte-for-byte unchanged**. Verified with a mobile-emulated
+raw-CDP harness (device metrics + touch + coarse pointer; SwiftShader `--use-angle=swiftshader
+--enable-unsafe-swiftshader` so the WebGL2 scene branch actually mounts headless).
+- **Hero background VIDEO fallback REMOVED entirely.** `VideoBackground.tsx` + `ShaderBackground.tsx`
+  DELETED. Non-WebGL2 devices (or a scene crash / reduced-motion) now get a plain dark `#04070d`
+  canvas via a tiny `DarkFallback` that still calls `markHeroVideoReady()` so the loader door never
+  hangs. `HeroCanvas` modes are now `"scene" | "dark"`. `heroReady.ts` kept (loader coordination) with
+  refreshed comments. **`ogl` is now an unused dependency** — left in package.json to avoid a lockfile
+  churn; safe to drop on the next real `npm install`.
+- **Mobile scroll journey SHRUNK, not removed** (user explicitly wanted it kept but "smaller / more
+  accessible"). In `Hero.tsx`, pin travel is `endVh = isCoarse ? 1.25 : 2.35` (was a flat
+  `OLD_END_VH = 2.35`). Same journey (all 3 phrases + 5 node beats) now plays over ~half the scroll —
+  page height **~11 → ~6.8 viewports** on a 390px phone (measured). `heroScroll.progress` still scales
+  by `OLD_UNITS` so the tunnel just travels a touch faster per swipe. Desktop path untouched.
+- **iOS "only shader, no text" FIXED.** The headline `[data-intro]` layer was staying parked at
+  `yPercent:120` (off-screen) when the loader hand-off timing lined up badly with the pinned WebGL
+  scene mount on iOS Safari. Fix: a latched **`revealOnce()`** wrapper + a hard **1.4s failsafe timer**
+  so the reveal fires no matter which trigger wins — the headline can never stay hidden. Both the
+  loader-event path and the client-nav double-rAF path now call `revealOnce`; cleanup clears the timer.
+- **White flash at page bottom FIXED.** The page `body` default background is warm near-white
+  (`--color-bg: 250 250 249`); on touch the hero pin-spacer could briefly under-cover as the pin
+  released, flashing white. Fix: `page.tsx` home root wrapped in `bg-[#06080c]` so any spacer gap shows
+  the dark canvas. Scoped to the home page — the light `/work` index and other routes are untouched.
+
+### LIR MOBILE READABILITY — Session 17 (shipped in `a682c1c`)
+User asked to scale up SPECIFIC baked-in-text SVGs on phones (their text is inside the SVG, so render
+width = text size; too small in the reading column on a 390px phone).
+- **New `.lir-wide-mobile` utility** (globals.css, `.lir` scope): breaks an element out to
+  `100vw - 24px` on phones (`margin-left:50% + translateX(-50%)`), collapsing to a normal in-column
+  element at `min-width: 640px` (`sm`). Phone-only — desktop/tablet untouched.
+- Applied to EXACTLY the three the user named: the **orange "gap conclusion" box** (end of Problem,
+  `GapReveal` img) and dd3's **"Why I gave it up" / "What it cost me"** cards (the `wide` cards in the
+  "Mobile is a different persona" decision cluster). Threaded via a new optional `wideMobile?: boolean`
+  on `DecisionCluster` (set true only on dd3 in `lirDesign.ts`) → `CardRows` → `CardImg`; only applied
+  to SOLO full-width cards (a 2-up pair can't take the negative-margin breakout). Verified: phone
+  renders them 366px vs the 342px text column (wider = bigger text); desktop stays 850–860px in-column;
+  no horizontal scroll introduced.
+
+### LIR PROCESS CONTENT — Session 17 (shipped in `e94238f`)
+- **Audit trio moved into Process.** The "Before designing anything new… I audited what already
+  existed" intro + the three orange `auditNotes` callouts now OPEN 05 Process instead of trailing 04
+  Reframe; Reframe now ends on the "single room per incident" vision lede. (Note: content-order changes
+  to a Chapter need a HARD reload to re-measure — ScrollTrigger keeps stale flash/spawn offsets across
+  HMR, which briefly showed a dead gap under the PROCESS flash until reload.)
+- **New `archTimeline` block** — the "code architecture" Q&A beats on a vertical accent rail. Two beats
+  (drone-feed via a Supabase edge fn; live-chat 7–11 language translation server-side), each = question
+  (white) → constraint (muted) → answer (brighter), framed by "Then I had to start building the code
+  architecture." / "And similarly every other moving piece… needed a plan." Component `ArchTimeline`
+  in `lirBlocks.tsx`: the rail DRAWS IN on scroll (scaleY scrub), per-beat node dot pops (`back.out`) +
+  staggered line reveals (ProseReveal idiom), full reduced-motion fallback. Inserted right after the
+  audit, before the user-flow beat.
 
 ### LIR POLISH + PERF — Session 16 (all shipped in `9aff22d`)
 Iterative polish on the LIR case study, driven by the user screenshot-by-screenshot, plus a real
@@ -868,18 +925,27 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0. **⭐ MOBILE RESPONSIVENESS (user's next request — raised Session 16, DEFERRED that session by
-   the user's own call to "ship what we have first, no mobile changes today").** The user's full ask
-   (verbatim intent): make the **hero page** and the **first case study (LIR)** mobile-responsive;
-   want the **interactive scroll shaders to work on phone** (open question they flagged: *will it
-   lag?* — needs a real perf check on-device, and a decision on whether to run the R3F scene or fall
-   back); the **footer** should match the desktop shaders on mobile too; and once the phone shader
-   path works, **REMOVE the mobile fallback VIDEO** that currently plays on phones. Also on mobile
-   there should be **no left/right white gutters** (the hero's curved side masks — see the user's
-   hero screenshot). NONE of this is started. Touchpoints: `Hero.tsx` (+ `hero3d/*`, the WebGL2/
-   touch gates), `WorksJourney.tsx`, `FooterGlow.tsx`, `LirCaseStudy.tsx`/`lirBlocks.tsx` layouts.
-   Remember Lenis is disabled on coarse-pointer + GSAP is `matchMedia`-gated — verify the mobile
-   breakpoints of all the Session-16 case-study work (cards, media rows, cycle boxes, video player).
+0. **⭐ MOBILE RESPONSIVENESS — STARTED Session 17, PARTIALLY DONE.** DONE (shipped `a682c1c`, see
+   §6 "MOBILE HERO + VIDEO REMOVAL" + "LIR MOBILE READABILITY"): phone shaders already run (WebGL2
+   scene on coarse pointer via the mobile quality profile — that predates this session); the **mobile
+   fallback VIDEO is REMOVED** (deleted everywhere, dark canvas replaces it); the hero **scroll journey
+   is shrunk** (~half the scroll on touch) so the empty drag-scrolls are gone; the **iOS no-text bug**
+   (revealOnce + failsafe) and the **white-flash-at-bottom** are fixed; and the two flagged **LIR
+   text-SVGs** (orange gap box + dd3 why/cost cards) are widened on phones. STILL OPEN:
+   a. **REAL iOS-Safari + Android device verification** — everything above was checked in mobile-
+      EMULATED headless Chrome (SwiftShader), NOT real Safari. The iOS text fix is a timing failsafe,
+      not a confirmed root-cause fix on-device; the user must load the live site on an actual iPhone +
+      Android phone and confirm: headline text appears, scroll feels tight/accessible, no white flash,
+      SVGs readable. Perf/lag on the real GPU still unverified on-device.
+   b. **Hero left/right white gutters on mobile** (the curved CASES/PLAYS side masks — user's original
+      ask) — NOT addressed this session; still to check on a real phone.
+   c. **Footer shaders on mobile** — the log says they were already wired (Session pre-17 "real footer
+      shaders on phone"); confirm on-device.
+   d. **Verify the mobile breakpoints of ALL the Session-16 LIR work** (decision cards, media rows,
+      image-cycle boxes, before/after slider, demo video player) — only the two named text-SVGs were
+      touched this session; the rest is unverified on a phone.
+   Touchpoints: `Hero.tsx` (+ `hero3d/*` WebGL2/touch gates), `WorksJourney.tsx`, `FooterGlow.tsx`,
+   `LirCaseStudy.tsx`/`lirBlocks.tsx`. Lenis is disabled on coarse-pointer; GSAP is `matchMedia`-gated.
 
 0b. **BUILD THE `/play` PAGE** — the About page's game card links to `/play` (currently the styled
    404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
@@ -923,6 +989,32 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 17 — 2026-07-24
+**LIR Process content (audit reorder + new code-architecture timeline), then a first real MOBILE pass
+on the home hero + LIR readability, then SHIPPED. Two commits pushed to `main` → Vercel: `e94238f`
+(content) and `a682c1c` (mobile). Prod `npm run build` clean (13 pages) before each push. Dev server +
+headless Chrome stopped at end. Full detail in Current State §6 (three Session-17 subsections).**
+1. **LIR: moved the audit trio into Process** (`lirDesign.ts`) — the "Before designing anything new…"
+   intro + 3 orange `auditNotes` now OPEN 05 Process (were trailing 04 Reframe). HMR gotcha noted: a
+   Chapter content-order change needs a HARD reload to re-measure ScrollTrigger (stale flash offsets
+   briefly showed a dead gap under the PROCESS flash).
+2. **LIR: new `archTimeline` block** — "code architecture" Q&A beats on a vertical accent rail (rail
+   draws in on scroll, node-dot pop + staggered reveals). Two beats (drone-feed edge-fn; live-chat 7–11
+   lang translation). Component `ArchTimeline` in `lirBlocks.tsx`.
+3. **Hero: removed the VIDEO fallback everywhere** (`VideoBackground.tsx` + `ShaderBackground.tsx`
+   DELETED; non-WebGL2 → plain dark canvas + `DarkFallback` still unblocks the loader). `ogl` now unused.
+4. **Hero mobile scroll SHRUNK** — `endVh` `2.35 → 1.25` on coarse pointer (page ~11 → ~6.8 viewports),
+   same journey, half the scroll. Desktop untouched.
+5. **iOS "only shader, no text" FIXED** — latched `revealOnce()` + 1.4s failsafe so the headline can't
+   stay parked off-screen. **White-flash-at-bottom FIXED** — home root painted `#06080c`.
+6. **LIR mobile readability** — new `.lir-wide-mobile` utility widens 3 named baked-in-text SVGs to
+   `100vw-24px` on phones (orange gap box + dd3 why/cost cards); collapses in-column at `sm+`. Threaded
+   via `wideMobile` on `DecisionCluster`→`CardRows`→`CardImg` (dd3 only, solo cards only).
+- **Verification:** typecheck + prod build clean; mobile-EMULATED CDP harness (touch + coarse pointer +
+  SwiftShader for WebGL2). **NOT verified on real iOS Safari / Android hardware** — the iOS fix is a
+  timing failsafe; user to confirm on-device. Hero side gutters + full LIR mobile-breakpoint sweep
+  still open (see Next Steps §0).
 
 ### Session 16 — 2026-07-17
 **LIR case-study polish + perf pass, then SHIPPED to prod. Full detail in Current State §6
