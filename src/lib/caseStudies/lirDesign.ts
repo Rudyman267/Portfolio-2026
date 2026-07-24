@@ -75,6 +75,9 @@ export type DecisionCluster = {
   row: [string, string];
   /** Full-width reasoning card SVG(s), stacked below the row. */
   wide: string[];
+  /** Break the `wide` cards out toward the screen edge on phones so their
+   *  baked-in text stays readable (used for dd3, whose cards are text-dense). */
+  wideMobile?: boolean;
   /** A prose beat between the cards and the screenshots — the cluster's thesis
    *  stated plainly on the canvas (e.g. dd3's "Mobile is a different product"). */
   note?: { heading: string; body: string[] };
@@ -584,6 +587,8 @@ export const LIR_DESIGN: LirDesign = {
           row: ["/case-study/dd3-tempting.svg", "/case-study/dd3-gaveup.svg"],
           // "Why I gave it up" (green) first, then "What it cost me" (salmon) below.
           wide: ["/case-study/dd3-why.svg", "/case-study/dd3-shortcut.svg"],
+          // these two cards are text-dense — widen them on phones for readability.
+          wideMobile: true,
           // the mobile thesis — sits between "What it cost me" and the phone shots.
           note: {
             heading: "Mobile is a different product, not a smaller one.",

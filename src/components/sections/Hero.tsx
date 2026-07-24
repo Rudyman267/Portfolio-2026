@@ -249,10 +249,24 @@ export function Hero() {
         // rAF ids for the deferred client-nav reveal (cancelled in cleanup).
         let revealRaf1 = 0;
         let revealRaf2 = 0;
+        // Self-healing guard: reveal() must run exactly once, no matter which
+        // path fires. On iOS Safari the [data-intro] layer was staying parked
+        // at yPercent:120 (off-screen, so "only the shader shows, no text") when
+        // the loader hand-off timing lined up badly with the pinned scene mount.
+        // A latched wrapper + a hard failsafe timer make it impossible for the
+        // headline to stay hidden — whichever trigger wins, the text comes in.
+        let revealed = false;
+        const revealOnce = () => {
+          if (revealed) return;
+          revealed = true;
+          reveal();
+        };
+        // no matter what, the headline is on screen within ~1.4s of mount.
+        const revealFailsafe = window.setTimeout(revealOnce, 1400);
 
         if (document.body.classList.contains("is-loading")) {
           // fresh full load → wait for the loader to hand off, then reveal.
-          window.addEventListener(LOADER_DONE_EVENT, reveal, { once: true });
+          window.addEventListener(LOADER_DONE_EVENT, revealOnce, { once: true });
         } else {
           // client-side nav (e.g. clicking "Rudyman" from another page) — no
           // loader runs. The SmoothScrollProvider queues a ScrollTrigger.refresh
@@ -263,7 +277,7 @@ export function Hero() {
           // animates cleanly on stable layout. Double rAF: frame 1 = provider's
           // refresh, frame 2 = us.
           revealRaf1 = requestAnimationFrame(() => {
-            revealRaf2 = requestAnimationFrame(reveal);
+            revealRaf2 = requestAnimationFrame(revealOnce);
           });
         }
 
@@ -461,10 +475,21 @@ export function Hero() {
         // Pin length: preserve the original scroll-per-timeline-unit (the old
         // hero was 235% of viewport across 5.75 units), so the phrase pacing —
         // and, via the progress scale in onUpdate, the tunnel's world-units-
-        // per-scroll — are IDENTICAL to the pre-works build.
+        // per-scroll — are IDENTICAL to the pre-works build ON DESKTOP.
         const OLD_UNITS = 5.75;
         const OLD_END_VH = 2.35;
-        const unitPx = () => (window.innerHeight * OLD_END_VH) / OLD_UNITS;
+        // On touch, the journey was ~11 viewports of pin-spacer — a thumb has to
+        // flick through a lot of "dead" scroll to advance each beat, which read
+        // as empty drag-scrolls. Coarse pointer gets a tighter travel budget so
+        // the SAME journey (all phrases + node beats) happens over roughly half
+        // the scroll — smaller, more accessible, still every beat intact. The
+        // scene's world-units-per-scroll scales with it, so the tunnel just moves
+        // a touch faster per swipe. Desktop (fine pointer) is unchanged.
+        const isCoarse =
+          typeof window !== "undefined" &&
+          window.matchMedia("(pointer: coarse)").matches;
+        const endVh = isCoarse ? 1.25 : OLD_END_VH;
+        const unitPx = () => (window.innerHeight * endVh) / OLD_UNITS;
 
         ScrollTrigger.create({
           animation: scrub,
@@ -535,8 +560,9 @@ export function Hero() {
         }
 
         return () => {
-          window.removeEventListener(LOADER_DONE_EVENT, reveal);
+          window.removeEventListener(LOADER_DONE_EVENT, revealOnce);
           window.removeEventListener(LOADER_DONE_EVENT, goWorks);
+          window.clearTimeout(revealFailsafe);
           cancelAnimationFrame(revealRaf1);
           cancelAnimationFrame(revealRaf2);
           gsap.ticker.remove(tick);

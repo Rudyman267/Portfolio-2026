@@ -901,7 +901,13 @@ const WIDE_CARD_DESIGN_W = 700;
    Full-width exports (>= WIDE_CARD_DESIGN_W) each span the column; runs of
    small exports pair up 2-per-row (the Figma 2x2 for dd2). Widths are read
    from the files themselves, so nothing is hardcoded per card. ───────────── */
-function CardRows({ srcs }: { srcs: string[] }) {
+function CardRows({
+  srcs,
+  wideMobile,
+}: {
+  srcs: string[];
+  wideMobile?: boolean;
+}) {
   const [widths, setWidths] = useState<Record<string, number>>({});
   const note = (src: string, w: number) =>
     setWidths((prev) => (prev[src] === w ? prev : { ...prev, [src]: w }));
@@ -940,7 +946,14 @@ function CardRows({ srcs }: { srcs: string[] }) {
           className={cn("grid gap-5", g.length === 2 && "md:grid-cols-2")}
         >
           {g.map((src) => (
-            <CardImg key={src} src={src} onWidth={(w) => note(src, w)} />
+            <CardImg
+              key={src}
+              src={src}
+              onWidth={(w) => note(src, w)}
+              // only solo full-width cards break out on mobile — a 2-up pair
+              // can't (the negative-margin breakout assumes a single flow item).
+              wideMobile={wideMobile && g.length === 1}
+            />
           ))}
         </div>
       ))}
@@ -952,9 +965,11 @@ function CardRows({ srcs }: { srcs: string[] }) {
 function CardImg({
   src,
   onWidth,
+  wideMobile,
 }: {
   src: string;
   onWidth: (w: number) => void;
+  wideMobile?: boolean;
 }) {
   const ref = useRef<HTMLImageElement>(null);
   // naturalWidth must also be read on mount: an already-cached image never
@@ -973,7 +988,10 @@ function CardImg({
       alt=""
       loading="eager"
       onLoad={read}
-      className="h-auto w-full rounded-[var(--radius-lg)]"
+      className={cn(
+        "h-auto w-full rounded-[var(--radius-lg)]",
+        wideMobile && "lir-wide-mobile",
+      )}
     />
   );
 }
@@ -983,6 +1001,7 @@ export function DecisionCluster({
   heading,
   row,
   wide,
+  wideMobile,
   note,
   mediaRows,
 }: {
@@ -990,6 +1009,7 @@ export function DecisionCluster({
   heading: string;
   row: [string, string];
   wide: string[];
+  wideMobile?: boolean;
   note?: { heading: string; body: string[] };
   mediaRows?: MediaRow[];
 }) {
@@ -1017,7 +1037,7 @@ export function DecisionCluster({
           file's intrinsic width, so re-exporting a card at a different size
           re-flows it automatically. */}
       <div className="mt-5 space-y-5">
-        <CardRows srcs={wide} />
+        <CardRows srcs={wide} wideMobile={wideMobile} />
       </div>
 
       {/* The cluster's thesis, stated plainly on the canvas between the cards

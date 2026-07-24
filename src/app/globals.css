@@ -160,6 +160,28 @@
   text-wrap: initial;
 }
 
+/* Widen specific baked-in-text SVGs on phones so their copy is readable.
+   Some LIR cards (the orange "gap conclusion" box, the dd3 "why I gave it up" /
+   "what it cost me" cards) carry their text INSIDE the SVG, so the text size is
+   tied to the render width. Inside the reading column (px-6 gutter = 24px each
+   side) they're too small to read on a 390px phone. `.lir-wide-mobile` breaks
+   the element out toward the screen edge (leaving a ~12px inset), giving the
+   baked text ~24px more width to scale into. Phone-only — at sm+ it collapses
+   to a normal in-column element, so desktop/tablet are untouched. */
+.lir-wide-mobile {
+  width: calc(100vw - 24px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+  max-width: none;
+}
+@media (min-width: 640px) {
+  .lir-wide-mobile {
+    width: 100%;
+    margin-left: 0;
+    transform: none;
+  }
+}
+
 /* ============================================================================
    TAILWIND THEME — maps tokens into Tailwind's utility namespace.
    These reference the vars above; never hardcode raw values here.

@@ -127,7 +127,7 @@ function GapReveal({ src }: { src: string }) {
         <img
           src={src}
           alt="The CEO whose building is on fire and the fire captain in the parking lot don't have a FlytBase account, don't know what FlytBase is — a phone in one hand, a radio in the other, and they need answers now."
-          className="mx-auto h-auto w-full max-w-[var(--lir-measure)] rounded-[21px]"
+          className="lir-wide-mobile mx-auto h-auto w-full max-w-[var(--lir-measure)] rounded-[21px]"
         />
       </div>
     </div>

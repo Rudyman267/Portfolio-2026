@@ -1,18 +1,20 @@
 /**
- * Tiny coordination channel between <VideoBackground> and <Loader>.
+ * Tiny coordination channel between the hero background and <Loader>.
  *
- * The loader's door should not unlock until the hero video has buffered enough
- * to play seamlessly — otherwise the reveal stutters while the video is still
- * loading. VideoBackground reports readiness here; Loader awaits it.
+ * The loader's door should not unlock until the hero background is ready to
+ * paint — otherwise the reveal opens onto a blank frame. HeroCanvas reports
+ * readiness here (the 3D scene once it mounts, or the dark fallback
+ * immediately); Loader awaits it. Name kept for continuity — it predates the
+ * video fallback being removed.
  *
- * Latched: if the video becomes ready before the loader subscribes, the
+ * Latched: if the background becomes ready before the loader subscribes, the
  * subscriber still fires immediately. Safe on the server (no window access).
  */
 
 let ready = false;
 const waiters = new Set<() => void>();
 
-/** Called by VideoBackground once the video can play through (or is skipped). */
+/** Called by HeroCanvas once the background is ready (or skipped). */
 export function markHeroVideoReady() {
   if (ready) return;
   ready = true;

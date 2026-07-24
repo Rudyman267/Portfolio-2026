@@ -2,19 +2,18 @@
 
 import dynamic from "next/dynamic";
 import { Component, type ReactNode, useEffect, useRef, useState } from "react";
-import { VideoBackground } from "@/components/motion/VideoBackground";
 import { markHeroVideoReady } from "@/components/motion/heroReady";
 import { applyMobileProfile } from "@/components/hero3d/tweakConfig";
 
 /**
- * HeroCanvas — chooses the richest background the device can honor:
+ * HeroCanvas — the living 3D scene (R3F), on every device that can run it.
  *
  *   1. WebGL2-capable device (desktop AND mobile) → the living 3D scene (R3F).
  *      Touch devices get the mobile quality profile (fewer instances, lower
- *      DPR cap, no DoF/CA) so the real shaders run instead of the old video.
- *   2. no WebGL2 / runtime crash → the light-trails VIDEO
- *      (VideoBackground — which itself falls back to poster for reduced motion)
- *   3. reduced motion → VideoBackground's poster still
+ *      DPR cap, no DoF/CA) so the real shaders run on phones too.
+ *   2. no WebGL2 / runtime crash / reduced motion → a plain dark canvas
+ *      (#04070d). The old light-trails VIDEO fallback has been removed — the
+ *      scene is the one background now.
  *
  * The 3D scene is dynamically imported (three stays out of the initial bundle
  * and out of SSR). Whichever branch mounts signals the door loader via
@@ -24,6 +23,15 @@ import { applyMobileProfile } from "@/components/hero3d/tweakConfig";
 const Scene = dynamic(() => import("@/components/hero3d/Scene"), {
   ssr: false,
 });
+
+/** Plain dark fill for devices that can't run the scene. Also unblocks the
+ *  loader so the door never waits on a background that will never signal. */
+function DarkFallback() {
+  useEffect(() => {
+    markHeroVideoReady();
+  }, []);
+  return null;
+}
 
 class SceneErrorBoundary extends Component<
   { fallback: ReactNode; children: ReactNode },
@@ -54,14 +62,14 @@ function supportsScene(): boolean {
 export function HeroCanvas() {
   const ref = useRef<HTMLDivElement>(null);
   // null = deciding (SSR/first paint) — render nothing heavy yet
-  const [mode, setMode] = useState<"scene" | "video" | null>(null);
+  const [mode, setMode] = useState<"scene" | "dark" | null>(null);
   const [active, setActive] = useState(true);
 
   useEffect(() => {
     // coarse pointer → overlay the mobile quality profile BEFORE the scene
     // mounts, so the meshes first build at the reduced counts
     if (window.matchMedia("(pointer: coarse)").matches) applyMobileProfile();
-    setMode(supportsScene() ? "scene" : "video");
+    setMode(supportsScene() ? "scene" : "dark");
     // failsafe: never let the door loader hang on us
     const t = window.setTimeout(markHeroVideoReady, 8000);
     return () => window.clearTimeout(t);
@@ -95,10 +103,10 @@ export function HeroCanvas() {
       className="pointer-events-none absolute inset-0 overflow-hidden bg-[#04070d]"
       aria-hidden="true"
     >
-      {mode === "video" && <VideoBackground />}
+      {mode === "dark" && <DarkFallback />}
 
       {mode === "scene" && (
-        <SceneErrorBoundary fallback={<VideoBackground />}>
+        <SceneErrorBoundary fallback={<DarkFallback />}>
           <Scene active={active} />
           {/* readability layer — keeps the cream headline crisp over the
               brightest moments of the scene (same intent as the Figma 57% fill) */}
