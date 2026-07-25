@@ -28,8 +28,12 @@ export function CountUp({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
 
+  // Arrow-notation stats ("45 → 5 mins", "187 → 0") aren't a single count —
+  // animating them would tick the first number through nonsense. Render static.
+  const isTransition = /[→]|->/.test(value);
+
   // Split "<30s" into ["<", "30", "s"] — leading non-digits, the number, trailing.
-  const match = value.match(/^(\D*)([\d.,]+)(.*)$/);
+  const match = isTransition ? null : value.match(/^(\D*)([\d.,]+)(.*)$/);
   const prefix = match?.[1] ?? "";
   const numStr = match?.[2] ?? "";
   const suffix = match?.[3] ?? "";

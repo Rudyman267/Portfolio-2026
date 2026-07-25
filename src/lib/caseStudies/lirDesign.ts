@@ -94,14 +94,23 @@ export type Block =
   | { t: "label"; text: string } // small blue eyebrow label (e.g. "Features shipped")
   | { t: "lede"; text: string } // large intro paragraph
   | { t: "p"; text: string } // body paragraph
+  // big bold statement beat — the segmented thesis lines that get their own
+  // viewport moment (Figma 258:2: Plus Jakarta Sans Bold, 36px). Larger + bolder
+  // than `lede`, which stays 16px medium for LIR reading copy.
+  | { t: "statement"; text: string }
+  // lead paragraph: a bold WHITE lead sentence followed INLINE by a light-grey
+  // remainder (the mixed-weight Impact copy — Figma 258:2). No indent.
+  | { t: "leadP"; lead: string; text: string }
   // rich paragraph: an optional bold, slightly-indented lead line, then a body
   // built from mixed-weight spans (entity names bold, rest regular).
   | { t: "richP"; lead?: string; spans: Span[] }
   | { t: "quote"; text: string; cite?: string } // pull quote (blue, large)
   | { t: "note"; text: string } // blue-outlined callout card
-  // a SECOND full-viewport flash inside a chapter (grey, centered) that plays
-  // then goes away as the next block appears — e.g. the "During an emergency" quote.
-  | { t: "quoteFlash"; text: string }
+  // a SECOND full-viewport flash inside a chapter (centered) that plays in then
+  // scrubs away as the next block appears — e.g. LIR's "During an emergency"
+  // quote. `tone` "bright" = white + bolder (Verkos's reframe thesis); default
+  // grey. `wide` widens the measure so it breaks to ~2 lines instead of 3.
+  | { t: "quoteFlash"; text: string; tone?: "grey" | "bright"; wide?: boolean }
   | { t: "media"; slot: MediaSlot; wide?: boolean; caption?: string }
   // the orange "gap conclusion" card (Figma SVG, copy baked in) — the CEO
   // scenario, shown as a full-width orange panel right after the warehouse
@@ -157,6 +166,34 @@ export type Block =
         | { k: "p"; text: string }
         | { k: "richP"; spans: Span[] }
       )[];
+    }
+  // NATIVE decision cluster (Verkos) — the tempting/problem/chose/why copy is
+  // live text (not baked Figma SVGs like LIR's), rendered as styled cards with
+  // semantic washes and animated in with anime.js. `n` + `heading` label the
+  // decision; each `card` is one labelled beat.
+  | {
+      t: "decisionText";
+      n: string;
+      heading: string;
+      cards: {
+        kind: "tempting" | "problem" | "chose" | "why";
+        label: string; // "The tempting option:", "Why?:", …
+        // body = one or more paragraphs. A paragraph may carry a semibold LEAD
+        // sentence (Jakarta SemiBold) before its regular remainder — the mixed
+        // weight in the Figma "why" cards. `body: string` shorthand = one
+        // all-regular paragraph.
+        body: string | { lead?: string; text: string }[];
+      }[];
+      /** optional supporting UI screenshot below the cards (bare, no frame). */
+      img?: string;
+      imgAlt?: string;
+    }
+  // inline ANIMATED SVG diagram, drawn in via anime.js as it enters view. Built
+  // as code components (crisp, accent-themeable) — not a raster export.
+  | {
+      t: "verkosDiagram";
+      which: "pipeline" | "assembly" | "personaSplit";
+      caption?: string;
     };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
@@ -224,6 +261,12 @@ export type LirDesign = {
   contents: { n: string; label: string; id?: string }[];
   buildStatement: string; // "I didn't hand a spec to engineers…"
   sections: Section[];
+  /** Per-study signal color. Defaults to LIR orange; "cyan" = Verkos (#08e6ff).
+   *  Applied as data-accent on the .lir root; overrides --color-accent. */
+  accent?: "orange" | "cyan";
+  /** Optional demo video that closes the Overview. Omit for studies with no
+   *  video (e.g. Verkos). `src` = basename under /case-study/video (.webm+.mp4). */
+  demoVideo?: { src: string; poster: string; label: string };
 };
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -289,6 +332,14 @@ export const LIR_DESIGN: LirDesign = {
 
   buildStatement:
     "I didn't hand a spec to engineers. I planned the constraints, designed the flows, wrote the React, and shipped it. The gap between intent and product was zero because there was no handoff.",
+
+  // LIR ships a real demo video that closes the Overview (Verkos has none).
+  demoVideo: {
+    src: "/case-study/video/lir-demo",
+    poster: "/case-study/video/lir-demo-poster.jpg",
+    label:
+      "Demo video — a walkthrough of Live Incident Response in a real session.",
+  },
 
   sections: [
     /* ── 01 CONTEXT ──────────────────────────────────────────────────────── */

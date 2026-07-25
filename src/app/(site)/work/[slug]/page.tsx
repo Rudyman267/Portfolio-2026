@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LirCaseStudy } from "@/components/case-study/LirCaseStudy";
 import { LIR_DESIGN } from "@/lib/caseStudies/lirDesign";
+import { VERKOS_DESIGN } from "@/lib/caseStudies/verkosDesign";
 import type { LirDesign } from "@/lib/caseStudies/lirDesign";
 
 /**
@@ -17,6 +18,7 @@ import type { LirDesign } from "@/lib/caseStudies/lirDesign";
 // Registry of locally-authored case studies, keyed by slug.
 const STUDIES: Record<string, LirDesign> = {
   [LIR_DESIGN.slug]: LIR_DESIGN,
+  [VERKOS_DESIGN.slug]: VERKOS_DESIGN,
 };
 
 export function generateStaticParams() {

@@ -118,7 +118,7 @@
   --color-fg: 255 255 255;          /* #ffffff — headings / primary text */
   --color-muted: 180 180 180;       /* #b4b4b4 — body / secondary text */
   --color-faint: 122 128 138;       /* tertiary / captions */
-  --color-accent: 255 141 59;       /* #ff8d3b — the signal orange */
+  --color-accent: 255 141 59;       /* #ff8d3b — the signal orange (LIR) */
   --color-accent-fg: 6 8 12;
   --color-border: 255 255 255;      /* white hairlines — alpha applied per-use */
   --color-ring: 255 141 59;
@@ -150,6 +150,15 @@
 
   background-color: rgb(var(--color-bg));
   color: rgb(var(--color-fg));
+}
+
+/* Per-study accent override — the case-study shell (.lir scope) is shared, but
+   each study can carry its own signal color. Verkos Reports = cyan #08e6ff
+   (Figma). Set via data-accent on the article root; everything token-driven
+   (eyebrow, stats, chapter flash, decision washes, rail active state) recolors. */
+.lir[data-accent="cyan"] {
+  --color-accent: 8 230 255;        /* #08e6ff — Verkos signal cyan */
+  --color-ring: 8 230 255;
 }
 
 /* Section headings in the case study use Tanker, uppercase, tight. */

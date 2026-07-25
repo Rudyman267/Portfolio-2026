@@ -4,6 +4,7 @@ import { useRef, type Key, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
+import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/motion/Reveal";
 import { Chapter, FlashPanel, Spawn } from "@/components/case-study/Chapter";
 import {
@@ -23,6 +24,7 @@ import {
   OnboardingFlowDiagram,
   StakeholderActionsDiagram,
 } from "@/components/case-study/lirBlocks";
+import { DecisionText, VerkosDiagram } from "@/components/case-study/verkosBlocks";
 
 /** Chapters wired to the full-viewport flash transition — every numbered
  *  section now opens on its Tanker title flash, then spawns its content. */
@@ -257,6 +259,7 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
     <article
       ref={root}
       className="lir relative bg-bg text-fg"
+      data-accent={data.accent === "cyan" ? "cyan" : undefined}
       data-header-dark={undefined}
     >
       {/* ── THUMBNAIL INTRO — a fixed, fully-OPAQUE cover pinned BEHIND the page
@@ -385,7 +388,9 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                   size={86}
                   className="w-[52px] shrink-0 sm:w-[86px]"
                 />
-                <h1 className="max-w-[16ch] text-[length:var(--lir-headline)] font-extrabold leading-[0.86] tracking-[-0.01em] text-fg">
+                {/* max-w tuned so both LIR + Verkos headlines break to 2 lines
+                    (was 16ch → 3 lines). balance keeps the two lines even. */}
+                <h1 className="max-w-[24ch] text-balance text-[length:var(--lir-headline)] font-extrabold leading-[0.9] tracking-[-0.01em] text-fg">
                   {data.headline}
                 </h1>
               </div>
@@ -397,14 +402,24 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </p>
             </Reveal>
 
-            {/* stats row (36px Bold number, 16px label + sub) */}
+            {/* stats row (36px Bold number, 16px label + sub). Columns adapt to
+                the stat COUNT — LIR has 4, Verkos has 2 — so a 2-stat study
+                doesn't get squeezed into quarter-width cells (which wrapped
+                "45 → 5 mins"). Arrow-notation values stay on one line. */}
             <Reveal delay={0.18}>
-              <div className="mt-[5.5rem] grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-4">
+              <div
+                className={cn(
+                  "mt-[5.5rem] grid gap-x-10 gap-y-8",
+                  data.stats.length <= 2
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-2 sm:grid-cols-4",
+                )}
+              >
                 {data.stats.map((s) => (
                   <div key={s.label}>
                     <CountUp
                       value={s.value}
-                      className="block text-[length:var(--lir-stat)] font-bold leading-none tracking-[-0.01em] tabular-nums text-accent"
+                      className="block whitespace-nowrap text-[length:var(--lir-stat)] font-bold leading-none tracking-[-0.01em] tabular-nums text-accent"
                     />
                     <div className="mt-2.5 text-[length:var(--lir-stat-label)] font-semibold text-fg">
                       {s.label}
@@ -429,16 +444,19 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
               </p>
             </Reveal>
 
-            {/* Demo video — closes the Overview. Audio is part of the story,
-                so the player ships mute + volume controls and never autoplays
-                (autoplay would force muting and drop the narration). */}
-            <Reveal className="mt-16 max-w-[var(--lir-measure)]">
-              <DemoVideo
-                src="/case-study/video/lir-demo"
-                poster="/case-study/video/lir-demo-poster.jpg"
-                label="Demo video — a walkthrough of Live Incident Response in a real session."
-              />
-            </Reveal>
+            {/* Demo video — closes the Overview, but only for studies that
+                ship one (data.demoVideo). Audio is part of the story, so the
+                player ships mute + volume controls and never autoplays.
+                Verkos has no video, so it opts out by omitting the field. */}
+            {data.demoVideo && (
+              <Reveal className="mt-16 max-w-[var(--lir-measure)]">
+                <DemoVideo
+                  src={data.demoVideo.src}
+                  poster={data.demoVideo.poster}
+                  label={data.demoVideo.label}
+                />
+              </Reveal>
+            )}
 
             {/* the spine */}
             <div className="mt-2">
@@ -662,10 +680,36 @@ function ProseBody({
                 </p>
               </W>
             );
+          case "statement":
+            // big bold statement beat — large Figma display statement. Spans the
+            // full content measure so a ~95-char thesis breaks to ~3 lines (not 5
+            // a tight measure forced); text-balance evens them. Bigger than a
+            // lede, indented onto the content column (not the far-left gutter).
+            return (
+              // Display beat — a fixed px measure (not ch, which scales with the
+              // huge font). ~820px lands a 95-char thesis in 3 lines, 82-char in
+              // 3, 65-char in 2. text-pretty fills lines greedily (balance would
+              // add lines). Indented onto the content column.
+              <W key={i} className="mx-auto max-w-[940px]">
+                <p className="text-pretty text-[clamp(1.9rem,1.2rem+2.3vw,2.6rem)] font-bold leading-[1.16] tracking-[-0.015em] text-fg">
+                  {b.text}
+                </p>
+              </W>
+            );
           case "p":
             return (
               <W key={i}>
                 <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
+                  {b.text}
+                </p>
+              </W>
+            );
+          case "leadP":
+            // bold WHITE lead sentence, then light-grey remainder, inline.
+            return (
+              <W key={i}>
+                <p className="max-w-[var(--lir-measure)] text-[length:var(--lir-body)] leading-relaxed text-muted">
+                  <span className="font-semibold text-fg">{b.lead} </span>
                   {b.text}
                 </p>
               </W>
@@ -694,12 +738,23 @@ function ProseBody({
               </W>
             );
           case "quoteFlash":
-            // full-viewport grey quote flash — plays then clears as the next
-            // block appears. (Only inside a Chapter; FlashPanel is a no-op box
-            // that the Chapter's GSAP pins + scrubs.) Wide → ~2 lines.
+            // full-viewport quote flash — plays in then scrubs away as the next
+            // block appears (the Chapter's GSAP owns the come-and-go). `bright` =
+            // white + heavier (Verkos reframe thesis); default grey. `wide`
+            // widens the measure so a ~65-char line breaks to ~2 lines.
             return (
               <FlashPanel key={i}>
-                <span className="max-w-[60ch] text-center text-[clamp(1.4rem,0.9rem+1.9vw,2.3rem)] font-extrabold leading-[1.2] tracking-[-0.01em] text-balance text-muted">
+                <span
+                  className={cn(
+                    "text-center text-balance tracking-[-0.01em]",
+                    b.wide
+                      ? "max-w-[22ch] text-[clamp(2rem,1.2rem+3vw,3.25rem)] leading-[1.15]"
+                      : "max-w-[60ch] text-[clamp(1.4rem,0.9rem+1.9vw,2.3rem)] leading-[1.2]",
+                    b.tone === "bright"
+                      ? "font-bold text-fg"
+                      : "font-extrabold text-muted",
+                  )}
+                >
                   {b.text}
                 </span>
               </FlashPanel>
@@ -830,6 +885,23 @@ function ProseBody({
                 outro={b.outro}
                 beats={b.beats}
               />
+            );
+          case "decisionText":
+            // Verkos native decision cluster — anime.js drives its own reveal.
+            return (
+              <DecisionText
+                key={i}
+                n={b.n}
+                heading={b.heading}
+                cards={b.cards}
+                img={b.img}
+                imgAlt={b.imgAlt}
+              />
+            );
+          case "verkosDiagram":
+            // Verkos inline animated SVG diagram — anime.js vector draw.
+            return (
+              <VerkosDiagram key={i} which={b.which} caption={b.caption} />
             );
           case "heading":
             // bold white subsection title (2-line, tight) — Figma 229:3.
