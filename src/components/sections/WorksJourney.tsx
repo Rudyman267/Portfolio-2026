@@ -298,6 +298,23 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
   const layer = root.querySelector<HTMLElement>("[data-works-layer]");
   if (!layer) return { worksStart: tl.duration(), drivers, snapSpans };
 
+  // On TOUCH the ScrollTrigger snap (which is meant to glide a thumb-flick that
+  // lands mid-flight to the fully-formed window) is unreliable — native
+  // momentum scrolling rarely fires the clean scroll-end snap needs. That left
+  // readers parked on a bare centered node with the morph not yet started
+  // (m≈0 → the white window opacity, driven by m, never rose): "the 3D rect
+  // comes to center and nothing happens." So on coarse pointer we OVERLAP the
+  // morph with the flight much more (bigger MORPH_LEAD): by the time the node is
+  // anywhere near center the window is already forming, so there is no reachable
+  // "docked but bare" resting state to get stuck on. Desktop timing unchanged.
+  const isCoarse =
+    typeof window !== "undefined" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  // desktop keeps the module constants; touch starts the morph ~1.0 units before
+  // dock (vs 0.35) so it runs across most of the arrival glide.
+  const morphLead = isCoarse ? 1.0 : MORPH_LEAD;
+  const morphDur = isCoarse ? 0.7 : MORPH;
+
   const worksStart = tl.duration();
 
   // --- chapter intro: HERE'S SOME OF MY WORK ------------------------------
@@ -371,8 +388,8 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
     drivers.push(driver);
 
     const T = tl.duration() + (i === 0 ? 0.1 : 0.25); // breath between beats
-    const M = T + SPAWN - MORPH_LEAD; // morph begins during the arrival glide
-    const E = M + MORPH + HOLD; // exit
+    const M = T + SPAWN - morphLead; // morph begins during the arrival glide
+    const E = M + morphDur + HOLD; // exit
 
     // Handhold spans: settle anywhere in the flight/morph → auto-glide to the
     // fully-dressed window (just before the exit tween); settle mid-exit →
@@ -426,7 +443,7 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
       .fromTo(
         driver.proxy,
         { m: 0 },
-        { m: 1, duration: MORPH, ease: "power3.inOut", immediateRender: false },
+        { m: 1, duration: morphDur, ease: "power3.inOut", immediateRender: false },
         M,
       )
       .fromTo(
@@ -436,7 +453,7 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
           width: frameW,
           height: frameH,
           borderRadius: 10,
-          duration: MORPH,
+          duration: morphDur,
           ease: "power3.inOut",
           immediateRender: false,
         },

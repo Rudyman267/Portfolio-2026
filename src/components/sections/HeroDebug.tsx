@@ -67,6 +67,29 @@ export function HeroDebug() {
       // Portfolio mark (a [data-hero-item]) — the other element that was stuck
       const mark = document.querySelector<HTMLElement>("[data-hero-item]");
       if (mark) out.push("mark.opacity=" + getComputedStyle(mark).opacity);
+
+      // works-journey: the currently-visible beat's WHITE window frame — is it
+      // forming (opacity→1, width grown) as the node docks? ("morph broken" bug)
+      const beats = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-beat]"),
+      );
+      const activeBeat = beats.find((b) => {
+        const cs = getComputedStyle(b);
+        return cs.visibility !== "hidden" && parseFloat(cs.opacity) > 0.02;
+      });
+      if (activeBeat) {
+        const idx = beats.indexOf(activeBeat);
+        const frame = activeBeat.querySelector<HTMLElement>("[data-frame]");
+        if (frame) {
+          const fcs = getComputedStyle(frame);
+          const fr = frame.getBoundingClientRect();
+          out.push(
+            `beat${idx}.frame: op=${(+fcs.opacity).toFixed(2)} w=${Math.round(fr.width)}`,
+          );
+        }
+      } else {
+        out.push("beat=none-visible");
+      }
       setLines(out);
     };
 

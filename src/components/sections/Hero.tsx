@@ -499,17 +499,16 @@ export function Hero() {
         // per-scroll — are IDENTICAL to the pre-works build ON DESKTOP.
         const OLD_UNITS = 5.75;
         const OLD_END_VH = 2.35;
-        // On touch, the journey was ~11 viewports of pin-spacer — a thumb has to
-        // flick through a lot of "dead" scroll to advance each beat, which read
-        // as empty drag-scrolls. Coarse pointer gets a tighter travel budget so
-        // the SAME journey (all phrases + node beats) happens over roughly half
-        // the scroll — smaller, more accessible, still every beat intact. The
-        // scene's world-units-per-scroll scales with it, so the tunnel just moves
-        // a touch faster per swipe. Desktop (fine pointer) is unchanged.
+        // On touch, only a GENTLE trim of the scroll length. An earlier ~half
+        // reduction (1.25) made the whole journey feel hair-trigger sensitive —
+        // a small thumb flick jumped several beats. Back to ~10% off the desktop
+        // travel (2.35 → 2.12): a touch shorter than desktop, but the tunnel and
+        // node beats keep almost the same world-units-per-swipe, so scrubbing
+        // feels controlled again. Desktop (fine pointer) is unchanged.
         const isCoarse =
           typeof window !== "undefined" &&
           window.matchMedia("(pointer: coarse)").matches;
-        const endVh = isCoarse ? 1.25 : OLD_END_VH;
+        const endVh = isCoarse ? 2.12 : OLD_END_VH;
         const unitPx = () => (window.innerHeight * endVh) / OLD_UNITS;
 
         ScrollTrigger.create({
