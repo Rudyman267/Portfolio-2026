@@ -203,15 +203,80 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 17)
+## 6. Current State (as of Session 18)
 
-**Status (as of Session 17): MOBILE HERO PASS + LIR CONTENT/READABILITY SHIPPED TO PROD.
-Two commits this session — `e94238f` (LIR Process reorder + code-architecture timeline) and
-`a682c1c` (mobile hero adaptation + video-fallback removal + LIR text-SVG widening) — both pushed to
-`main` → Vercel auto-deploy. Prod `npm run build` clean (13 pages incl. /work/live-incident-response).
-Dev server + headless Chrome stopped at session end. First real mobile work landed (hero journey +
-LIR readability); still NOT device-verified on real iOS Safari — see Next Steps. Everything from
-Session 16 still live; the hero background VIDEO fallback is now GONE (see below).**
+**Status (as of Session 18): 2ND CASE STUDY — VERKOS REPORTS — BUILT & SHIPPED TO PROD.
+New route `/work/verkos-reports` (commit `c9fef67`, pushed to `main` → Vercel). Prod `npm run build`
+clean (14 pages, both case studies). Dev server + headless Chrome stopped at session end. Reuses the
+LIR chapter/flash shell with a cyan accent + anime.js motion. Everything from Session 17 still live.
+KNOWN NIT (deferred): the Problem `statement` beat renders at 4 lines (wanted 3) — cosmetic, the
+other statements land at 2–3.**
+
+### VERKOS REPORTS — Session 18 (the 2nd FlytBase case study, shipped in `c9fef67`)
+Recreated from **Figma node 258:2** ("Page of project 3"). A FlytBase project — AI-powered automated
+security **report generation**. Built to REUSE the LIR case-study shell (`<LirCaseStudy>` + `Chapter`),
+so it inherits every chapter flash/spawn transition for free; only the content + accent differ.
+- **Data:** `src/lib/caseStudies/verkosDesign.ts` — `LirDesign`-shaped, copy transcribed VERBATIM from
+  the Figma text nodes (a hand-authored `Verkos_Reports_case_study.md` exists in the gitignored assets
+  but is NOT the copy source — the user was explicit: follow Figma). Registered in the `STUDIES` slug
+  registry in `work/[slug]/page.tsx`.
+- **Per-study accent = cyan `#08e6ff`** (vs LIR orange). Added `accent?: "orange" | "cyan"` to
+  `LirDesign`; the component sets `data-accent="cyan"` on the `.lir` root; globals.css
+  `.lir[data-accent="cyan"]` overrides `--color-accent`. Everything token-driven recolors (eyebrow,
+  stats, chapter flash, decision labels, rail, diagram vectors, the Verkos star logo).
+- **anime.js (v4) — the user asked for it for this study's transitions/vectors.** It does NOT conflict
+  with GSAP: the division is GSAP/ScrollTrigger owns scroll-POSITION-driven motion (chapter flashes,
+  pin, scrub); anime.js does self-playing ONE-SHOT motion fired by an IntersectionObserver (no scroll
+  scrubbing), so it never touches ScrollTrigger's world. `@types/animejs` (v3) UNINSTALLED — v4 ships
+  its own types and the v3 ones conflict. `ogl` is still an unused dep from the removed video shader.
+  - `VerkosMotion.tsx`: `AnimeReveal` (staggered rise+fade), `AnimeVectorDraw` (draws stroked SVG paths
+    via `svg.createDrawable`), `InlineSvg` (fetches an external .svg, injects it inline so anime can
+    reach its geometry, draws strokes + fades fills — used for the real Figma Reframe diagram).
+  - ⚠️ GOTCHA: `InlineSvg` fills animate OPACITY ONLY — never translate/transform. The Verkos star
+    logo has 4 rotated-rect petals; adding a translate fought their existing `rotate()` and scattered
+    the mark. Both anims hard-set their final state `onComplete` so the diagram always ends intact.
+- **`verkosBlocks.tsx`:** `DecisionText` (native decision cards — the copy is live text in Figma, not
+  baked SVGs like LIR) + `VerkosDiagram`/`FlowSvg` (inline animated pipeline + assembly diagrams, one
+  self-contained SVG each so boxes/text/connectors never misalign) + `VerkosLogo` (the real 4-petal +
+  cyan-star mark, geometry lifted from the Figma export, reused in the "Verkos Reports" box).
+- **Decision cards — EXACT Figma palette** (258:2): solid fills tempting `#FFB350` / problem `#FFA09B`
+  / chose `#7AC3FF` / why `#62FFC0`; labels `#000`; body `#363636`; the "why" cards carry a mixed-
+  weight semibold black lead + regular. **Headings verbatim from Figma** (the user re-added the heading
+  layers so they'd export): 01 "Detection events needed details for the VLM to fetch bounding boxes",
+  02 "How to configure report structure and contents via editable templates", 03 "One screen from
+  flight to report." Layout: the FIRST TWO cards pair 2-up, every card after spans full width (matches
+  dd1 tempting+problem 2-up / chose+why full; dd2+dd3 tempting+chose 2-up / why full). dd1→image599,
+  dd3→image511, dd2 has no image.
+- **New SHARED blocks** added to `lirDesign.ts` + `LirCaseStudy.tsx` (available to LIR too):
+  `statement` (big bold display beat, indented onto the content column), `leadP` (white bold lead
+  sentence + light-grey body — the Impact copy), `decisionText`, `verkosDiagram`. `quoteFlash` gained
+  `tone` ("bright"=white) + `wide` (2-line measure) — the Reframe thesis is a full-viewport bright
+  `quoteFlash`. `richP` unchanged.
+- **Demo video is now OPTIONAL** (`data.demoVideo?`): the Overview only renders `<DemoVideo>` when a
+  study provides it. LIR keeps its video (moved into LIR's data); Verkos ships none. Fixed the bug
+  where LIR's video showed on every study.
+- **Overview polish (shared, so LIR benefits):** headline `max-w` widened → breaks to 2 lines in BOTH
+  studies; stats grid columns adapt to stat COUNT (Verkos has 2, LIR 4) so a 2-stat study isn't
+  quarter-width; `CountUp` skips the count-up for arrow-notation values ("45 → 5 mins", "187 → 0")
+  which it would otherwise tick through nonsense — renders them static + `whitespace-nowrap`.
+- **UI IMAGES = bare figures, NO rounded container frames** (house rule the user restated). 8 UI
+  screenshots WebP-compressed (ffmpeg libwebp cap 1600w q82/86: 24MB PNG → ~1.6MB) into
+  `public/case-study/flytbase-2`; sources in gitignored `case-study-assets/flytbase-project-2`.
+  - **Annotated frames re-composited:** the Figma exports of east-gate / south-fence were the RAW
+    photos; the red/orange detection boxes + "Pickup truck (98%)" / "Fence deformation (87%)" labels
+    are drawn manually in Figma. Baked them in with ffmpeg drawbox/drawtext at the Figma frame coords
+    (scale 1.5685 to 1600w). GOTCHA: ffmpeg `drawtext` mangles `%` even escaped/in a textfile — must
+    pass **`expansion=none`** to render "(98%)" literally. Label bar widths sized to the text so it
+    doesn't bleed out of the coloured bar.
+  - Figma asset server: `http://localhost:3845/assets/<hash>.png|svg` via the Dev-Mode MCP (no Figma
+    REST token available — CLI not logged in; `get_screenshot` renders composed frames but can't save
+    to disk, so raster compositing + inline SVG were the paths used).
+
+### PRIOR STATE (Session 17): MOBILE HERO PASS + LIR CONTENT/READABILITY (still live)
+**`e94238f`** (LIR Process reorder + code-architecture timeline) + **`a682c1c`** (mobile hero
+adaptation + video-fallback removal + LIR text-SVG widening) + **`41d86dd`** (mobile round 2: Android
+pin flash, iOS reveal, home hamburger) — all live. First real mobile work; still NOT fully device-
+verified on real iOS Safari. The hero background VIDEO fallback is GONE (non-WebGL2 → dark canvas).
 
 ### MOBILE HERO + VIDEO REMOVAL — Session 17 (shipped in `a682c1c`)
 First real cross-device pass on the home hero, driven by user bug reports (Android empty drag-scrolls
@@ -925,6 +990,14 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
+00. **VERKOS REPORTS — polish pass (Session 18 shipped v1).** Loose ends / to feel on a real GPU:
+    (a) the Problem `statement` beat renders 4 lines, wanted 3 — tune the `statement` measure/size in
+    `LirCaseStudy.tsx` (the three statements are different lengths sharing one style, so they fight;
+    maybe per-block line hint). (b) Verify the anime.js diagram draws + the Reframe SVG curve-draw feel
+    right on a real GPU (headless can't show the motion). (c) Confirm the Verkos MOBILE breakpoints
+    (decision cards, diagrams, statements, annotated images) — only desktop was captured. (d) `ogl` is
+    an unused dep (from the removed video shader) — safe to drop on the next `npm install`.
+
 0. **⭐ MOBILE RESPONSIVENESS — STARTED Session 17, PARTIALLY DONE.** DONE (shipped `a682c1c`, see
    §6 "MOBILE HERO + VIDEO REMOVAL" + "LIR MOBILE READABILITY"): phone shaders already run (WebGL2
    scene on coarse pointer via the mobile quality profile — that predates this session); the **mobile
@@ -989,6 +1062,29 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 18 — 2026-07-26
+**Built the 2nd case study — VERKOS REPORTS — from Figma 258:2, and SHIPPED. One commit `c9fef67` to
+`main` → Vercel. Prod build clean (14 pages). Full detail in Current State §6 ("VERKOS REPORTS").**
+Reuses the LIR chapter/flash shell (`<LirCaseStudy>`) with a cyan `#08e6ff` accent + **anime.js (v4)**
+for its scroll-triggered content/vector motion (IntersectionObserver-fired, GSAP-independent → no
+conflict). Chapters: Context · Problem · Reframe · Process · Design Decisions · Features · Impact.
+Highly iterative, user driving screenshot-by-screenshot against Figma:
+1. Content + copy transcribed VERBATIM from Figma (the .md in assets is NOT the source).
+2. Decision cards rebuilt as NATIVE cards (copy is live text in Figma) with the exact Figma palette
+   (#FFB350/#FFA09B/#7AC3FF/#62FFC0, #000/#363636 text), mixed-weight "why" bodies, headings verbatim
+   (user re-added the heading layers), first-two-2-up / rest-full-width layout.
+3. Diagrams built inline + animated: the persona split uses the REAL Figma `Reframe diagram.svg`
+   (inlined so anime draws its curves); pipeline/assembly are self-contained SVGs with the real
+   `VerkosLogo` in the report box (centred as a group).
+4. Annotated UI images (east-gate/south-fence) RE-COMPOSITED — Figma exports were the raw photos; baked
+   the detection boxes + labels in via ffmpeg (`expansion=none` to survive the `%` in "(98%)").
+5. New shared blocks: `statement`, `leadP`, `decisionText`, `verkosDiagram`; `quoteFlash` gained
+   tone/wide; demo video made optional (LIR keeps its, Verkos has none); stats grid adapts to count;
+   arrow-notation stats skip the count-up; overview headline → 2 lines. UI images stay BARE (no frames).
+- **Verified:** typecheck + prod build clean throughout; emulated headless-Chrome captures for line
+  counts, decision headings, logo centring. NOT felt on real GPU. Known nit: Problem `statement` = 4
+  lines (wanted 3), deferred.
 
 ### Session 17 — 2026-07-24
 **LIR Process content (audit reorder + new code-architecture timeline), then a first real MOBILE pass
