@@ -25,6 +25,7 @@ import {
   StakeholderActionsDiagram,
 } from "@/components/case-study/lirBlocks";
 import { DecisionText, VerkosDiagram } from "@/components/case-study/verkosBlocks";
+import { VerkosPrototype } from "@/components/case-study/VerkosPrototype";
 
 /** Chapters wired to the full-viewport flash transition — every numbered
  *  section now opens on its Tanker title flash, then spawns its content. */
@@ -300,8 +301,8 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
              reading content is capped + centered within its own track so it
              floats in the middle rather than hugging the rail.
              z-10 + opaque bg so it paints OVER the fixed thumbnail as it rises. */}
-      <div className="relative z-10 mx-auto max-w-[1680px] bg-bg px-6 pt-28 pb-24 sm:pt-32 lg:px-12">
-        <div className="grid gap-[var(--lir-col-gap)] lg:grid-cols-[var(--lir-rail-w)_1fr]">
+      <div className="relative z-10 bg-bg px-6 pt-28 pb-24 sm:pt-32 lg:px-12">
+        <div className="mx-auto grid max-w-[1680px] gap-[var(--lir-col-gap)] lg:grid-cols-[var(--lir-rail-w)_1fr]">
           {/* ── LEFT RAIL — back link + meta + Contents, sticky the whole way ── */}
           <aside className="lg:sticky lg:top-24 lg:h-fit lg:self-start">
             <Link
@@ -456,6 +457,16 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                   label={data.demoVideo.label}
                 />
               </Reveal>
+            )}
+
+            {/* INTERACTIVE PRODUCT DEMO — the real app, embedded. Sits after
+                the build statement and BEFORE the first chapter flash, so the
+                reader can use the thing before any of the story starts.
+                Opt-in per study via data.appDemo. */}
+            {data.appDemo && (
+              <div className="mt-10 w-full max-w-[1080px]">
+                <VerkosPrototype variant="app" />
+              </div>
             )}
 
             {/* the spine */}
@@ -902,6 +913,15 @@ function ProseBody({
             // Verkos inline animated SVG diagram — anime.js vector draw.
             return (
               <VerkosDiagram key={i} which={b.which} caption={b.caption} />
+            );
+          case "prototype":
+            // Interactive exhibit. Wider than the reading measure (it's a UI,
+            // not prose) and DESKTOP-ONLY — see VerkosPrototype for the mobile
+            // notice that replaces it.
+            return (
+              <div key={i} className="w-full max-w-[1080px]">
+                <VerkosPrototype />
+              </div>
             );
           case "heading":
             // bold white subsection title (2-line, tight) — Figma 229:3.

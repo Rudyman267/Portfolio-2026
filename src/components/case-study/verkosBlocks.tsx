@@ -224,14 +224,23 @@ export function VerkosDiagram({
 }
 
 /* ── VerkosLogo — the real Verkos mark (4 white rounded-rect petals + the cyan
-   sharp star behind them), lifted from the Figma export. Native geometry lives
-   around (43,173) in a ~104-unit cluster; we translate it to origin and scale to
-   `size` so it can drop into any SVG at (x,y). ─────────────────────────────── */
+   sharp star behind them), lifted from the Figma export. The native geometry's
+   true bbox is 83.09 x 82.98 centred at (42.93, 172.98) — measured from the star
+   path extents + the four ROTATED rects' corners, not the raw x/y/width attrs
+   (those describe the pre-rotation boxes and understate the cluster).
+
+   (x, y) is the mark's visual CENTRE, so callers can align it to a text centre
+   line directly; `size` is the rendered extent of the longest axis. ────────── */
+const LOGO_EXTENT = 83.09; // true cluster extent (was mis-stated as 104)
+const LOGO_CX = 42.93;
+const LOGO_CY = 172.98;
+
 function VerkosLogo({ x, y, size }: { x: number; y: number; size: number }) {
-  const CLUSTER = 104; // native cluster extent
-  const s = size / CLUSTER;
+  const s = size / LOGO_EXTENT;
   return (
-    <g transform={`translate(${x}, ${y}) scale(${s}) translate(-8, -131.5)`}>
+    <g
+      transform={`translate(${x}, ${y}) scale(${s}) translate(${-LOGO_CX}, ${-LOGO_CY})`}
+    >
       {/* cyan sharp star (drawn first, sits behind the petals) */}
       <path
         d="M41.6665 142.814C41.7993 141.384 43.8869 141.386 44.0171 142.816L45.3896 157.892C45.9538 164.09 50.7978 169.037 56.9826 169.732L76.3337 171.906C77.714 172.061 77.7392 174.058 76.3632 174.248L56.6422 176.969C50.6095 177.801 45.9441 182.678 45.3797 188.741L44.0088 203.471C43.8761 204.897 41.796 204.9 41.6588 203.475L40.2319 188.655C39.6493 182.603 34.9827 177.746 28.9592 176.922L9.3956 174.245C8.01849 174.056 8.04284 172.057 9.42413 171.903L28.6689 169.745C34.846 169.053 39.6879 164.118 40.2627 157.929L41.6665 142.814Z"
@@ -384,9 +393,11 @@ function FlowSvg({
           const groupLeft = W / 2 - (logoW + gap + textW) / 2;
           return (
             <>
+              {/* centred on the same y as the wordmark's central baseline, so
+                  the mark sits on the text's centre axis (not its bottom). */}
               <VerkosLogo
-                x={groupLeft}
-                y={repTop + repH / 2 - logoW / 2}
+                x={groupLeft + logoW / 2}
+                y={repTop + repH / 2}
                 size={logoW}
               />
               <text

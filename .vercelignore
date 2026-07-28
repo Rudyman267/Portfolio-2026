@@ -19,3 +19,6 @@ move-pagefile-to-E.ps1
 
 # deps (Vercel installs fresh)
 node_modules/
+
+# raw background-music source
+Background music/

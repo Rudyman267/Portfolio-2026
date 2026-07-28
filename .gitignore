@@ -67,3 +67,6 @@ next-env.d.ts
 
 # local Claude session permissions
 .claude/settings.json
+
+# raw background-music source — the compressed encode will ship from /public.
+/Background music/

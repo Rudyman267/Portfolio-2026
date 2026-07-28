@@ -194,7 +194,11 @@ export type Block =
       t: "verkosDiagram";
       which: "pipeline" | "assembly" | "personaSplit";
       caption?: string;
-    };
+    }
+  // INTERACTIVE exhibit — a visual-only prototype of the product's core flow the
+  // reader can actually drive (fullscreen-able). No network, no real data; the
+  // fixtures live inside the component. Full-bleed out of the reading column.
+  | { t: "prototype"; which: "verkosReport" };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
 
@@ -267,6 +271,9 @@ export type LirDesign = {
   /** Optional demo video that closes the Overview. Omit for studies with no
    *  video (e.g. Verkos). `src` = basename under /case-study/video (.webm+.mp4). */
   demoVideo?: { src: string; poster: string; label: string };
+  /** Embed the interactive product demo (the real app, static + auth-free)
+   *  right after the build statement, before the first chapter. Desktop only. */
+  appDemo?: boolean;
 };
 
 /* ────────────────────────────────────────────────────────────────────────── */

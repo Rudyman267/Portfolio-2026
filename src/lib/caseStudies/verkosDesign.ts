@@ -73,6 +73,9 @@ export const VERKOS_DESIGN: LirDesign = {
   buildStatement:
     "The AI already detected what mattered mid-flight — my job was building the layer that knows what those detections mean.",
 
+  // the real product UI, embedded before 01 Context so it can be used first
+  appDemo: true,
+
   sections: [
     /* ── 01 CONTEXT ──────────────────────────────────────────────────────── */
     {
@@ -81,6 +84,9 @@ export const VERKOS_DESIGN: LirDesign = {
       n: "01",
       heading: "Context",
       blocks: [
+        // INTERACTIVE EXHIBIT — placed first so the reader can drive the thing
+        // before reading how it was built. Visual-only prototype, invented data.
+        { t: "prototype", which: "verkosReport" },
         {
           t: "statement",
           text: "Enterprise security customers don't pay for drone flights. They pay for the report.",
