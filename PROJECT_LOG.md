@@ -203,14 +203,101 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 18)
+## 6. Current State (as of Session 19)
 
-**Status (as of Session 18): 2ND CASE STUDY — VERKOS REPORTS — BUILT & SHIPPED TO PROD.
-New route `/work/verkos-reports` (commit `c9fef67`, pushed to `main` → Vercel). Prod `npm run build`
-clean (14 pages, both case studies). Dev server + headless Chrome stopped at session end. Reuses the
-LIR chapter/flash shell with a cyan accent + anime.js motion. Everything from Session 17 still live.
-KNOWN NIT (deferred): the Problem `statement` beat renders at 4 lines (wanted 3) — cosmetic, the
-other statements land at 2–3.**
+**Status (as of Session 19): VERKOS CASE STUDY NOW SHIPS TWO INTERACTIVE EXHIBITS — the real
+product UI and a generated report — plus a full-bleed fix and a logo-alignment fix. Commit
+`8a3d26f` on `main` → Vercel. Prod `npm run build` clean (14 pages). Dev server + headless
+Chrome stopped at session end. Everything from Sessions 17–18 still live.
+KNOWN NIT (still deferred): the Problem `statement` beat renders at 4 lines (wanted 3).
+TO REVISIT: the app embed is built from the OLDER Verkos source copy — see §6 "VERKOS
+INTERACTIVE EXHIBITS" for why, and what it would take to move to `-fresh`.**
+
+### VERKOS INTERACTIVE EXHIBITS — Session 19 (shipped in `8a3d26f`)
+Two embeds on `/work/verkos-reports`, both rendered by ONE component
+(`src/components/case-study/VerkosPrototype.tsx`) with a `variant` prop.
+
+**1. `variant="app"` — the REAL Verkos frontend, static, in `public/verkos-demo/` (3.1 MB).**
+Placed in `LirCaseStudy.tsx` right after the build statement and BEFORE the first chapter
+flash (opt-in per study via `appDemo?: boolean` on `LirDesign`; only Verkos sets it), so a
+reader can use the product before the story starts. Measured: app y=2397, CONTEXT flash
+y=3728, report y=4449.
+- ⚠️ **BUILT FROM THE OLDER SOURCE COPY** `E:\Grad Project@Flytbase\Flinks\Verkos\verkos-reports-exhibit-rudy`,
+  **NOT** `-fresh`. Reason: `-fresh`'s `CreateReportWizard` calls LIVE FlytBase APIs
+  (`fetchFlightMedia`, `runAgentDetectionQueries` via `useHttp`) so its report-generation flow
+  cannot run without a backend. The older copy's wizard is fully local — grep for
+  `useHttp|httpClient` in its `src/components/reports/` returns NOTHING; it runs on Zustand +
+  `src/data/mock-*.ts`. **To move to `-fresh` later:** stub those two API helpers the same way
+  Supabase was stubbed (canned media list + canned detection results). `-fresh` also adds
+  `ContextCheckStep`, `ReportGenerationModal`, `SectionsDndList`, template panels, flights routes.
+- **Build recipe** (all in a scratch copy at `E:\tmp\verkos-exhibit` — **neither source folder
+  was modified**): source from the old copy, `node_modules` seeded from `-fresh` (its deps are a
+  strict superset: 5 extra packages, zero version conflicts) then `npm install`.
+  Patches applied there:
+  1. `@auth` vite alias → `src/exhibit-auth/` stub (SuperTokens/guards inert). `orgId: null` is
+     load-bearing — `TemplateAppLayout` feeds it to `useDbSync()`, which only calls Supabase when
+     an org id is present, so null keeps the app entirely offline. Deep imports
+     (`@auth/components/*`) needed the stub to be a DIRECTORY, not a file.
+  2. `_layout.tsx` guard loader removed (else it redirects to `/login`).
+  3. `App.tsx` reduced to I18n + QueryClient + Toaster + Router (SuperTokensWrapper/AuthProvider/
+     HttpProvider/FeatureFlagInitializer all dropped).
+  4. `src/integrations/supabase/client.ts` replaced by a pure mock — the real one calls
+     `createClient(import.meta.env.VITE_SUPABASE_URL)` at IMPORT time and THROWS
+     "supabaseUrl is required", which alone stopped the app mounting. Its only real use is
+     `functions.invoke('generate-report')` (modes `site_context_fill` / `full_report` /
+     `section_assist`) — each now resolves canned content in the caller's exact shape after a
+     short delay so loading states still play.
+  5. Store seeded at init with `buildDemoReport(mockTemplates[0])` + `DEMO_SITE`/`DEMO_AGENT`/
+     `DEMO_GALLERY_IMAGES` — the app ships EMPTY otherwise. The `demoMode` FLAG is deliberately
+     NOT set (user: don't use the app's demo mode; make up data instead).
+  6. Absolute `/demo/` + `/assets/` paths rebased to `/verkos-demo/…` — vite's `base` does NOT
+     rewrite absolute URLs inside JS strings.
+  7. Vite `base` + `environment.lovable.ts` `websiteBasePath` both set to `/verkos-demo/` (the
+     runtime env selector falls through to `lovableConfig` on non-flytbase hostnames).
+- **FontAwesome Pro REMOVED — icons are lucide now.** The app renders `<i class="fa-solid fa-x">`
+  from FlytBase's **Pro kit with an account token** (`kit.fontawesome.com/2fa2222b23.js`), which
+  must not ship on a public portfolio. `src/exhibit-lucide-icons.ts` maps all **78** distinct
+  `fa-*` glyphs to inline lucide SVGs and swaps them in place (MutationObserver catches icons
+  React mounts later; each SVG inherits the original classes + `currentColor`, 1em box).
+  Google Fonts `@import`s also stripped (`index.html` AND `src/index.scss`).
+  **Verified: 0 external requests, 0 leftover `fa-*`, 0 unmapped icons.**
+- **Fit-to-width scaling:** the dashboard wraps into unreadable slivers below ~1200px, and
+  breaking it out of the reading column overflowed (the column is offset by the rail, so
+  symmetric expansion pushes past the right edge). Instead the iframe renders at a logical
+  1400px and a `ResizeObserver` scales it into the slot; fullscreen returns to 1:1. No
+  horizontal overflow at 1500px or 2541px.
+
+**2. `variant="report"` — `public/verkos-report/index.html` (1.3 MB), standalone.**
+A self-contained recreation of the generated-report ARTIFACT, matched to the real viewer
+(`Verkos Reports marketing material/generated report viewer.png`): light canvas,
+`Observation #N` headings, coloured priority, "AI detection confidence: N%", *Pilot observation*,
+then the annotated frame + detection caption. Interactive: filter by priority, disclose pilot
+notes, re-roll the executive summary (3 canned variants on a timer). Opens 01 Context.
+Icons are inlined lucide SVGs (it's plain HTML, so no React import). No network at all.
+
+**Shared shell behaviour (both variants):**
+- **Desktop-only** — `(min-width: 900px) and (pointer: fine)`; phones get a short notice. The
+  gate returns `null` before measurement so SSR and first paint agree (no hydration mismatch).
+- **Fullscreen toggles BOTH ways** (same button + Esc), with a fixed-overlay fallback when the
+  Fullscreen API is missing or refuses (iOS Safari).
+- iframe is `sandbox="allow-scripts allow-same-origin"` — first-party static build; same-origin
+  is needed for its router/localStorage.
+- **Images: annotated frames ONLY** (user's call). The 3 `*-annotated.jpg` were re-encoded
+  (16 MB → 1.3 MB, ffmpeg, max 1800px, q4); the `-raw` variants were deleted and every
+  reference repointed at the annotated file.
+
+### CASE-STUDY FIXES — Session 19
+- **Full-bleed panel.** `LirCaseStudy.tsx` had `max-w-[1680px]` on the same element as the
+  opaque `bg-bg` that paints over the fixed intro thumbnail — so above 1680px the thumbnail
+  showed through the left/right gutters. The cap moved INWARD onto the grid; the background is
+  now full-width. Measured at 2541px: panel 0→2526 (no gutters), grid still 1680 centred,
+  content position unchanged. Benefits LIR too (shared shell).
+- **`VerkosLogo` alignment.** `(x, y)` now means the mark's CENTRE (was its top-left) so it sits
+  on the wordmark's centre axis — `deltaY: 0` in both the pipeline and assembly diagrams (they
+  share one `FlowSvg`, so one fix covers both). The true bbox was measured from the star path
+  extents + the four **ROTATED** rects' corners (the raw `x/y/width` attrs describe pre-rotation
+  boxes and understate the cluster): extent **83.09** centred **(42.93, 172.98)**, not the
+  assumed `104` / `(8, 131.5)` — so the mark had also been rendering ~20% undersized.
 
 ### VERKOS REPORTS — Session 18 (the 2nd FlytBase case study, shipped in `c9fef67`)
 Recreated from **Figma node 258:2** ("Page of project 3"). A FlytBase project — AI-powered automated
@@ -990,6 +1077,26 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
+000. **⭐ REVISIT THE VERKOS APP EXHIBIT (user flagged at the end of Session 19).** The embed works
+    but is built from the OLDER source copy. Open items, in rough order:
+    a. **Move to `-fresh` if its newer screens matter** (ContextCheckStep, ReportGenerationModal,
+       SectionsDndList, template panels, flights routes). Blocker: its `CreateReportWizard` calls
+       `fetchFlightMedia` + `runAgentDetectionQueries` over `useHttp`. Stub both the way Supabase
+       was stubbed (canned media + canned detections) and it should build the same way.
+    b. **Drive the embedded app end-to-end on a real GPU** — only the reports library, sidebar nav
+       and routing into the seeded report were verified. The wizard, agent builder, template
+       builder and ReportReview screens are UNVERIFIED; the mocked `generate-report` responses
+       have never been exercised through the UI.
+    c. **Headless caveat:** route transitions inside the app did NOT repaint in headless Chrome
+       (DOM updated, paint stale) — believed a SwiftShader/framer-motion artifact, but confirm in
+       a real browser.
+    d. **Payload:** `public/verkos-demo` 3.1 MB + `public/verkos-report` 1.3 MB = 4.4 MB in the
+       repo. Static + lazy-loaded so initial page weight is unaffected, but it is real repo size.
+    e. **Scratch build dir `E:\tmp\verkos-exhibit` is NOT in the repo** and will be lost if tmp is
+       cleared. If the app embed needs rebuilding, the full recipe is in Current State §6.
+    f. The app's **"Try demo mode" button is still visible** in the sidebar — it works, but the
+       exhibit deliberately doesn't use demo mode. Consider hiding it.
+
 00. **VERKOS REPORTS — polish pass (Session 18 shipped v1).** Loose ends / to feel on a real GPU:
     (a) the Problem `statement` beat renders 4 lines, wanted 3 — tune the `statement` measure/size in
     `LirCaseStudy.tsx` (the three statements are different lengths sharing one style, so they fight;
@@ -1062,6 +1169,36 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 19 — 2026-07-28
+**Added TWO interactive exhibits to the Verkos case study + two visual fixes. One commit
+`8a3d26f` to `main` → Vercel. Prod build clean (14 pages). Full detail in Current State §6
+("VERKOS INTERACTIVE EXHIBITS" + "CASE-STUDY FIXES").**
+Started as a mobile-verification question (checklist written, testing still on the user), then
+became a long, user-steered build with several mid-flight pivots — worth recording because the
+end state is NOT what the first three attempts were:
+1. **Full-bleed fix** — thin strips of the scrolling intro thumbnail showed at the far left/right
+   above 1680px. `max-w-[1680px]` was on the opaque `bg-bg` panel itself; moved inward to the grid.
+2. **VerkosLogo alignment** — the mark hung below the "Verkos Reports" wordmark in both diagrams.
+   Root cause was a coordinate-contract mismatch (component treated `(x,y)` as top-left, caller
+   passed a centre) PLUS a wrong cluster extent (104 vs the true 83.09), so it was undersized too.
+3. **Exhibit, attempt 1 — REJECTED:** a hand-built React prototype of the report flow. User: "use
+   the frontend UI of the code present in the folder as is, don't make your own UI."
+4. **Exhibit, attempt 2:** built the REAL app to static. Chose the older source copy after finding
+   `-fresh`'s wizard is API-bound. Stripped auth, mocked Supabase, seeded the store, rebased asset
+   paths. Got the library + routing working headlessly.
+5. **PIVOT (user):** "small standalone HTML report instead" + "use lucide react icons instead of
+   FontAwesome" — answered via a decision prompt after the **FontAwesome Pro token** was spotted
+   leaking in the app build. Built `public/verkos-report/index.html`, removed the app.
+6. **PIVOT BACK (user):** "where is the app? add the full demo app UI iframe just before the
+   context section starts." Rebuilt the app WITH the lucide swap applied (all 78 `fa-*` glyphs),
+   Google Fonts stripped, and fit-to-width scaling so the dashboard doesn't wrap in-column.
+   Both exhibits now ship, app first.
+- **Verified:** typecheck + prod build clean throughout; headless-Chrome measurement for the
+  full-bleed fix (2541px), logo `deltaY: 0`, report interactions (filter/disclose/regenerate),
+  app icon swap (0 external requests / 0 leftover fa / 0 unmapped), embed ordering, and the
+  mobile gate (notice shown, 0 iframes). Dev server + Chrome stopped at session end.
+- **User asked to revisit the app exhibit** — see Next Steps §000.
 
 ### Session 18 — 2026-07-26
 **Built the 2nd case study — VERKOS REPORTS — from Figma 258:2, and SHIPPED. One commit `c9fef67` to
