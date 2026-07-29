@@ -203,14 +203,139 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 21)
+## 6. Current State (as of Session 22)
 
-**Status (as of Session 21): CUSTOM DOMAIN `rudyman.com` IS BOUGHT + WIRED, WAITING ONLY ON DNS
-PROPAGATION. Shipped in `91c68e3`: the iOS "can't scroll at all" bug is FIXED, both case studies
-now open on a LAYERED cover (raster bg + vector title/role SVGs), and Verkos Reports is the 2nd
-home work box (replacing Marrow). Prod build clean (14 pages), typecheck clean.
-⏳ TOMORROW'S FIRST JOB: confirm `rudyman.com` resolves to Vercel (see §7 item 0000) — until it
-does, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
+**Status (as of Session 22): THE /work INDEX IS REBUILT — cinematic particle field + alternating
+project plates (`e809c42`). The before/after slider no longer opens the lightbox and the zoom
+cursor is gone site-wide (`beae3ab`). Prod build clean (14 pages), typecheck clean.
+🚨 `rudyman.com` IS BLOCKED ON A VERCEL-SIDE BUG — NOT propagation (see §7 item 0000 and the
+DOMAIN section below). Vercel's own nameservers REFUSE the zone. **THE LINK TO SHARE REMAINS
+`https://portfolio-2026-psi-flax.vercel.app`.** Nothing else is waiting on it.
+Dev server + headless Chrome stopped at session end.**
+
+### 🚨 DOMAIN BLOCKED — Vercel never provisioned the DNS zone — Session 22
+Session 21 left this as "just wait for propagation". **That diagnosis was WRONG.** ~14h later the
+domain still did not resolve, and the real cause is now identified:
+
+**`ns1/ns2.vercel-dns.com` answer `Query refused` for rudyman.com.** They are correctly delegated
+the domain at the .com registry, but the zone does not exist on Vercel's DNS infrastructure — so
+every public resolver returns **SERVFAIL (status 2)**, not a stale cache. This is a Vercel-side
+provisioning failure, not DNS latency, and waiting will not fix it.
+
+Diagnosis command that actually settles it (query the authoritative NS directly — bypasses every
+cache, which is what the propagation theory was hiding behind):
+```
+nslookup -type=A rudyman.com ns1.vercel-dns.com     # → "Query refused"
+curl -s "https://dns.google/resolve?name=rudyman.com&type=A"   # → "Status": 2 (SERVFAIL)
+```
+Evidence the Vercel side *thinks* it is fine (which is why this is confusing):
+`serviceType: zeit.world`, `verified: true`, delegation confirmed via
+`rdap.verisign.com/com/v1/domain/rudyman.com` → `NS1/NS2.VERCEL-DNS.COM`. But
+`GET /v4/domains/rudyman.com/records` is **EMPTY** and
+`POST /v2/domains/rudyman.com/records` returns **`invalid_zone: "rudyman.com is not a DNS zone"`**.
+
+**Everything the API can do HAS been done and did not help:**
+- `POST /v9/projects/<id>/domains/<d>/verify` on both apex + www → passes, zone still empty.
+- Full **remove + re-add** of the account-level domain (`DELETE /v6/domains/<d>` then
+  `POST /v5/domains`) → re-added clean, zone STILL empty, NS still refusing.
+- ⚠️ **GOTCHA: `DELETE /v6/domains/<d>` ALSO drops the PROJECT domain bindings**, not just the
+  account entry. Both `rudyman.com` and `www.rudyman.com` vanished from the project and had to be
+  re-added via `POST /v10/projects/<id>/domains` — remember to restore
+  `{"redirect":"rudyman.com","redirectStatusCode":308}` on www, or the apex/www relationship is
+  silently lost. Bindings ARE currently restored and correct.
+
+**NEXT ACTION IS THE USER'S, and it is one of these two — do not keep poking the API:**
+  a. **Vercel support** (vercel.com/help) — quote "delegated to vercel-dns but ns1/ns2 return
+     Query refused; `/v4/domains/<d>/records` empty; `invalid_zone` on record create". This is the
+     correct fix if the domain should stay on Vercel DNS.
+  b. **FASTER WORKAROUND — switch back to Hostinger DNS and use A/CNAME instead.** Point the
+     nameservers back to `aurora.dns-parking.com` / `nebula.dns-parking.com`, then add in
+     Hostinger's DNS zone editor: **A `@` → `216.198.79.1`** and
+     **CNAME `www` → `8a0f233b3a7d8efb.vercel-dns-017.com.`** (values Vercel returned for this
+     project). This sidesteps Vercel DNS entirely and does not depend on their zone bug.
+     Recommend (b) if the user wants the domain live soon.
+
+Unaffected + already correct, so no rework needed once DNS resolves: project bindings (apex
+serves, www 308-redirects), `NEXT_PUBLIC_SITE_URL=https://rudyman.com` on production, and the
+deployed sitemap/robots.
+
+### PRIOR STATUS (Session 21)
+**CUSTOM DOMAIN `rudyman.com` BOUGHT + WIRED. Shipped in `91c68e3`: the iOS "can't scroll at all"
+bug is FIXED, both case studies now open on a LAYERED cover (raster bg + vector title/role SVGs),
+and Verkos Reports is the 2nd home work box (replacing Marrow).**
+
+### /work INDEX REBUILT — particle field + alternating plates — Session 22 (`e809c42`)
+The `/work` index was still the ORIGINAL light placeholder grid (`WorkGrid` + Sanity `PROJECTS_QUERY`,
+which returns nothing). It is now a dark route with its own cinematic particle field, built from the
+user's Figma slides 34/35/36.
+
+**`src/components/hero3d/PageGlow.tsx` — the field.** Shares the footer's visual DNA (locked palette,
+square-mote sprite, fresnel energy boxes) but is a DELIBERATELY different experience — the brief was
+"should feel different from the footer". The five rules are written into the file header so they
+don't drift; keep them if you retune:
+  1. **Always in flight** — travels toward the camera even at rest (`BASE_SPEED`). A field that only
+     moves on scroll reads as a widget, not a place.
+  2. **Scroll ACCELERATES, doesn't start** — `uScroll` ADDS to the idle travel (`SCROLL_TRAVEL`, 90
+     world-units across the page), so the reader throttles forward.
+  3. **Depth is the point** — 3 discrete strata (`aDepth` 0.15/0.55/1.0) parallaxing at their own
+     rates. Discrete, not random, so it reads as layers rather than mush.
+  4. **Nothing pops** — `travelFade()` fades motes in far and dissolves them before the camera plane.
+     The first build wrapped hard at the boundary, which instantly breaks the illusion.
+  5. **Aerial perspective** — near = brighter/bigger, far = dimmer.
+- ⚠️ **Nodes need their OWN earlier dissolve (`travelFadeNode`, gone by z=4).** They're real geometry
+  (up to ~1.3 world units); within ~12 units of the lens they blow up into flat opaque cubes. The
+  first build did exactly that — huge dead cubes over the headline.
+- Density ~3× the footer (900 motes / 46 nodes vs 310/22), filling the whole viewport rather than a
+  band below the fold. Mobile takes ~45%.
+- Motion split follows the house rule: **ScrollTrigger owns scroll-POSITION values** (`uScroll`, plus
+  a velocity-derived `uFlare` that tweens back to 0 so fast scrolling energises the field); the
+  **intro ignition self-plays** as a one-shot rAF tween (`uIgnite`); the **GPU owns per-frame** life
+  cycles + drift (`uTime`). They never write the same uniform, so they can't fight.
+- ⚠️ **`ssr: false` in `next/dynamic` is ILLEGAL in a Server Component** (Next 16 hard-errors). `/work`
+  is a server component (fetches settings), so the dynamic import lives in
+  **`PageGlowMount.tsx`** (`"use client"`). Same pattern any future page must use.
+- ⚠️ **TWO GLSL TRAPS, both cost a debug cycle — commented in the file:**
+  (a) **`half` is a RESERVED WORD in GLSL ES.** Using it as a parameter name fails with only
+      "Vertex shader is not compiled" and no line number. Renamed to `h`.
+  (b) **Backticks inside a shader comment TERMINATE the JS template literal** holding the GLSL.
+      The error surfaces as "Expected a semicolon" in the .tsx, nowhere near the real cause.
+
+**`src/components/sections/WorkShowcase.tsx` — the cards.** Alternate left/right (`index % 2`) down a
+centred column with `14–18vh` gaps, so the pair reads as one staggered centre-stage column (Figma
+slide 35). Entrance = GSAP rise + settle from the card's own side; the cover parallaxes against its
+frame on scrub (hence `scale-[1.06]` on the img, so the translate never reveals an edge).
+- **At REST the plate is a CLEAN image with the big Tanker title BELOW it.** An earlier build put the
+  title ON the plate and it was illegible over bright covers (the gate shot is mostly sky + white
+  truck) — and re-reading the user's slide 35, the title is below the card there too.
+- **HOVER = the user's own Figma treatment: solid `#000` at 20% opacity** over the thumbnail (verified
+  computes to exactly `0.2`), revealing the study headline (white) + eyebrow (accent orange) centred,
+  with the year pinned bottom-right; the Tanker title turns accent. `text-shadow` on the copy so it
+  survives a bright cover even at only 20% scrim.
+- **`src/components/sections/PageHeading.tsx`** — the shared full-viewport Tanker lockup ("WORK" +
+  subtitle) that opens the page; letters rise out of a mask, then it lifts + dissolves on scroll so it
+  never fights the first plate. Generic — `/play` can reuse it as-is.
+- Page root carries **`hero-dark`** (without it `text-fg` resolves to the LIGHT theme's near-black and
+  the whole page renders dark-on-dark) and overrides `--color-accent` to the signal orange `255 141 59`
+  (`.hero-dark` defaults it to electric blue, which fought the orange field).
+- **`Header.tsx` `darkPage` now also matches `/work` and `/play`** — the index used to be a light route.
+- ⚠️ **KNOWN GAP: the kicker/eyebrow are HOVER-ONLY, so touch users get image + title but no
+  description.** Deliberate for now; add a static line under the title for coarse pointers if wanted.
+- Placeholder slugs (nightshift/atlas/ember) are FILTERED OUT of this page — they 404, and this is the
+  page whose whole job is to send people into the work. Years for the two real studies corrected to
+  **2026** to match their own case-study meta.
+
+### LIGHTBOX + ZOOM-CURSOR CHANGES — Session 22 (`beae3ab`)
+- **The before/after slider is EXCLUDED from the lightbox.** `BeforeAfter`'s two images now carry
+  `data-no-zoom` (checked by `ImageLightbox` in BOTH the click handler and the tagger, so they get
+  neither the lightbox nor the hover affordance). It's a DRAG slider — opening a full-screen view
+  mid-drag fights the interaction the component exists for.
+- **`cursor: zoom-in` REMOVED site-wide** from `[data-zoomable]` (globals.css). The slight lift +
+  accent ring is enough affordance; the magnifier made reading-flow screenshots feel like heavy UI
+  controls. **Deliberate — don't reintroduce it** (noted in the CSS comment).
+- ⚠️ **VERIFICATION TRAP:** a probe that looks for "any `div.fixed.inset-0` containing an img" FALSE-
+  POSITIVES on the case-study cover intro plate, which is also `fixed inset-0` with images. Key off
+  the real **`.lir-lightbox`** class. The first run reported the slider still opening the lightbox
+  purely because of this; the behaviour was correct all along.
 
 ### CUSTOM DOMAIN — `rudyman.com` — Session 21
 Registrar **Hostinger**; Vercel project `portfolio-2026` (`prj_LyJsSNYxQCqJu9xpZXEIfnG2s9oE`,
@@ -1289,27 +1414,31 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0000. **⭐⭐ FIRST THING: FINISH THE `rudyman.com` CUTOVER (started Session 21).** Everything is
-    configured; it was purely waiting on DNS caches. See §6 "CUSTOM DOMAIN" for the full state.
-    a. **Check propagation:**
-       `curl -s "https://dns.google/resolve?name=rudyman.com&type=A"` — success = an A record that
-       is NOT the Hostinger parking IP `2.57.91.91`. Cross-check Vercel's own view:
-       `GET /v6/domains/rudyman.com/config?teamId=team_ui5Ojpk8q4oYhCb6FrNH6RAe` → want
-       **`misconfigured: false`**.
-    b. **Then verify end-to-end:** `https://rudyman.com` serves the portfolio (NOT the "Parked
-       Domain name on Hostinger DNS system" title), HTTPS cert is valid, and
-       `https://www.rudyman.com` 308-redirects to the bare domain.
-    c. **If the Vercel DNS zone is STILL empty ~6h+ after the NS change**, add the records
-       manually (they were rejected with `invalid_zone` during Session 21 because the zone wasn't
-       provisioned yet): A `@` → `216.198.79.1`, CNAME `www` →
-       `8a0f233b3a7d8efb.vercel-dns-017.com.`
+0000. **🚨 `rudyman.com` IS BLOCKED BY A VERCEL BUG — THE NEXT MOVE IS THE USER'S, NOT MORE API
+    POKING.** Session 21 called this "waiting on propagation"; **that was wrong** and Session 22
+    proved it: Vercel's own nameservers return **`Query refused`** for the domain, so resolvers get
+    SERVFAIL. Full diagnosis + every API remedy already attempted is in §6 "DOMAIN BLOCKED".
+    a. **PICK ONE (recommend the workaround — it's much faster):**
+       - **WORKAROUND (recommended):** switch the nameservers at Hostinger back to
+         `aurora.dns-parking.com` / `nebula.dns-parking.com`, then in Hostinger's DNS zone editor
+         add **A `@` → `216.198.79.1`** and **CNAME `www` → `8a0f233b3a7d8efb.vercel-dns-017.com.`**
+         Sidesteps Vercel DNS entirely, so the zone bug stops mattering.
+       - **OR** open a **Vercel support ticket** (vercel.com/help) quoting: delegated to vercel-dns
+         but ns1/ns2 return Query refused; `/v4/domains/<d>/records` empty; `invalid_zone` when
+         creating records. Correct fix if the domain should stay on Vercel DNS.
+    b. **DO NOT re-run remove/re-add on the domain.** It was tried, didn't fix the zone, and
+       `DELETE /v6/domains/<d>` ALSO silently drops the PROJECT bindings (see the gotcha in §6).
+       Bindings are currently correct — apex serves, www 308-redirects — leave them alone.
+    c. **Then verify end-to-end:** `https://rudyman.com` serves the portfolio (NOT Hostinger's
+       "Parked Domain name" page), HTTPS cert valid, `https://www.rudyman.com` 308s to the apex.
+       Authoritative check that skips caches: `nslookup -type=A rudyman.com ns1.vercel-dns.com`.
     d. **Add `rudyman.com` + `www.rudyman.com` to Sanity CORS**
        (sanity.io/manage/project/4bo3ynjd/api) so `/studio` + live content work on the new domain.
-       This is NOT done yet and `/studio` will fail on the custom domain until it is.
+       NOT done yet — `/studio` will fail on the custom domain until it is.
     e. `NEXT_PUBLIC_SITE_URL` is ALREADY `https://rudyman.com` on Vercel production — no action,
-       but remember it's build-time inlined, so it only changed after the redeploy.
-    f. **UNTIL (b) PASSES, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
-       (User asked this explicitly on 2026-07-29 and chose to wait rather than temporarily point
+       but it's build-time inlined, so it only took effect on the Session-21 redeploy.
+    f. **UNTIL (c) PASSES, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
+       (Asked explicitly on 2026-07-29; user chose to wait rather than temporarily point
        `NEXT_PUBLIC_SITE_URL` back at the vercel.app URL for link previews.)
 
 000b. **🔐 REVOKE THE VERCEL TOKEN pasted in Session 21** (`vcp_1fr3...`, in that session's
@@ -1372,10 +1501,25 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    Touchpoints: `Hero.tsx` (+ `hero3d/*` WebGL2/touch gates), `WorksJourney.tsx`, `FooterGlow.tsx`,
    `LirCaseStudy.tsx`/`lirBlocks.tsx`. Lenis is disabled on coarse-pointer; GSAP is `matchMedia`-gated.
 
-0b. **BUILD THE `/play` PAGE** — the About page's game card links to `/play` (currently the styled
-   404). Plan: Play page = AI experiments gallery; The Other Hand gets its own page/embed (source
-   in gitignored `the-other-hand project/`; DO NOT commit it — it's a separate Vite app).
+0b. **⭐ BUILD THE `/play` PAGE — NOW MOSTLY COMPOSITION.** Session 22 built the two pieces it needs
+   and both are already generic: **`PageGlow`** (via `PageGlowMount`, the particle field) and
+   **`PageHeading`** (the full-viewport Tanker lockup — pass `title="PLAY"` +
+   `subtitle="Spellcrafting with AI"` per the user's Figma slide 36). Copy the `/work` page shell:
+   `hero-dark` + `bg-[#06080c]` + the `--color-accent` orange override + `data-header-dark`
+   (`Header.tsx` already treats `/play` as a dark route). **The user explicitly deferred the page's
+   CONTENTS ("hold on about the play page contents for now") — ask before inventing them.**
+   Still the styled 404 today. Plan: AI experiments gallery; The Other Hand gets its own page/embed
+   (source in gitignored `the-other-hand project/`; DO NOT commit it — separate Vite app).
    Also `#play` + `#resume` nav anchors still have no destinations.
+
+0c. **`/work` follow-ups (Session 22).**
+   a. **Touch users get no description** — the card kicker/eyebrow are hover-only. Add a static
+      line under the title for coarse pointers if wanted (flagged to the user, not yet decided).
+   b. **Feel the field on a real GPU.** The 5 cinematic rules, the scroll flare and the ignition
+      were only verified in software-rendered headless Chrome. Dials at the top of `PageGlow.tsx`
+      (`DENSITY`, `BASE_SPEED`, `SCROLL_TRAVEL`) and the two fade windows in `FIELD_GLSL`.
+   c. The old `WorkGrid` + `PROJECTS_QUERY` path is now UNUSED by `/work` — prune when Sanity
+      content lands (or wire the real query into `WorkShowcase`, which takes a plain array).
 1. **USER TO FEEL ON REAL GPU** — everything below verified only in software-rendered headless
    Chrome; feel it on the actual GPU:
    a. **Home WORKS JOURNEY** — the 5 project-node beats (energy cuboid flying the snake path →
@@ -1414,6 +1558,26 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 22 — 2026-07-30
+**Rebuilt the `/work` index (cinematic particle field + alternating project plates), excluded the
+before/after slider from the lightbox, removed the zoom cursor site-wide, and — the important
+one — DISPROVED Session 21's domain diagnosis.**
+- **`/work` (`e809c42`)** — was still the original light placeholder grid. Now a dark route with
+  `PageGlow`: the footer's visual DNA but ~3× denser, filling the viewport, flying TOWARD the
+  camera continuously with scroll ACCELERATING (not starting) the flight, 3 parallax strata, a
+  velocity flare and an intro ignition. Cards alternate left/right; plate is clean at rest with
+  the Tanker title below, and hover drops the user's `#000 @ 20%` scrim to reveal the headline +
+  accent eyebrow + year. Full detail + the GLSL traps in §6.
+- **Lightbox/cursor (`beae3ab`)** — the drag slider no longer opens a full-screen view; the
+  magnifier cursor is gone everywhere (lift + ring is the affordance now).
+- **DOMAIN: Session 21's "just waiting on propagation" was WRONG.** `ns1/ns2.vercel-dns.com`
+  return **`Query refused`** — the zone was never provisioned, so resolvers SERVFAIL. Verify,
+  and a full remove + re-add, both failed to create it. **Blocked on Vercel; the user must either
+  open a support ticket or (faster) move DNS back to Hostinger with A/CNAME records.** See §7
+  item 0000. ⚠️ Learned the hard way: `DELETE /v6/domains/<d>` also drops the PROJECT bindings —
+  they were restored, and are correct.
+- Typecheck + prod build clean (14 pages). Dev server + headless Chrome stopped at session end.
 
 ### Session 21 — 2026-07-29
 **Fixed the iOS "site won't scroll at all" bug, rebuilt both case-study opening covers as
