@@ -201,6 +201,15 @@ export function Loader() {
   const [done, setDone] = useState(false);
   const [ready, setReady] = useState(false); // load hit 100 → pan unlocks
   const openedRef = useRef(false);
+  // Mirror of `ready` for code that runs OUTSIDE the render cycle (timers,
+  // event listeners registered once on mount). Those capture a stale `ready`
+  // from whichever render created them, which previously let a dismissed
+  // loader be re-opened. Always set both together via markReady().
+  const readyRef = useRef(false);
+  const markReady = () => {
+    readyRef.current = true;
+    setReady(true);
+  };
 
   // Was this load triggered by an in-app nav click (hardNavigate)? If so the
   // Loader runs in "transition" mode: pan ONLY (no counter, no label, no click
@@ -265,7 +274,7 @@ export function Loader() {
             // after the pan has popped in + done ~one flip, auto-open (throw +
             // hole reveal + handoff). `ready` must be true for openPan to run.
             onComplete: () => {
-              setReady(true);
+              markReady();
               openPan();
             },
           })
@@ -291,7 +300,7 @@ export function Loader() {
         gsap.set(".pan__group", { scale: 1, opacity: 1, y: 0 });
         gsap.set(".pan__label", { opacity: 1, y: 0 });
         gsap.set(".pan__count", { opacity: 0 }); // no count-up to show
-        setReady(true);
+        markReady();
         return;
       }
 
@@ -447,7 +456,7 @@ export function Loader() {
                   duration: 0.45,
                   ease: "power2.in",
                 });
-                setReady(true);
+                markReady();
               },
             });
           });
@@ -460,7 +469,10 @@ export function Loader() {
   const openPan = () => {
     // nav (transition) mode drives the open itself — it doesn't use the
     // click-gate, so `ready` may still be false when it calls this.
-    if ((!ready && !isNav) || openedRef.current) return;
+    // Reads readyRef, NOT the `ready` state: callers include timers whose
+    // closures captured an old render, and a stale `ready===false` there used
+    // to slip past this guard and re-open a dismissed loader.
+    if ((!readyRef.current && !isNav) || openedRef.current) return;
     openedRef.current = true;
 
     // Hand off to the hero partway through — while the hole is opening — so
@@ -580,22 +592,30 @@ export function Loader() {
   //    while the page was still painting. On iOS that read as "the loader
   //    flashes for a split second and is gone". A deliberate tap on the intro
   //    is the ONLY thing that should open it.
+  // ⚠️ THIS EFFECT MUST RUN **ONCE**, ON MOUNT ONLY — hence the empty dep array
+  //    and the refs below. It previously depended on [ready, done], and `ready`
+  //    flips false→true when the counter completes, which RE-RAN the effect and
+  //    RESTARTED the 12s ceiling from zero. Twelve seconds later — by which
+  //    time the reader had long since tapped in and was scrolling the page —
+  //    the ceiling fired and called openPan() on an already-dismissed loader,
+  //    bringing the frying pan back over the content mid-scroll. (`done` did
+  //    not save us: it only turns true AFTER the ~1.5s exit animation, well
+  //    after the re-run, and the stale closure captured ready===false so
+  //    openPan's own guard passed too.)
+  //    Everything time-sensitive therefore reads a REF, never a state value.
   useEffect(() => {
-    if (done) return;
+    const el = root.current;
+
     // never let the intro hold the page hostage — cap the whole thing.
     const ceiling = window.setTimeout(() => {
-      if (openedRef.current) return;
-      // `ready` may still be false (hero never signalled); unlock regardless.
-      setReady(true);
+      if (openedRef.current) return; // already opened — do NOT re-run
+      markReady();
       openPan();
       // openPan bails if it somehow can't run — guarantee the unlock anyway.
       window.setTimeout(() => {
         if (document.body.classList.contains("is-loading")) finish();
       }, 1800);
     }, 12000);
-
-    const el = root.current;
-    if (!el) return () => window.clearTimeout(ceiling);
 
     // Ignore input for a beat after mount so a touch that was already in
     // flight (or the tap that navigated here) can't dismiss the intro.
@@ -605,23 +625,24 @@ export function Loader() {
     }, 600);
 
     const anyTap = () => {
-      if (armed && ready) openPan();
+      if (armed && readyRef.current && !openedRef.current) openPan();
     };
-    el.addEventListener("click", anyTap);
+    el?.addEventListener("click", anyTap);
     // keydown stays on window — a keyboard user has no "stray touch" problem
     // and may not have focus inside the overlay.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (armed && ready && (e.key === "Enter" || e.key === " ")) openPan();
+      if (!armed || !readyRef.current || openedRef.current) return;
+      if (e.key === "Enter" || e.key === " ") openPan();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.clearTimeout(ceiling);
       window.clearTimeout(arm);
-      el.removeEventListener("click", anyTap);
+      el?.removeEventListener("click", anyTap);
       window.removeEventListener("keydown", onKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, done]);
+  }, []);
 
   // Last-resort guarantee: once the intro is gone, the scroll lock MUST be
   // gone with it. If any path above unmounted the loader without clearing the
