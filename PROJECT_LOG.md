@@ -203,15 +203,117 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 19)
+## 6. Current State (as of Session 20)
 
-**Status (as of Session 19): VERKOS CASE STUDY NOW SHIPS TWO INTERACTIVE EXHIBITS — the real
-product UI and a generated report — plus a full-bleed fix and a logo-alignment fix. Commit
-`8a3d26f` on `main` → Vercel. Prod `npm run build` clean (14 pages). Dev server + headless
-Chrome stopped at session end. Everything from Sessions 17–18 still live.
-KNOWN NIT (still deferred): the Problem `statement` beat renders at 4 lines (wanted 3).
-TO REVISIT: the app embed is built from the OLDER Verkos source copy — see §6 "VERKOS
-INTERACTIVE EXHIBITS" for why, and what it would take to move to `-fresh`.**
+**Status (as of Session 20): THE VERKOS APP EXHIBIT WAS REBUILT FROM THE LATEST SOURCE
+(`verkos-reports-exhibit-rudy-main.zip`), replacing the older copy Session 19 shipped. It now
+runs in PERMANENT demo mode with every live FlytBase/Supabase call answered offline, plus a
+click-to-expand image lightbox across BOTH case studies, a Contents rail derived from the real
+chapter flashes, and the three Figma design-decision images. Prod `npm run build` clean
+(14 pages), typecheck clean. Dev server + headless Chrome stopped at session end.
+Everything from Sessions 17–19 still live.
+RESOLVED THIS SESSION: the "older source copy" caveat (§7 item 000) is GONE — the exhibit is
+now the newest UI. The demo-mode button and DEMO chips were removed at the user's request.
+KNOWN NIT (still deferred): the Problem `statement` beat renders at 4 lines (wanted 3) — note
+the statements are now CENTRED, so line balance matters more than before.**
+
+### VERKOS APP EXHIBIT — REBUILT FROM LATEST SOURCE — Session 20
+**Supersedes the Session-19 app embed.** Source = `verkos-reports-exhibit-rudy-main.zip`
+(E:\Grad Project@Flytbase\Flinks\Verkos\), extracted to `E:\tmp\verkos-main-src`, built in a
+scratch copy at **`E:\tmp\verkos-exhibit-main`**. Neither the zip nor the user's source folders
+were modified. Output → `public/verkos-demo/` (6.8 MB, was 3.1 MB).
+- **`node_modules` seeded from the Session-19 scratch build** — dependency sets between `-fresh`
+  and `-main` are BYTE-IDENTICAL (105 packages, zero version drift), so no install was needed.
+- **DEMO MODE IS THE POINT AND IT IS PERMANENT.** This copy ships a real, purpose-built demo mode
+  that Session 19 deliberately avoided (user reversed that call). It already short-circuits all
+  three `generate-report` invokes (`ai-report-service.ts` `demoAssistSection` /
+  `demoGenerateFullReport` / `demoFillSiteContext`), the wizard flights step, and the flights
+  pages. `src/exhibit/bootstrap.ts` calls `enterDemoMode()` before the router mounts.
+- **⚠️ DEMO MODE DOES NOT COVER EVERYTHING** (user flagged this; it was correct). The store's base
+  mocks are EMPTY arrays — `mockSites = []`, `mockReports = []`, `mockDrafts = []` — and
+  `flightContexts` starts `{}`, so `enterDemoMode()` looks up `demo-flight-1..5` contexts and
+  finds none. **`src/exhibit/seed-data.ts`** authors the missing records: 3 enriched sites,
+  5 reports (varied profile/status), 5 drafts, 5 flight contexts with pilot notes, and gallery
+  media for flights 6-12 (the demo gallery only covers 1-5, so seeded reports showed
+  "0 files from 0 flights").
+- **`src/exhibit/mock-http.ts`** replaces the axios instance from `useHttp()`. URL-routing, never
+  throws, never hits the network: `v2/flight`, `v2/objects/folder/:id`, forensic
+  `ai-search/search/text` + `/detections/:id` (with plausible bboxes), sites, profile, org.
+  ⚠️ **`sites/` returns a BARE ARRAY of ISite, not an envelope** — returning an object makes
+  `mergeApiAndLocalSites` throw "e is not iterable" and the Sites route white-screens.
+  ⚠️ **API site `_id`s must match the seeded local ids as `site-fb-<_id>`** — that's the merge key
+  in `src/utils/map-api-site.ts`; mismatched ids render every site TWICE.
+- **`src/exhibit-auth/`** (directory — deep imports need it) replaces the `@auth` vite alias.
+  Inert guards (the real ones redirect the whole app to `/login`), pass-through providers,
+  `useHttp()` → the mock client. **`useAuth().orgId` stays `null`** — load-bearing, keeps
+  `useDbSync()` off Supabase (same as Session 19).
+- **CREDENTIALS REMOVED — three, all would have shipped publicly:** a hard-coded Supabase URL +
+  anon key in `integrations/supabase/client.ts` (replaced by a full offline mock covering all
+  four modes incl. `extract_template`, which has NO demo branch); the FontAwesome Pro kit token
+  in `index.html`; and a **Cesium ion token** in `environment.lovable.ts`.
+- **`environment.lovable.ts` is the config that actually runs** — the runtime selector falls
+  through to it for any non-flytbase hostname. Its `websiteBasePath` now derives from
+  `import.meta.env.BASE_URL`, which sets the TanStack router `basepath`. **Without this every
+  route falls through to the index** (all 7 routes rendered identical content until fixed).
+- **Icons: FontAwesome → lucide.** `scripts/gen-icon-map.mjs` codegens `src/exhibit/lucide-icons.ts`
+  (92 glyphs, all resolved first pass) from lucide-react's ESM `__iconNode` data.
+  ⚠️ **`src/exhibit/icon-swap.ts` INJECTS a child into the existing `<i>` — it must NEVER use
+  `replaceWith()`.** The first version replaced the node, which pulled React-managed elements out
+  of the tree and threw `NotFoundError: Failed to execute 'removeChild'` on unmount, crashing
+  `/flight/:id` and `/guides`. Do not go back to replaceWith.
+- **Fonts self-hosted** (`public/fonts/`, 7 woff2 latin subsets, ~296 KB): Inter + DM Sans were
+  loaded from Google in 5 places (index.html ×2, index.scss, report-print.ts, ReportPreview.tsx).
+  The app has NO serif anywhere; the risk was print/canvas fallbacks landing on one. Verified 0.
+- **`src/exhibit/asset-url.ts` is IDEMPOTENT ON PURPOSE** — demo data resolves URLs at module load
+  and the mock HTTP layer hands the same values back as API responses; naive re-application
+  produced `/verkos-demo/verkos-demo/demo/...` and broke every flight image.
+- **Images:** the 6 real photos compressed 30 MB → 2.1 MB. The 16 `placehold.co` URLs are gone,
+  replaced by frames DERIVED from the real photos with ffmpeg (thermal false-colour via
+  `pseudocolor`, night grades, 14 patrol crops) plus **`Oil Rig.jpg`** — the one genuinely new
+  asset in `Demo data\Demo images\` (the other six were already in the build).
+- **UI edits (user-requested, the only deviations from "UI strictly as shipped"):** the sidebar
+  "Try demo mode" CTA + "Demo mode · Exit" badge removed (a toggle would empty the app out from
+  under a visitor), and the `Demo` chips + "viewing a complete demo shift report" banner removed
+  from `ReportsTable.tsx` / `ReportReview.tsx`.
+- **VERIFIED** (raw-CDP headless harness): 0 external requests · 0 leftover `fa-*` · 0 unmapped
+  icons · 0 serif elements · 0 broken images · all 7 list routes + 7 detail routes populated ·
+  the create-report wizard runs end-to-end (flights → agent → template → editable report) ·
+  in-iframe nav is pure client-side (0 network). Embedded on the case study: app iframe at
+  y=2397, report at y=4449, no horizontal overflow at 1500px.
+- **KNOWN, ACCEPTED:** the reports table clips its TYPE/AUTHOR columns at the embed's 1400px
+  logical width (container is `overflow-hidden`) — that is the app's own responsive behaviour;
+  widening `designWidth` would shrink all text. Direct URL loads of `/verkos-demo/<route>` 404
+  (Next serves `public/` with no SPA fallback) — irrelevant, the iframe entry point is
+  `index.html` and routing is client-side thereafter.
+
+### CASE-STUDY CHANGES — Session 20 (both studies)
+- **Contents rail is now DERIVED** (`deriveContents()` in `LirCaseStudy.tsx`) from the sections in
+  `CHAPTER_IDS`, using each chapter's real flash `heading`. The hand-authored `data.contents` had
+  drifted badly in BOTH studies: 10 entries for 7 chapters, three ids targeted TWICE
+  ("the shift"/"process", "solution"/"trade-offs", "Impact"/"reflection" — which also broke the
+  scroll-spy, two links lighting at once), and **`features` missing entirely**. `data.contents`
+  is now unused by the renderer but left in the types.
+- **`ImageLightbox.tsx`** — click any screenshot → full-screen view, ✕ button, Esc or click-anywhere
+  to close. **Delegated listener on the case-study root**, NOT per-image: the two studies render
+  images from 16 call sites across 4 files, so wrapping each would miss any added later. Opt out
+  with `data-no-zoom` (used on the fixed intro cover); images under 120px are skipped
+  automatically, which excludes logos/icons. **Scroll lock is the whole point** — the studies are
+  scroll-driven, so a reader must not advance past a chapter transition while an image is open.
+  `overflow:hidden` alone is NOT enough (Lenis keeps driving the page) — it stops Lenis via
+  `lenisBridge`. Verified with REAL CDP wheel events; `window.scrollBy` is programmatic and is
+  never blocked, so it falsely reports failure. Restores the exact scroll offset on close.
+- **Hover affordance** (`globals.css`): `[data-zoomable]` gets `cursor:zoom-in` + a 1.2% lift +
+  accent ring. `(hover:hover) and (pointer:fine)` only; motion dropped under reduced-motion.
+- **Design-decision images** replaced from the user's Figma exports (`DD1 figma.png` etc. in
+  `case-study-assets/flytbase-project-2/`): `dd1-detection-events.webp`, **`dd2-templates.webp`
+  (dd2 previously had NO image)**, `dd3-one-screen.webp`. All at 1400px (column renders 860px, so
+  1400 stays crisp at 2× without waste). Old `dd1-configurable` / `dd2-onesurface` deleted.
+- **New optional `imgScale` on `decisionText`** (0-1, fraction of the measure, centred via
+  `mx-auto`): dd1 + dd3 are tall portrait captures at **0.8** so they don't tower over their cards;
+  **dd2 stays full width** — it's the wide landscape template editor and shrinking it would push
+  its UI text below readable size.
+- **`statement` blocks are now CENTRED** + `text-balance` (was left + `text-pretty`). Centring makes
+  ragged line lengths obvious, hence the balance swap. Verkos-only block; LIR is unaffected.
 
 ### VERKOS INTERACTIVE EXHIBITS — Session 19 (shipped in `8a3d26f`)
 Two embeds on `/work/verkos-reports`, both rendered by ONE component
@@ -1077,25 +1179,24 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-000. **⭐ REVISIT THE VERKOS APP EXHIBIT (user flagged at the end of Session 19).** The embed works
-    but is built from the OLDER source copy. Open items, in rough order:
-    a. **Move to `-fresh` if its newer screens matter** (ContextCheckStep, ReportGenerationModal,
-       SectionsDndList, template panels, flights routes). Blocker: its `CreateReportWizard` calls
-       `fetchFlightMedia` + `runAgentDetectionQueries` over `useHttp`. Stub both the way Supabase
-       was stubbed (canned media + canned detections) and it should build the same way.
-    b. **Drive the embedded app end-to-end on a real GPU** — only the reports library, sidebar nav
-       and routing into the seeded report were verified. The wizard, agent builder, template
-       builder and ReportReview screens are UNVERIFIED; the mocked `generate-report` responses
-       have never been exercised through the UI.
-    c. **Headless caveat:** route transitions inside the app did NOT repaint in headless Chrome
-       (DOM updated, paint stale) — believed a SwiftShader/framer-motion artifact, but confirm in
-       a real browser.
-    d. **Payload:** `public/verkos-demo` 3.1 MB + `public/verkos-report` 1.3 MB = 4.4 MB in the
-       repo. Static + lazy-loaded so initial page weight is unaffected, but it is real repo size.
-    e. **Scratch build dir `E:\tmp\verkos-exhibit` is NOT in the repo** and will be lost if tmp is
-       cleared. If the app embed needs rebuilding, the full recipe is in Current State §6.
-    f. The app's **"Try demo mode" button is still visible** in the sidebar — it works, but the
-       exhibit deliberately doesn't use demo mode. Consider hiding it.
+000. **⭐ VERKOS APP EXHIBIT — mostly RESOLVED in Session 20** (rebuilt from the latest source; the
+    old-copy caveat, the demo-mode button and the unverified wizard are all done). What REMAINS:
+    a. **Feel it on a real GPU / real browser.** Everything was verified in headless Chrome via
+       raw CDP — routes, detail pages, the wizard end-to-end, scroll lock, 0 external requests.
+       Not yet driven by a human on a real machine.
+    b. **⚠️ THE SCRATCH BUILD DIR IS NOT IN THE REPO.** `E:\tmp\verkos-exhibit-main` holds every
+       patch (exhibit-auth stub, mock-http, seed-data, bootstrap, icon codegen) and will be LOST
+       if `E:\tmp` is cleared — only the built `dist` is committed, under `public/verkos-demo/`.
+       The full recipe is in §6 "VERKOS APP EXHIBIT", but **consider vendoring the patch set**
+       (e.g. `case-study-assets/verkos-exhibit-src/`, gitignored-but-backed-up, or a real folder)
+       before it disappears. `.exhibit-src-images/` there also holds the uncompressed originals.
+    c. **Payload:** `public/verkos-demo` 6.8 MB (was 3.1) + `public/verkos-report` 1.3 MB = 8.1 MB
+       in the repo. Static + lazy so initial page weight is unaffected, but it is real repo size.
+       The JS bundle is 2.24 MB of it — this copy has far more screens than the old one.
+    d. **Reports table clips TYPE/AUTHOR** at the 1400px logical embed width (see §6 KNOWN).
+       Only fixable by raising `designWidth` in `VerkosPrototype.tsx`, which shrinks all text.
+    e. Seeded reports carry observations + media but **`missionCount` / stat tiles are authored,
+       not derived** — if a viewer edits a report the numbers won't recompute. Cosmetic.
 
 00. **VERKOS REPORTS — polish pass (Session 18 shipped v1).** Loose ends / to feel on a real GPU:
     (a) the Problem `statement` beat renders 4 lines, wanted 3 — tune the `statement` measure/size in
@@ -1169,6 +1270,35 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 20 — 2026-07-29
+**Rebuilt the Verkos app exhibit from the LATEST source zip (superseding Session 19's older copy),
+made demo mode permanent + filled the data gaps it leaves, added a click-to-expand image lightbox
+to BOTH case studies, fixed the Contents rail, and wired the three Figma design-decision images.
+Typecheck + prod build clean (14 pages). Full detail in Current State §6.**
+- **The trigger:** user supplied `verkos-reports-exhibit-rudy-main.zip` — the newest UI, which
+  Session 19 could not use (`-fresh`'s wizard called live FlytBase APIs). I unzipped it, confirmed
+  the same two blockers, and rebuilt rather than patched: same recipe, bigger surface.
+- **User reversed Session 19's "don't use demo mode" call** — this copy has a real demo mode that
+  covers the AI calls, wizard flights and flights pages. It's now ON permanently and cannot be
+  exited (button removed).
+- **User was right that "demo mode doesn't have mock data for everything"** — the store's base
+  mocks are empty arrays and flight contexts start `{}`. Authored sites/reports/drafts/contexts
+  and gallery media for flights 6-12 in `src/exhibit/seed-data.ts`.
+- **Three credentials found and removed** before they shipped publicly: a Supabase URL + anon key,
+  the FontAwesome Pro kit token, and a Cesium ion token.
+- **Four real bugs found and fixed during verification**, each documented in §6: Sites crashed
+  (bare-array response shape), `/flight/:id` + `/guides` crashed (my icon swapper used
+  `replaceWith` on React-managed nodes), every route fell through to the index (router `basepath`
+  from `websiteBasePath`), and sites rendered twice (`site-fb-<id>` merge key).
+- **Two of my own test methods were wrong and gave false readings** — worth remembering: dropped
+  `s` characters in the TOC came from `innerText` extraction, not rendering (`textContent` was
+  correct); and `window.scrollBy` is programmatic so `overflow:hidden` never blocks it, which
+  falsely failed the scroll lock. Real CDP wheel events confirmed the lock works.
+- **Case-study work:** Contents rail derived from real chapter flashes (both studies had 10
+  entries for 7 chapters, 3 duplicate targets, `features` missing); lightbox + hover affordance;
+  DD1/DD2/DD3 images from Figma with a new `imgScale` for the two tall ones; statements centred.
+- Dev server + headless Chrome stopped at session end, per user request.
 
 ### Session 19 — 2026-07-28
 **Added TWO interactive exhibits to the Verkos case study + two visual fixes. One commit

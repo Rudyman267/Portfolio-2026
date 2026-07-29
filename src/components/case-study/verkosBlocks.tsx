@@ -44,12 +44,19 @@ export function DecisionText({
   cards,
   img,
   imgAlt,
+  imgScale,
 }: {
   n: string;
   heading: string;
   cards: DecisionCard[];
   img?: string;
   imgAlt?: string;
+  /** Fraction of the content measure the screenshot should occupy (0-1).
+   *  Tall portrait captures (dd1's event editor, dd3's setup screen) tower over
+   *  the cards at full width, so they run at 0.8 and centre under the cluster.
+   *  Wide captures (dd2's template editor) stay full-width — shrinking those
+   *  would make their UI text unreadable. Defaults to full width. */
+  imgScale?: number;
 }) {
   // heading already carries its "01/02/03 …" number (from Figma); split it so
   // the number can be accented without double-printing it.
@@ -117,8 +124,12 @@ export function DecisionText({
       </AnimeReveal>
 
       {img && (
-        // bare UI screenshot — NO rounded container frame (house rule)
-        <div className="mt-8">
+        // bare UI screenshot — NO rounded container frame (house rule).
+        // `mx-auto` centres it when imgScale pulls it in from the full measure.
+        <div
+          className="mx-auto mt-8"
+          style={imgScale ? { width: `${imgScale * 100}%` } : undefined}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={img}

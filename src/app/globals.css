@@ -191,6 +191,44 @@
   }
 }
 
+/* ── Zoomable screenshots ───────────────────────────────────────────────────
+   ImageLightbox tags every image big enough to be worth expanding with
+   `data-zoomable`. Without an affordance nobody discovers the interaction, so
+   the image gets a zoom cursor plus a lift + accent ring on hover. Kept subtle:
+   these sit inside a reading flow and shouldn't read as buttons.
+   Pointer-fine only — on touch there is no hover, and the transform would just
+   cost paint. Motion is dropped for reduced-motion readers. */
+@media (hover: hover) and (pointer: fine) {
+  .lir img[data-zoomable] {
+    cursor: zoom-in;
+    transition:
+      transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+      outline-color 0.2s ease;
+    outline: 1px solid transparent;
+    outline-offset: 3px;
+  }
+  .lir img[data-zoomable]:hover {
+    transform: scale(1.012);
+    outline-color: rgb(var(--color-accent) / 0.55);
+    box-shadow: 0 18px 45px -18px rgb(0 0 0 / 0.75);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lir img[data-zoomable] {
+    transition: outline-color 0.2s ease;
+  }
+  .lir img[data-zoomable]:hover {
+    transform: none;
+  }
+}
+
+/* The lightbox lives in a portal on <body>, outside `.lir`, so it needs its
+   own escape from the study's scoped styles. */
+.lir-lightbox img {
+  cursor: default;
+}
+
 /* ============================================================================
    TAILWIND THEME — maps tokens into Tailwind's utility namespace.
    These reference the vars above; never hardcode raw values here.

@@ -310,9 +310,11 @@ export const VERKOS_DESIGN: LirDesign = {
               ],
             },
           ],
-          img: `${A}/dd1-configurable.webp`,
+          img: `${A}/dd1-detection-events.webp`,
           imgAlt:
-            "The agent detail screen — a named detection policy paired with its plain-English report instruction.",
+            "The detection-event editor — event name, severity, and the plain-English report instruction the AI writes from.",
+          // tall portrait capture — 80% of the measure, centred under the cards
+          imgScale: 0.8,
         },
         // dd2 — fixed report format → configurable sections
         {
@@ -344,7 +346,9 @@ export const VERKOS_DESIGN: LirDesign = {
               ],
             },
           ],
-          // dd2 has no dedicated screenshot in the Figma — cards only.
+          img: `${A}/dd2-templates.webp`,
+          imgAlt:
+            "The template editor — every report section independently configurable, with a live preview beside it.",
         },
         // dd3 — multi-step wizard → one fast surface
         {
@@ -376,9 +380,11 @@ export const VERKOS_DESIGN: LirDesign = {
               ],
             },
           ],
-          img: `${A}/dd2-onesurface.webp`,
+          img: `${A}/dd3-one-screen.webp`,
           imgAlt:
             "The single-surface setup — site, flight, and agent on one screen with a running summary.",
+          // tall portrait capture — 80% of the measure, centred under the cards
+          imgScale: 0.8,
         },
       ],
     },

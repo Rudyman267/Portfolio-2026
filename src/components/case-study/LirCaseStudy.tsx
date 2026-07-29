@@ -26,6 +26,7 @@ import {
 } from "@/components/case-study/lirBlocks";
 import { DecisionText, VerkosDiagram } from "@/components/case-study/verkosBlocks";
 import { VerkosPrototype } from "@/components/case-study/VerkosPrototype";
+import { ImageLightbox } from "@/components/case-study/ImageLightbox";
 
 /** Chapters wired to the full-viewport flash transition — every numbered
  *  section now opens on its Tanker title flash, then spawns its content. */
@@ -137,10 +138,37 @@ function GapReveal({ src }: { src: string }) {
   );
 }
 
+/** Build the Contents rail from the chapters that actually exist.
+ *
+ *  The hand-authored `data.contents` had drifted out of sync with the study:
+ *  it listed ten entries for seven chapters, pointed several of them at the
+ *  SAME section id ("the shift"/"process" both → `process`, "solution"/
+ *  "trade-offs" both → `decisions`, "Impact"/"reflection" both → `impact`),
+ *  and omitted `features` entirely. Duplicated targets also broke the
+ *  scroll-spy, since two links lit at once.
+ *
+ *  Deriving from the sections means the rail always mirrors the full-viewport
+ *  Tanker flash titles a reader actually sees, and cannot drift again.
+ *  `heading` is normalised to lower case so LIR's "IMPACT" matches the rail's
+ *  styling (Verkos writes "Impact"); `.lir` handles display casing.
+ */
+function deriveContents(data: LirDesign) {
+  const chapters = data.sections.filter((s) => CHAPTER_IDS.has(s.id));
+  return [
+    { n: "", label: "Overview", id: "overview" },
+    ...chapters.map((s, i) => ({
+      n: String(i + 1).padStart(2, "0"),
+      label: (s.heading ?? s.id).toLowerCase(),
+      id: s.id,
+    })),
+  ];
+}
+
 export function LirCaseStudy({ data }: { data: LirDesign }) {
   const root = useRef<HTMLElement>(null);
   let figN = 0;
   const nextFig = () => `Fig.${String(++figN).padStart(2, "0")}`;
+  const contents = deriveContents(data);
 
   /* Section-scroll wiring: light each Contents entry as its section arrives. */
   useGSAP(
@@ -284,6 +312,8 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
           src="/case-study/thumbnail-1.svg"
           alt="Live Incidence Response — case study cover"
           className="h-full w-full object-cover"
+          // decorative full-bleed intro plate — nothing to inspect up close
+          data-no-zoom
         />
         <div
           data-intro-hint
@@ -343,7 +373,7 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                 Contents
               </p>
               <ul className="mt-3 space-y-[0.6rem]">
-                {data.contents.map((c, i) => (
+                {contents.map((c, i) => (
                   <li key={i}>
                     <a
                       href={`#${c.id ?? "overview"}`}
@@ -483,6 +513,10 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
           </div>
         </div>
       </div>
+
+      {/* Click-to-expand for every screenshot in the study. Mounted here (the
+          shared shell) so LIR and Verkos both get it. */}
+      <ImageLightbox containerRef={root} />
     </article>
   );
 }
@@ -702,7 +736,12 @@ function ProseBody({
               // 3, 65-char in 2. text-pretty fills lines greedily (balance would
               // add lines). Indented onto the content column.
               <W key={i} className="mx-auto max-w-[940px]">
-                <p className="text-pretty text-[clamp(1.9rem,1.2rem+2.3vw,2.6rem)] font-bold leading-[1.16] tracking-[-0.015em] text-fg">
+                {/* Centred: these land as standalone thesis beats between
+                    scene breaks, so a centred block reads as a pause rather
+                    than another left-aligned paragraph. `text-balance` evens
+                    the line lengths, which matters far more once centred —
+                    a short last line looks accidental on a centred block. */}
+                <p className="text-balance text-center text-[clamp(1.9rem,1.2rem+2.3vw,2.6rem)] font-bold leading-[1.16] tracking-[-0.015em] text-fg">
                   {b.text}
                 </p>
               </W>
@@ -907,6 +946,7 @@ function ProseBody({
                 cards={b.cards}
                 img={b.img}
                 imgAlt={b.imgAlt}
+                imgScale={b.imgScale}
               />
             );
           case "verkosDiagram":

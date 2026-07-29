@@ -187,6 +187,9 @@ export type Block =
       /** optional supporting UI screenshot below the cards (bare, no frame). */
       img?: string;
       imgAlt?: string;
+      /** Fraction of the content measure the screenshot fills (0-1), centred.
+       *  Tall portrait captures need pulling in; wide ones stay full width. */
+      imgScale?: number;
     }
   // inline ANIMATED SVG diagram, drawn in via anime.js as it enters view. Built
   // as code components (crisp, accent-themeable) — not a raster export.
