@@ -719,7 +719,15 @@ export function Loader() {
   return (
     <div
       ref={root}
-      className="fixed inset-0 z-[100] overflow-hidden bg-black"
+      // ⚠️ z-index MUST beat ScrollTrigger's pinned hero.
+      // On touch we pin the hero with `pinType: "fixed"` (Hero.tsx), and
+      // ScrollTrigger gives a fixed pin `z-index: 110`. This overlay was
+      // z-[100], so on iPhone the PINNED HERO SAT ON TOP OF THE LOADER: the
+      // hero showed immediately, the pan was hidden behind it, and it only
+      // flashed into view during a scroll gesture (when the pin briefly
+      // restacks). The on-device ?herodebug readout said it outright —
+      // `hero.pos=fixed z=110`. Keep this comfortably above any pin.
+      className="fixed inset-0 z-[9000] overflow-hidden bg-black"
       role="dialog"
       aria-label="Site intro"
       aria-modal="true"

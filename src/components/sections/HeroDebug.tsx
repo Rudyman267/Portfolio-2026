@@ -122,6 +122,27 @@ export function HeroDebug() {
           " handoff=" +
           (w.__loaderHandoff ?? "NO"),
       );
+      // Stacking check — the intro overlay MUST be the topmost thing at the
+      // viewport centre while it is up. ScrollTrigger's fixed pin gets
+      // z-index:110, which used to out-stack the z-100 loader on touch (the
+      // hero showed and the pan hid behind it).
+      const introEl = document.querySelector<HTMLElement>(
+        '[aria-label="Site intro"]',
+      );
+      if (introEl) {
+        const topEl = document.elementFromPoint(
+          Math.round(window.innerWidth / 2),
+          Math.round(window.innerHeight / 2),
+        );
+        out.push(
+          "introZ=" +
+            getComputedStyle(introEl).zIndex +
+            " onTop=" +
+            (topEl ? introEl.contains(topEl) : "?"),
+        );
+      } else {
+        out.push("introZ=absent");
+      }
       out.push(
         "worksNode: on=" +
           heroScroll.worksNode.on +
