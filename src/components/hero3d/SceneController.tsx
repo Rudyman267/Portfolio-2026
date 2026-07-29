@@ -96,6 +96,9 @@ export function SceneController({ state }: { state: SceneState }) {
     // publish the eased travel for THREE-free DOM riders (works project nodes)
     heroScroll.travel = u.uTravel.value;
     heroScroll.sceneLive = true;
+    // heartbeat — consumers use this to tell "rendering" from "started once and
+    // then died" (lost context / stalled frameloop). See sceneIsLive().
+    heroScroll.lastFrameAt = performance.now();
 
     const intensityTarget =
       tw.scene.intensity + THREE.MathUtils.clamp(Math.abs(s.vel) / 2600, 0, 0.45);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { heroScroll } from "@/components/hero3d/heroScroll";
 
 /**
  * TEMPORARY on-device diagnostics for the "iOS shows only the shader, no text"
@@ -86,10 +87,39 @@ export function HeroDebug() {
           out.push(
             `beat${idx}.frame: op=${(+fcs.opacity).toFixed(2)} w=${Math.round(fr.width)}`,
           );
+          const img = frame.querySelector<HTMLImageElement>("img");
+          out.push(
+            img
+              ? `beat${idx}.img: ${img.complete && img.naturalWidth > 0 ? "ok" : "PENDING"} nw=${img.naturalWidth}`
+              : `beat${idx}.img: NONE`,
+          );
         }
+        const skin = activeBeat.querySelector<HTMLElement>("[data-skin]");
+        if (skin) out.push(`beat${idx}.skin=${(+getComputedStyle(skin).opacity).toFixed(2)}`);
       } else {
         out.push("beat=none-visible");
       }
+      // Is the 3D scene ACTUALLY painting? `sceneLive` is a latch that never
+      // goes false, so a stale heartbeat means the frameloop died — which would
+      // starve the works-window morph. This is the pair to read when the
+      // project card is missing on a real device.
+      out.push(
+        "sceneLive=" +
+          heroScroll.sceneLive +
+          " lastFrame=" +
+          (heroScroll.lastFrameAt
+            ? Math.round(performance.now() - heroScroll.lastFrameAt) + "ms"
+            : "never"),
+      );
+      out.push("heroProgress=" + heroScroll.progress.toFixed(3));
+      out.push(
+        "worksNode: on=" +
+          heroScroll.worksNode.on +
+          " p=" +
+          heroScroll.worksNode.p.toFixed(2) +
+          " m=" +
+          heroScroll.worksNode.m.toFixed(2),
+      );
       setLines(out);
     };
 

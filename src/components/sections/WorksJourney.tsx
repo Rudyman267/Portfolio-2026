@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight } from "lucide-react";
 import { gsap } from "@/lib/gsap";
-import { heroScroll } from "@/components/hero3d/heroScroll";
+import { heroScroll, sceneIsLive } from "@/components/hero3d/heroScroll";
 import { pathOffset } from "@/components/hero3d/pathMath";
 import { tweak } from "@/components/hero3d/tweakConfig";
 import {
@@ -577,7 +577,11 @@ export function createWorksTicker(drivers: BeatDriver[]) {
     const tanY = Math.tan((tweak.scene.fovBase * Math.PI) / 360);
     const tanX = tanY * (vw / vh);
     const travel = heroScroll.travel;
-    const live = heroScroll.sceneLive;
+    // NOT `heroScroll.sceneLive` — that's a latch that never goes false. This
+    // also requires a recently-rendered frame, so a lost WebGL context or a
+    // stalled frameloop (iOS Safari, memory pressure / Low Power Mode) drops us
+    // onto the DOM path instead of waiting on a mesh that will never draw.
+    const live = sceneIsLive();
     const wn = heroScroll.worksNode;
 
     // the active beat = the furthest one that has started (finished beats keep
@@ -603,15 +607,30 @@ export function createWorksTicker(drivers: BeatDriver[]) {
       // While the 3D scene renders the cuboid, the DOM frame exists only for
       // the morph — it crossfades in over the fading mesh. On the video
       // fallback (no scene) the DOM orange skin flies the whole way instead.
-      const frameAlpha = live
-        ? Math.min(1, Math.max(0, m / 0.35))
-        : Math.min(1, Math.max(0, p / 0.3));
+      //
+      // ⚠️ THE `live` BRANCH MUST NEVER BE THE ONLY THING THAT CAN SHOW THE
+      // WINDOW. It keys off `m` (the morph), so if the 3D scene dies mid-beat
+      // the window would wait forever on a morph that never advances — the
+      // reader gets the title, the description and the orange node, but no
+      // project card. That is exactly the iPhone bug. `sceneIsLive()` already
+      // falls back when the frameloop stalls; this max() is the second net:
+      // once the node has essentially docked (p high), the window comes up
+      // regardless of which branch we're on.
+      const dockedAlpha = Math.min(1, Math.max(0, (p - 0.82) / 0.12));
+      const frameAlpha = Math.max(
+        live
+          ? Math.min(1, Math.max(0, m / 0.35))
+          : Math.min(1, Math.max(0, p / 0.3)),
+        dockedAlpha,
+      );
       st.f(frameAlpha);
       // the orange skin never tints the 2D window on the live path — the
       // cuboid carries all the orange and burns off behind the white window.
       // Fallback (no 3D node): the skin IS the node through the flight, then
-      // burns off across the morph.
-      st.k(live ? 0 : 1 - Math.min(1, Math.max(0, (m - 0.05) / 0.4)));
+      // burns off across the morph. Once docked it must be GONE either way,
+      // or a dead scene leaves an orange blob sitting on the project image.
+      const skinAlpha = live ? 0 : 1 - Math.min(1, Math.max(0, (m - 0.05) / 0.4));
+      st.k(Math.min(skinAlpha, 1 - dockedAlpha));
       // never leave an invisible link hovering over the tunnel
       b.frame.style.pointerEvents = frameAlpha > 0.5 ? "auto" : "none";
 
