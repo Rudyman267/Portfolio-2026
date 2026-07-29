@@ -1184,12 +1184,19 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
     a. **Feel it on a real GPU / real browser.** Everything was verified in headless Chrome via
        raw CDP — routes, detail pages, the wizard end-to-end, scroll lock, 0 external requests.
        Not yet driven by a human on a real machine.
-    b. **⚠️ THE SCRATCH BUILD DIR IS NOT IN THE REPO.** `E:\tmp\verkos-exhibit-main` holds every
-       patch (exhibit-auth stub, mock-http, seed-data, bootstrap, icon codegen) and will be LOST
-       if `E:\tmp` is cleared — only the built `dist` is committed, under `public/verkos-demo/`.
-       The full recipe is in §6 "VERKOS APP EXHIBIT", but **consider vendoring the patch set**
-       (e.g. `case-study-assets/verkos-exhibit-src/`, gitignored-but-backed-up, or a real folder)
-       before it disappears. `.exhibit-src-images/` there also holds the uncompressed originals.
+    b. ✅ **DONE (Session 20, commit `4ec9456`) — the build source is now IN THE REPO** at
+       **`verkos-exhibit-src/`** (12 MB, 1142 files). It is excluded from `tsconfig.json`
+       (otherwise `tsc --noEmit` compiles ~1000 files importing `@auth`/`@ui`/`@libs` aliases the
+       portfolio lacks) and from `.vercelignore`; nothing imports it, so it never enters a bundle
+       — verified absent from `.next/static` + `.next/server`, build still clean in 35.5s.
+       See `verkos-exhibit-src/README-EXHIBIT.md` for the patch map + rebuild steps.
+       NOT vendored: `node_modules/`, `dist/`, `public/demo/` (identical to
+       `public/verkos-demo/demo`, see `public/DEMO-IMAGES-RESTORE.md`), and the 31 MB of
+       uncompressed originals (still in the user's `Demo data\Demo images\`).
+       ⚠️ While vendoring, **four MORE Cesium ion tokens** were found and scrubbed in
+       `environment.{dev,prod,stag,eu-prod}.ts` — Session 20 had only blanked `lovable`, and
+       these would otherwise have entered the public repo. **Re-scan after any re-sync from the
+       original zip:** `grep -rlnE "eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}" src/`
     c. **Payload:** `public/verkos-demo` 6.8 MB (was 3.1) + `public/verkos-report` 1.3 MB = 8.1 MB
        in the repo. Static + lazy so initial page weight is unaffected, but it is real repo size.
        The JS bundle is 2.24 MB of it — this copy has far more screens than the old one.
@@ -1298,6 +1305,12 @@ Typecheck + prod build clean (14 pages). Full detail in Current State §6.**
 - **Case-study work:** Contents rail derived from real chapter flashes (both studies had 10
   entries for 7 chapters, 3 duplicate targets, `features` missing); lightbox + hover affordance;
   DD1/DD2/DD3 images from Figma with a new `imgScale` for the two tall ones; statements centred.
+- **Follow-up commit `4ec9456`:** vendored the exhibit build source into the repo at
+  `verkos-exhibit-src/` (it had only existed in `E:\tmp`). Found and scrubbed **four more Cesium
+  ion tokens** in the unused environment files on the way in — bringing the session total to
+  **eight credentials removed**. Confirmed it does not touch the site build or the served
+  prototype: excluded from tsconfig + .vercelignore, absent from `.next/static`/`.next/server`,
+  `public/verkos-demo/` unchanged.
 - Dev server + headless Chrome stopped at session end, per user request.
 
 ### Session 19 — 2026-07-28
