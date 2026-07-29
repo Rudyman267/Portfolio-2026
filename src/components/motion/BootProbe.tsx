@@ -126,6 +126,10 @@ export function BootProbe() {
         return cs.visibility !== "hidden" && parseFloat(cs.opacity) > 0.05;
       });
       out.push("beats=" + beats.length + " active=" + (active < 0 ? "none" : active));
+      // RAW driver state — p/m per beat, straight from the ticker. This is the
+      // ground truth for "did the morph tween actually run".
+      out.push("drv " + (w.__worksDrivers ?? "ticker not running"));
+      out.push("sceneLive=" + (w.__worksLive ?? "?"));
       if (active >= 0) {
         const b = beats[active];
         const frame = b.querySelector<HTMLElement>("[data-frame]");
@@ -173,6 +177,46 @@ export function BootProbe() {
         );
         if (skin)
           out.push("skin op=" + (+getComputedStyle(skin).opacity).toFixed(2));
+      }
+      // NOTE: an earlier version reported `frame onTop=…` via elementFromPoint.
+      // That was MISLEADING and cost two wrong diagnoses: the whole works layer
+      // is `pointer-events-none`, so hit-testing skips the frame by design and
+      // onTop is false even when the card is perfectly visible. Do not
+      // reintroduce it — check ancestor chains and paint state instead.
+      if (active >= 0) {
+        const b = beats[active];
+        const frame = b.querySelector<HTMLElement>("[data-frame]");
+        if (frame) {
+          // Walk from the frame to <body> and report ANY ancestor that is
+          // faded, hidden, clipped or transformed away. A parent at opacity 0
+          // hides the child while the child's own computed opacity still
+          // reads 1 — which is precisely what the earlier readouts could not
+          // distinguish.
+          const chain: string[] = [];
+          let n: HTMLElement | null = frame.parentElement;
+          let depth = 0;
+          while (n && n !== document.body && depth < 12) {
+            const c = getComputedStyle(n);
+            const bad =
+              +c.opacity < 0.99 ||
+              c.visibility === "hidden" ||
+              c.display === "none" ||
+              (c.clipPath && c.clipPath !== "none") ||
+              (c.maskImage && c.maskImage !== "none");
+            if (bad) {
+              chain.push(
+                `  !${n.tagName}.${String(n.className).slice(0, 18)} op=${(+c.opacity).toFixed(2)} vis=${c.visibility.slice(0, 4)} disp=${c.display.slice(0, 5)}${c.clipPath !== "none" ? " CLIP" : ""}${c.maskImage !== "none" ? " MASK" : ""}`,
+              );
+            }
+            n = n.parentElement;
+            depth++;
+          }
+          out.push(
+            chain.length
+              ? "ANCESTORS HIDING IT:\n" + chain.join("\n")
+              : "ancestors: all visible",
+          );
+        }
       }
       setSnap(out);
     };

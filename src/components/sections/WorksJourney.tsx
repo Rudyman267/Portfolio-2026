@@ -666,6 +666,22 @@ export function createWorksTicker(
     // of the project windows).
     for (const g of introGuards) g();
 
+    // Expose the raw driver state for ?boot. Reading these on-device is the
+    // only way to tell "the tween never advanced" from "the tween ran but
+    // something hid the result" — a distinction that computed styles alone
+    // could not settle, and which caused several wrong diagnoses.
+    try {
+      (window as unknown as Record<string, unknown>).__worksDrivers = drivers
+        .map(
+          (d, i) =>
+            `${i}:p=${d.proxy.p.toFixed(2)},m=${d.proxy.m.toFixed(2)}`,
+        )
+        .join(" ");
+      (window as unknown as Record<string, unknown>).__worksLive = sceneIsLive();
+    } catch {
+      /* ignore */
+    }
+
     drivers.forEach((b, i) => {
       const { m } = b.proxy;
       let { p } = b.proxy;
