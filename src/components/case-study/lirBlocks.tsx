@@ -208,8 +208,18 @@ export function BeforeAfter({
         onPointerCancel={() => (dragging.current = false)}
       >
         {/* BEFORE — full width underneath */}
+        {/* NOTE: both images carry data-no-zoom. This is a DRAG SLIDER, so the
+            delegated lightbox listener must not claim the click — opening a
+            full-screen view mid-drag fights the interaction the component
+            exists for. The comparison IS the affordance here. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={before} alt="Before — the AI's first-pass interface" className="block h-auto w-full" draggable={false} />
+        <img
+          src={before}
+          alt="Before — the AI's first-pass interface"
+          className="block h-auto w-full"
+          draggable={false}
+          data-no-zoom
+        />
         {/* AFTER — clipped from the left edge to `pos` */}
         <div
           className="absolute inset-0 overflow-hidden"
@@ -221,6 +231,7 @@ export function BeforeAfter({
             alt="After — the final shipped Live Incident Response screen"
             className="block h-auto w-full"
             draggable={false}
+            data-no-zoom
           />
         </div>
         {/* corner labels */}

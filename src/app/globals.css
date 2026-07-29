@@ -193,14 +193,15 @@
 
 /* ── Zoomable screenshots ───────────────────────────────────────────────────
    ImageLightbox tags every image big enough to be worth expanding with
-   `data-zoomable`. Without an affordance nobody discovers the interaction, so
-   the image gets a zoom cursor plus a lift + accent ring on hover. Kept subtle:
-   these sit inside a reading flow and shouldn't read as buttons.
+   `data-zoomable`. The affordance is deliberately just a slight lift + accent
+   ring on hover — NO `cursor: zoom-in`. The magnifier cursor was removed on
+   purpose (user's call): the lift and ring already read as "this responds",
+   and the cursor swap made reading-flow screenshots feel like heavy UI
+   controls. Don't reintroduce it.
    Pointer-fine only — on touch there is no hover, and the transform would just
    cost paint. Motion is dropped for reduced-motion readers. */
 @media (hover: hover) and (pointer: fine) {
   .lir img[data-zoomable] {
-    cursor: zoom-in;
     transition:
       transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
