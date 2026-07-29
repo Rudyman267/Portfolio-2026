@@ -19,8 +19,9 @@ export type GalleryProject = {
 
 export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
   // THE REAL FLAGSHIP — links to the built case study at
-  // /work/live-incident-response (the only real study so far; the rest of the
-  // cards are placeholders whose slugs 404 until their studies exist).
+  // /work/live-incident-response. It and Verkos Reports (below) are the two
+  // real studies; the remaining cards are placeholders whose slugs 404 until
+  // their studies exist.
   {
     title: "Live Incident Response",
     slug: "live-incident-response",
@@ -30,12 +31,14 @@ export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
     tags: ["Product", "0→1", "FlytBase"],
     size: "lg",
   },
+  // SECOND REAL STUDY — /work/verkos-reports (built in Session 18).
   {
-    title: "Marrow",
-    slug: "marrow",
-    summary: "Design system and tokens powering a fintech super-app across web and native.",
+    title: "Verkos Reports",
+    slug: "verkos-reports",
+    summary:
+      "AI-powered automated security report generation — designed and shipped at FlytBase.",
     year: "2025",
-    tags: ["Design System", "Fintech"],
+    tags: ["Product", "AI", "FlytBase"],
     size: "sm",
   },
   {

@@ -94,6 +94,8 @@ const EXIT = 0.6;
 // real window thumbnails, per slug (the rest stay clean white for now)
 const THUMB_SRC: Record<string, string> = {
   "live-incident-response": "/case-study/image-1.webp",
+  // the annotated east-gate detection frame, re-cropped to the window's 16:9
+  "verkos-reports": "/case-study/verkos-cover.webp",
 };
 
 /* ------------------------------------------------------------- markup ---- */

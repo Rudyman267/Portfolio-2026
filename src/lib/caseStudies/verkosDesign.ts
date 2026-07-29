@@ -22,6 +22,12 @@ export const VERKOS_DESIGN: LirDesign = {
   slug: "verkos-reports",
   backLabel: "Back to work",
   accent: "cyan",
+  // opening cover plate — raster background + vector title lockup (see the
+  // `intro` docs on LirDesign for why they're separate files)
+  intro: {
+    bg: "/case-study/cover/verkos-cover-bg.webp",
+    title: "/case-study/cover/verkos-title.svg",
+  },
   eyebrow:
     "drone operations · AI report generation · enterprise security · FlytBase",
   title: "Verkos Reports",
@@ -86,13 +92,17 @@ export const VERKOS_DESIGN: LirDesign = {
       blocks: [
         // INTERACTIVE EXHIBIT — placed first so the reader can drive the thing
         // before reading how it was built. Visual-only prototype, invented data.
-        { t: "prototype", which: "verkosReport" },
+        // `full`: the exhibit and the thesis that follows each get their OWN
+        // viewport. They were previously butted together, so the report's
+        // caption and the big statement collided in one screenful.
+        { t: "prototype", which: "verkosReport", full: true },
         {
           t: "statement",
           text: "Enterprise security customers don't pay for drone flights. They pay for the report.",
+          full: true,
         },
-        // give the thesis its own beat before the supporting detail arrives
-        { t: "sceneBreak" },
+        // NOTE: no sceneBreak here — `full: true` above already gives the
+        // thesis a whole viewport of air on both sides.
         {
           t: "richP",
           spans: [

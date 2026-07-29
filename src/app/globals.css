@@ -333,9 +333,20 @@ html.lenis body {
   overflow: hidden;
 }
 
-/* While the intro loader runs, lock scroll and hide overflow. */
+/* While the intro loader runs, lock scroll and hide overflow.
+   `overflow:hidden` on <body> ALONE is unreliable on iOS Safari — it keeps
+   scrolling the viewport anyway — so the lock is mirrored onto <html> and
+   backed by `touch-action:none`, which is what actually stops a touch drag.
+   NOTE: whatever adds `.is-loading` MUST guarantee it gets removed. It's a
+   full-page scroll lock, so a stuck class = a site that cannot scroll at all
+   (the iOS bug). Loader.tsx now has timeout + unmount failsafes for exactly
+   this reason; don't rely on a single event to clear it. */
+html:has(body.is-loading) {
+  overflow: hidden;
+}
 body.is-loading {
   overflow: hidden;
+  touch-action: none;
 }
 
 /* Over dark sections the header goes transparent and its nav links read white

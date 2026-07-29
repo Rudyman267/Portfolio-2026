@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 import { whenHeroVideoReady } from "@/components/motion/heroReady";
@@ -528,6 +528,65 @@ export function Loader() {
     }
   };
 
+  // ── SCROLL-LOCK FAILSAFE (iOS "page won't scroll at all" bug) ──────────────
+  // `body.is-loading` sets `overflow:hidden` (globals.css) and on a COLD visit
+  // the ONLY thing that clears it is a successful tap on the pan button. That
+  // made the click gate a single point of failure for the whole page: if the
+  // tap never lands, the lock never lifts and NOTHING scrolls — which is
+  // exactly what iOS Safari does, because a <button> that was rendered
+  // `disabled` (it is, until `ready`) keeps swallowing taps after being
+  // re-enabled until something forces a re-layout of its hit target.
+  //
+  // Two independent nets, neither of which can be starved by the tap:
+  //   1. Any pointer/touch/key ANYWHERE on the overlay opens the pan once
+  //      ready — the reader's instinct is to tap the screen, not to hit the
+  //      exact button rect.
+  //   2. A hard ceiling: N seconds after mount the intro lifts itself. The
+  //      site MUST become scrollable whether or not input is ever received.
+  // Both funnel through openPan()/finish(), which are already idempotent.
+  useEffect(() => {
+    if (done) return;
+    // never let the intro hold the page hostage — cap the whole thing.
+    const ceiling = window.setTimeout(() => {
+      if (openedRef.current) return;
+      // `ready` may still be false (hero never signalled); unlock regardless.
+      setReady(true);
+      openPan();
+      // openPan bails if it somehow can't run — guarantee the unlock anyway.
+      window.setTimeout(() => {
+        if (document.body.classList.contains("is-loading")) finish();
+      }, 1800);
+    }, 12000);
+
+    // tap ANYWHERE (not just the button) once the dish is served
+    const anyTap = () => {
+      if (ready) openPan();
+    };
+    window.addEventListener("pointerdown", anyTap);
+    window.addEventListener("touchend", anyTap);
+    window.addEventListener("keydown", anyTap);
+    return () => {
+      window.clearTimeout(ceiling);
+      window.removeEventListener("pointerdown", anyTap);
+      window.removeEventListener("touchend", anyTap);
+      window.removeEventListener("keydown", anyTap);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, done]);
+
+  // Last-resort guarantee: once the intro is gone, the scroll lock MUST be
+  // gone with it. If any path above unmounted the loader without clearing the
+  // class, clear it here — an orphaned `is-loading` freezes the entire site.
+  useEffect(() => {
+    if (!done) return;
+    document.body.classList.remove("is-loading");
+  }, [done]);
+
+  useEffect(() => {
+    // and if the component is torn down for ANY reason mid-intro, unlock.
+    return () => document.body.classList.remove("is-loading");
+  }, []);
+
   if (done) return null;
 
   return (
@@ -554,8 +613,18 @@ export function Loader() {
         type="button"
         onClick={openPan}
         onKeyDown={onKey}
-        disabled={!ready}
+        onTouchEnd={openPan}
+        // NOT the `disabled` attribute. iOS Safari keeps swallowing taps on a
+        // button that was rendered disabled even after it's re-enabled, which
+        // stranded the whole page behind the intro's scroll lock. openPan()
+        // already no-ops until `ready`, so the gate is enforced in JS and the
+        // hit target stays live the entire time. aria-disabled carries the
+        // state to assistive tech without killing the tap.
+        aria-disabled={!ready}
         aria-label={ready ? "Click to enter the site" : "Loading"}
+        // touch-action:manipulation kills the 300ms double-tap delay so the
+        // first tap counts.
+        style={{ touchAction: "manipulation" }}
         className={`pan__group absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center bg-transparent ${
           ready ? "cursor-pointer" : "cursor-progress"
         }`}

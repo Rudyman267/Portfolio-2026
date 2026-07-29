@@ -216,8 +216,16 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
         const hint = root.current?.querySelector<HTMLElement>("[data-intro-hint]");
         if (!intro || !wrap) return;
 
-        const img = intro.querySelector("img");
-        gsap.timeline({
+        // Target the BACKGROUND explicitly. The plate now also contains the
+        // title/role SVGs, and a bare querySelector("img") would parallax
+        // whichever happened to come first in the DOM.
+        const img =
+          intro.querySelector<HTMLElement>("[data-intro-bg]") ??
+          intro.querySelector("img");
+        const type = intro.querySelectorAll<HTMLElement>(
+          "[data-intro-title], [data-intro-role]",
+        );
+        const tl = gsap.timeline({
           scrollTrigger: {
             trigger: wrap,
             start: "top top",
@@ -228,6 +236,11 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
           // subtle parallax on the thumbnail as the page slides over it
           .to(img, { scale: 1.06, yPercent: -6, ease: "none" }, 0)
           .to(hint ?? {}, { autoAlpha: 0, ease: "none", duration: 0.35 }, 0);
+        // the type drifts UP slightly faster than the photo and fades as the
+        // page rises over it — so it reads as a layer, not a baked-in caption
+        if (type.length) {
+          tl.to(type, { yPercent: -22, autoAlpha: 0, ease: "none" }, 0);
+        }
       });
 
       mm.add("(prefers-reduced-motion: reduce)", () => {
@@ -302,22 +315,67 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
           whole page, leaving the nav as bare text colliding with the case
           study copy. The page is a dark route (see Header's darkPage), so the
           bar is solid dark over the intro anyway. */}
+      {/* The plate is LAYERED, not a single baked image: a raster background
+          (object-cover, so it re-crops per viewport) with the title lockup +
+          company/role strip as VECTOR overlays on top. That's the whole point
+          of the split — on a phone the photo crops down hard, but the SVG type
+          is laid out independently and stays legible at its own scale instead
+          of being shrunk along with the background. `intro` is per-study; the
+          role strip is shared by every FlytBase study. */}
       <div
         data-intro
         aria-hidden
-        className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden bg-black"
+        className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-black"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/case-study/thumbnail-1.svg"
-          alt="Live Incidence Response — case study cover"
-          className="h-full w-full object-cover"
-          // decorative full-bleed intro plate — nothing to inspect up close
-          data-no-zoom
-        />
+        {data.intro ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              data-intro-bg
+              src={data.intro.bg}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: data.intro.bgPosition ?? "50% 50%" }}
+              // decorative full-bleed intro plate — nothing to inspect up close
+              data-no-zoom
+            />
+            {/* legibility scrim — the backgrounds are busy at the bottom edge
+                where the type sits (city lights / tree canopy) */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(4,7,13,0.82)_0%,rgba(4,7,13,0.35)_38%,rgba(4,7,13,0.08)_65%,transparent_100%)]" />
+
+            {/* type block — bottom-left title, bottom-right role strip on wide
+                screens; stacked left-aligned on phones. Widths are in cqw-ish
+                clamps so each SVG scales on its OWN curve, independent of how
+                far the background has been cropped. */}
+            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-6 px-[6vw] pb-[8vh] sm:px-[5vw] lg:flex-row lg:items-end lg:justify-between lg:gap-10 lg:px-[4vw] lg:pb-[7vh]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                data-intro-title
+                src={data.intro.title}
+                alt={`${data.title} — case study cover`}
+                className="block h-auto w-[min(88vw,320px)] sm:w-[min(72vw,480px)] lg:w-[clamp(480px,42vw,803px)]"
+                data-no-zoom
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                data-intro-role
+                src="/case-study/cover/company-role.svg"
+                alt="FlytBase — AI Product Design Builder"
+                className="block h-auto w-[min(64vw,240px)] shrink-0 lg:mb-2 lg:w-[clamp(280px,24vw,552px)]"
+                data-no-zoom
+              />
+            </div>
+          </>
+        ) : null}
+        {/* Hint sits TOP-centre when there's a layered cover — the bottom of
+            the plate is now occupied by the title + role lockup, and the old
+            bottom-centre position sat right on top of them. */}
         <div
           data-intro-hint
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 text-[13px] font-medium uppercase tracking-[0.25em] text-white/70"
+          className={cn(
+            "absolute left-1/2 -translate-x-1/2 text-[13px] font-medium uppercase tracking-[0.25em] text-white/70",
+            data.intro ? "top-24 sm:top-28" : "bottom-8",
+          )}
         >
           scroll to enter
         </div>
@@ -415,9 +473,11 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
             {/* headline (46px ExtraBold, LH 80%) with the drone mark to its left */}
             <Reveal delay={0.06}>
               <div className="mt-[3.75rem] flex items-center gap-5 sm:gap-[35px]">
+                {/* text-accent drives the star via currentColor: LIR resolves
+                    to the same #ff8d3b as before, Verkos to its cyan #08e6ff */}
                 <DroneMark
                   size={86}
-                  className="w-[52px] shrink-0 sm:w-[86px]"
+                  className="w-[52px] shrink-0 text-accent sm:w-[86px]"
                 />
                 {/* max-w tuned so both LIR + Verkos headlines break to 2 lines
                     (was 16ch → 3 lines). balance keeps the two lines even. */}
@@ -735,7 +795,16 @@ function ProseBody({
               // huge font). ~820px lands a 95-char thesis in 3 lines, 82-char in
               // 3, 65-char in 2. text-pretty fills lines greedily (balance would
               // add lines). Indented onto the content column.
-              <W key={i} className="mx-auto max-w-[940px]">
+              // `full` stages it on its OWN viewport (see the block type): the
+              // thesis gets clear air above and below instead of crowding
+              // whatever block precedes it.
+              <W
+                key={i}
+                className={cn(
+                  "mx-auto max-w-[940px]",
+                  b.full && "flex min-h-svh flex-col justify-center py-[12vh]",
+                )}
+              >
                 {/* Centred: these land as standalone thesis beats between
                     scene breaks, so a centred block reads as a pause rather
                     than another left-aligned paragraph. `text-balance` evens
@@ -958,8 +1027,16 @@ function ProseBody({
             // Interactive exhibit. Wider than the reading measure (it's a UI,
             // not prose) and DESKTOP-ONLY — see VerkosPrototype for the mobile
             // notice that replaces it.
+            // `full` gives it its own viewport so the exhibit is a stage, not a
+            // figure crammed against the next beat.
             return (
-              <div key={i} className="w-full max-w-[1080px]">
+              <div
+                key={i}
+                className={cn(
+                  "w-full max-w-[1080px]",
+                  b.full && "flex min-h-svh flex-col justify-center py-[10vh]",
+                )}
+              >
                 <VerkosPrototype />
               </div>
             );

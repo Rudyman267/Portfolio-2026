@@ -1158,9 +1158,13 @@ export function DroneMark({
       className={className}
       aria-hidden
     >
+      {/* The star takes the STUDY's signal accent, not a baked-in orange —
+          on Verkos (data-accent="cyan") it must read cyan like every other
+          accent-driven element. `currentColor` + the accent text token means
+          one rule in globals.css recolors it per study. */}
       <path
         d="M41.6665 12.7797C41.7993 11.3503 43.8869 11.3522 44.0171 12.7819L45.3896 27.8579C45.9538 34.056 50.7978 39.0032 56.9826 39.698L76.3337 41.8719C77.714 42.027 77.7392 44.0241 76.3632 44.2139L56.6422 46.9346C50.6095 47.7668 45.9441 52.6436 45.3797 58.7073L44.0088 73.4372C43.8761 74.8628 41.796 74.8661 41.6588 73.441L40.2319 58.621C39.6493 52.5693 34.9827 47.7121 28.9592 46.8878L9.3956 44.2106C8.01849 44.0222 8.04284 42.0232 9.42413 41.8684L28.6689 39.711C34.846 39.0185 39.6879 34.0836 40.2627 27.8944L41.6665 12.7797Z"
-        fill="#FF8D3B"
+        fill="currentColor"
       />
       <rect x="40.8555" y="26.5308" width="20.0959" height="35.5205" rx="10.048" transform="rotate(134.57 40.8555 26.5308)" fill="#FFFFFF" />
       <rect x="84.4766" y="69.7586" width="20.0959" height="35.5205" rx="10.048" transform="rotate(134.57 84.4766 69.7586)" fill="#FFFFFF" />

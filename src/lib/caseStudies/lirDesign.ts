@@ -97,7 +97,10 @@ export type Block =
   // big bold statement beat — the segmented thesis lines that get their own
   // viewport moment (Figma 258:2: Plus Jakarta Sans Bold, 36px). Larger + bolder
   // than `lede`, which stays 16px medium for LIR reading copy.
-  | { t: "statement"; text: string }
+  /** Big display thesis beat. `full` gives it its OWN full-viewport stage
+   *  (vertically centred, min-h-svh) so it lands as a standalone pause between
+   *  scenes instead of sitting tight under whatever preceded it. */
+  | { t: "statement"; text: string; full?: boolean }
   // lead paragraph: a bold WHITE lead sentence followed INLINE by a light-grey
   // remainder (the mixed-weight Impact copy — Figma 258:2). No indent.
   | { t: "leadP"; lead: string; text: string }
@@ -201,7 +204,10 @@ export type Block =
   // INTERACTIVE exhibit — a visual-only prototype of the product's core flow the
   // reader can actually drive (fullscreen-able). No network, no real data; the
   // fixtures live inside the component. Full-bleed out of the reading column.
-  | { t: "prototype"; which: "verkosReport" };
+  /** Interactive exhibit. `full` stages it on its own full viewport (centred,
+   *  min-h-svh) so it reads as a self-contained artifact rather than an inline
+   *  figure butted up against the next block. */
+  | { t: "prototype"; which: "verkosReport"; full?: boolean };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
 
@@ -277,6 +283,20 @@ export type LirDesign = {
   /** Embed the interactive product demo (the real app, static + auth-free)
    *  right after the build statement, before the first chapter. Desktop only. */
   appDemo?: boolean;
+  /** The full-bleed cover plate the study opens on (the fixed plate the page
+   *  scrolls up over). Split into a raster BACKGROUND and a vector OVERLAY on
+   *  purpose: the background can be cropped/re-focused per breakpoint while the
+   *  title stays a crisp SVG that scales independently, so the type is never
+   *  shrunk to illegibility along with the photo on a phone. `title` is the
+   *  per-study lockup; `role` is the shared company/role strip. */
+  intro?: {
+    /** raster background (webp), full-bleed + object-cover */
+    bg: string;
+    /** per-study title lockup SVG (logo + name + timeline/tools/team) */
+    title: string;
+    /** optional focal point for the background crop, e.g. "50% 40%" */
+    bgPosition?: string;
+  };
 };
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -284,6 +304,12 @@ export type LirDesign = {
 export const LIR_DESIGN: LirDesign = {
   slug: "live-incident-response",
   backLabel: "Back to work",
+  // opening cover plate — raster background + vector title lockup (see the
+  // `intro` docs on LirDesign for why they're separate files)
+  intro: {
+    bg: "/case-study/cover/lir-cover.webp",
+    title: "/case-study/cover/lir-title.svg",
+  },
   eyebrow: "corporate drone ops · emergency response · real-time collaboration",
   title: "Live Incidence Response",
   headline: "A situation room that assembles itself in 30s.",
