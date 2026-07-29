@@ -203,9 +203,119 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 20)
+## 6. Current State (as of Session 21)
 
-**Status (as of Session 20): THE VERKOS APP EXHIBIT WAS REBUILT FROM THE LATEST SOURCE
+**Status (as of Session 21): CUSTOM DOMAIN `rudyman.com` IS BOUGHT + WIRED, WAITING ONLY ON DNS
+PROPAGATION. Shipped in `91c68e3`: the iOS "can't scroll at all" bug is FIXED, both case studies
+now open on a LAYERED cover (raster bg + vector title/role SVGs), and Verkos Reports is the 2nd
+home work box (replacing Marrow). Prod build clean (14 pages), typecheck clean.
+⏳ TOMORROW'S FIRST JOB: confirm `rudyman.com` resolves to Vercel (see §7 item 0000) — until it
+does, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
+
+### CUSTOM DOMAIN — `rudyman.com` — Session 21
+Registrar **Hostinger**; Vercel project `portfolio-2026` (`prj_LyJsSNYxQCqJu9xpZXEIfnG2s9oE`,
+team `portfolio-27` / `team_ui5Ojpk8q4oYhCb6FrNH6RAe`). Everything configurable IS configured;
+only resolver caches remain.
+- **Nameservers switched at Hostinger → `ns1/ns2.vercel-dns.com`.** Confirmed live at the .com
+  registry via RDAP (`rdap.verisign.com/com/v1/domain/rudyman.com`) at 2026-07-29 16:26 UTC.
+- **`rudyman.com` is PRIMARY, `www` 308-redirects to it.** The domains were already attached but
+  the redirect was BACKWARDS (bare → www); fixed via
+  `PATCH /v9/projects/<id>/domains/<domain>` with `{"redirect":null}` on the apex and
+  `{"redirect":"rudyman.com","redirectStatusCode":308}` on www.
+- ⚠️ **Vercel's DNS zone is still EMPTY and `misconfigured: true` — this is EXPECTED, not a
+  fault.** Vercel only provisions the zone after it confirms delegation; until then
+  `POST /v2/domains/<d>/records` returns **`invalid_zone`** (tried; don't retry in a loop).
+  Once provisioned Vercel writes the apex A + issues SSL itself. Only intervene if the zone is
+  still empty ~6h after the NS change; the manual records would be A `@`→`216.198.79.1` and
+  CNAME `www`→`8a0f233b3a7d8efb.vercel-dns-017.com.`
+- **Why it's slow:** the OLD Hostinger SOA (`aurora.dns-parking.com` / `dns.hostinger.com`) has a
+  **604800s (7-day) negative-cache TTL**, so public resolvers keep serving the parking IP
+  `2.57.91.91` well after the registry flipped. Google + Cloudflare DoH both still returned it at
+  session end. Nothing to fix — wait it out.
+- **DO NOT re-edit DNS at Hostinger while waiting** — it only resets caches again.
+- Useful checks: registry = the RDAP URL above (source of truth); resolver =
+  `curl -s "https://dns.google/resolve?name=rudyman.com&type=A"`; Vercel's own view =
+  `GET /v6/domains/rudyman.com/config?teamId=<t>` (watch for `misconfigured: false`).
+
+### 🐞 FIXED: `NEXT_PUBLIC_SITE_URL` WAS NEVER SET ON VERCEL — Session 21
+A REAL live-site bug found while doing the domain work. The var was absent from the Vercel
+project entirely, and all three consumers fall back to `http://localhost:3000`
+(`src/app/layout.tsx:39` metadataBase, `robots.ts:3`, `sitemap.ts:5`). The deployed
+`robots.txt` was literally telling crawlers `Sitemap: http://localhost:3000/sitemap.xml` and
+every `<loc>` in the sitemap was a localhost URL; OG/social preview images had the same broken
+base. **Set to `https://rudyman.com` (production target) + redeployed; verified both files now
+emit the real domain.** NOTE it's inlined at BUILD time, so it needs a redeploy to take effect.
+⚠️ Side effect while DNS propagates: link-preview cards for the *vercel.app* URL point at a
+domain that doesn't resolve yet, so previews may not render. The site itself is unaffected. The
+user chose to WAIT rather than temporarily point it back at the vercel.app URL.
+
+### iOS SCROLL LOCK — THE SITE COULDN'T SCROLL AT ALL ON iPhone — Session 21 (`91c68e3`)
+User-reported, reproduced on multiple devices: the first scene painted but the page would not
+scroll. **Root cause: the intro loader was a single point of failure for the whole page's
+scrollability.** `body.is-loading` applies `overflow:hidden` (globals.css) and on a COLD visit
+the ONLY thing that removed it was a successful tap on the pan button — no timeout, no fallback
+(unlike `Hero.tsx`, which already had a poll + 2.5s ceiling for its own reveal).
+- **Why iOS specifically:** the button was rendered with the **`disabled` attribute** until the
+  WebGL hero signalled ready, and **iOS Safari keeps swallowing taps on a button that was
+  rendered disabled even after it is re-enabled**. Tap does nothing → lock never lifts → frozen.
+- **Fixes in `Loader.tsx`:** `disabled` → **`aria-disabled`** (the gate is still enforced in JS by
+  `openPan()`, so the hit target stays live) + `onTouchEnd` + `touch-action:manipulation`;
+  **tap-anywhere-on-the-overlay** opens it once ready; a **12s hard ceiling** lifts the intro
+  unaided (with a 1.8s secondary that force-calls `finish()`); and **unmount cleanup always
+  clears `is-loading`**. All paths funnel through the existing idempotent `openPan()`/`finish()`.
+- **`globals.css`:** the lock is mirrored onto **`html:has(body.is-loading)`** + `touch-action:none`
+  — `overflow:hidden` on `<body>` ALONE is unreliable on iOS Safari. Verified both rules survive
+  into the prod CSS chunk.
+- ⚠️ **VERIFYING SCROLL LOCKS: use REAL CDP touch events** (`Input.dispatchTouchEvent`), never
+  `window.scrollBy`/`scrollTo` — programmatic scrolling bypasses the lock and falsely PASSES.
+  (Same trap the Session-20 lightbox work hit.)
+- Verified: iPhone-emulated + **never tapping** → lock clears, page scrolls (scrollY 770); a real
+  tap still opens it at ~8.7s (**before** the 12s ceiling, proving the tap does the work, not the
+  timeout); desktop 1440×900 unchanged. Harnesses in the session scratchpad.
+
+### LAYERED CASE-STUDY COVERS (both studies) — Session 21
+The fixed opening plate was ONE hardcoded SVG (`/case-study/thumbnail-1.svg`) shared by both
+studies. Now per-study and **split into a raster background + vector overlays** — the whole point
+being that on a phone the photo crops hard via `object-cover` while the TYPE is laid out
+independently and stays legible instead of being shrunk with it.
+- New optional **`intro: { bg, title, bgPosition? }`** on `LirDesign`. Assets in
+  **`public/case-study/cover/`**: `lir-cover.webp` (9.3MB PNG → 146KB), `verkos-cover-bg.webp`
+  (5.8MB → 65KB), `lir-title.svg`, `verkos-title.svg`, and the **shared `company-role.svg`**
+  (flytbase + "AI Product Design Builder", used by BOTH studies). Sources are the user's
+  `ThumbnailNew.png` / `Project Thumbnail.png` / `Thumbnail text and logo.svg` /
+  `Thumbnail project name.svg` / `Company name and role.svg` in the gitignored asset folders.
+- Both title SVGs are **803×175**, the role strip **552×35** — consistent, so ONE layout serves
+  both: title bottom-left, role bottom-right on the same baseline (matches the Figma), stacked
+  left-aligned on phones. Each SVG scales on its own clamp, NOT with the background.
+- Added a bottom-up legibility scrim (both backgrounds are busy exactly where the type sits) and
+  moved the **"scroll to enter" hint to TOP-centre when `intro` is set** — its old bottom-centre
+  position sat right on top of the new lockup.
+- The intro parallax now targets **`[data-intro-bg]` explicitly** (a bare `querySelector("img")`
+  would have grabbed whichever image came first) and the type gets its own faster drift + fade.
+- `public/case-study/thumbnail-1.svg` (1.4MB) is now **UNREFERENCED** — left on disk deliberately;
+  safe to delete.
+
+### VERKOS ON THE HOME PAGE + ACCENT/SPACING FIXES — Session 21
+- **Verkos Reports replaces Marrow as home work box 02** (`placeholderProjects.ts`). Cover =
+  **`/case-study/verkos-cover.webp`**, the annotated east-gate detection frame re-cropped to the
+  window's 16:9 (scale-to-fill then crop — the source is 1600×772 so a plain crop to 900 fails;
+  truck + red bbox + "Pickup truck (98%)" label all verified intact). Registered in `THUMB_SRC`
+  in `WorksJourney.tsx`, which feeds BOTH the pinned journey and the static fallback.
+  Verified: beat 02, thumbnail HTTP 200, zero "Marrow" left in the DOM.
+- **The headline star is now ACCENT-DRIVEN.** `DroneMark` (`lirBlocks.tsx`) had `fill="#FF8D3B"`
+  hardcoded, so Verkos showed LIR orange. Now `fill="currentColor"` + `text-accent` on the call
+  site — LIR resolves to the same `#ff8d3b` as before, Verkos to its cyan `#08e6ff`. (The COVER
+  SVGs were already correct: they export with `#08E6FF` / `#FF8D3B` baked in.)
+- **The report exhibit and its "Enterprise security…" thesis each get their own viewport.** They
+  were butted together, so the report's caption and the big statement collided in one screenful.
+  New optional **`full?: boolean`** on the `statement` and `prototype` block types →
+  `min-h-svh` + centred. Enabled on the Verkos pair only; the `sceneBreak` that followed is now
+  redundant and removed. Measured: the statement stage is exactly 900px (1 viewport) with ~600px
+  of clear air above it. The other two Verkos statements were LEFT INLINE on purpose — they sit
+  mid-prose and a full viewport each would over-fragment the read.
+
+### PRIOR STATE (Session 20) — all still live
+**THE VERKOS APP EXHIBIT WAS REBUILT FROM THE LATEST SOURCE
 (`verkos-reports-exhibit-rudy-main.zip`), replacing the older copy Session 19 shipped. It now
 runs in PERMANENT demo mode with every live FlytBase/Supabase call answered offline, plus a
 click-to-expand image lightbox across BOTH case studies, a Contents rail derived from the real
@@ -1179,6 +1289,33 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
+0000. **⭐⭐ FIRST THING: FINISH THE `rudyman.com` CUTOVER (started Session 21).** Everything is
+    configured; it was purely waiting on DNS caches. See §6 "CUSTOM DOMAIN" for the full state.
+    a. **Check propagation:**
+       `curl -s "https://dns.google/resolve?name=rudyman.com&type=A"` — success = an A record that
+       is NOT the Hostinger parking IP `2.57.91.91`. Cross-check Vercel's own view:
+       `GET /v6/domains/rudyman.com/config?teamId=team_ui5Ojpk8q4oYhCb6FrNH6RAe` → want
+       **`misconfigured: false`**.
+    b. **Then verify end-to-end:** `https://rudyman.com` serves the portfolio (NOT the "Parked
+       Domain name on Hostinger DNS system" title), HTTPS cert is valid, and
+       `https://www.rudyman.com` 308-redirects to the bare domain.
+    c. **If the Vercel DNS zone is STILL empty ~6h+ after the NS change**, add the records
+       manually (they were rejected with `invalid_zone` during Session 21 because the zone wasn't
+       provisioned yet): A `@` → `216.198.79.1`, CNAME `www` →
+       `8a0f233b3a7d8efb.vercel-dns-017.com.`
+    d. **Add `rudyman.com` + `www.rudyman.com` to Sanity CORS**
+       (sanity.io/manage/project/4bo3ynjd/api) so `/studio` + live content work on the new domain.
+       This is NOT done yet and `/studio` will fail on the custom domain until it is.
+    e. `NEXT_PUBLIC_SITE_URL` is ALREADY `https://rudyman.com` on Vercel production — no action,
+       but remember it's build-time inlined, so it only changed after the redeploy.
+    f. **UNTIL (b) PASSES, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
+       (User asked this explicitly on 2026-07-29 and chose to wait rather than temporarily point
+       `NEXT_PUBLIC_SITE_URL` back at the vercel.app URL for link previews.)
+
+000b. **🔐 REVOKE THE VERCEL TOKEN pasted in Session 21** (`vcp_1fr3...`, in that session's
+    transcript) now that the domain work is done — plus the older Session-8 tokens still listed
+    in item 2 below. Not yet done.
+
 000. **⭐ VERKOS APP EXHIBIT — mostly RESOLVED in Session 20** (rebuilt from the latest source; the
     old-copy caveat, the demo-mode button and the unverified wizard are all done). What REMAINS:
     a. **Feel it on a real GPU / real browser.** Everything was verified in headless Chrome via
@@ -1277,6 +1414,29 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 21 — 2026-07-29
+**Fixed the iOS "site won't scroll at all" bug, rebuilt both case-study opening covers as
+layered raster+vector plates, put Verkos Reports on the home page, and bought + wired the
+custom domain `rudyman.com` (waiting only on DNS propagation at session end).**
+- **iOS scroll lock (user-reported, multiple devices).** Root cause: the intro loader was the
+  single point of failure for the whole page's scrollability — `body.is-loading` sets
+  `overflow:hidden` and only a successful tap on a `disabled`-rendered button ever removed it,
+  which iOS Safari swallows. Added aria-disabled + tap-anywhere + a 12s ceiling + unmount
+  cleanup, and hardened the CSS lock for iOS. Verified with REAL CDP touch (never
+  `window.scrollBy`, which bypasses the lock and falsely passes).
+- **Layered covers** (`intro` on `LirDesign`): raster bg + vector title + shared company/role
+  SVG, so phone type stays legible while the photo crops. New `public/case-study/cover/`.
+- **Verkos Reports replaces Marrow** as home work box 02, covered by the annotated east-gate
+  frame. Also made the headline star accent-driven (was hardcoded LIR orange, so Verkos showed
+  the wrong colour) and gave the report exhibit + its thesis their own viewports (they collided).
+- **Domain:** nameservers → Vercel (confirmed at the .com registry), `rudyman.com` set primary
+  with `www` 308-redirecting to it. **Found + fixed a real live bug:** `NEXT_PUBLIC_SITE_URL`
+  was never set on Vercel, so the deployed robots.txt/sitemap advertised `http://localhost:3000`.
+- Shipped in **`91c68e3`** (pushed, deployed READY) + a follow-up redeploy for the env var.
+  Typecheck + prod build clean (14 pages).
+- **Ended:** waiting on DNS caches (old Hostinger SOA has a 7-day negative TTL). Next session
+  starts at §7 item 0000. Dev server + headless Chrome stopped.
 
 ### Session 20 — 2026-07-29
 **Rebuilt the Verkos app exhibit from the LATEST source zip (superseding Session 19's older copy),
