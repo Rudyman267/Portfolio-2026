@@ -36,8 +36,14 @@ export function Header({
   // instead of falling back to the white bar. /about is a full-dark route, and
   // so is every case study (/work/<slug>) — without this they fell through to
   // the white bar, so the nav sat as bare text over dark scrolling copy.
+  // NOTE `/work` (the index) is now dark too — it runs the PageGlow particle
+  // field on a #06080c canvas. It used to be a light page, hence the old regex
+  // matching only `/work/<slug>`.
   const darkPage =
-    pathname === "/about" || /^\/work\/[^/]+$/.test(pathname ?? "");
+    pathname === "/about" ||
+    pathname === "/work" ||
+    pathname === "/play" ||
+    /^\/work\/[^/]+$/.test(pathname ?? "");
   // The mobile menu panel needs a dark fill on every dark-canvas route — that
   // includes the HOME page (dark hero) even though its header bar itself starts
   // transparent-over-hero (so `darkPage` above excludes it). Without this the

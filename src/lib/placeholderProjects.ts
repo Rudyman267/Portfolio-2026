@@ -27,7 +27,8 @@ export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
     slug: "live-incident-response",
     summary:
       "A single live room for drone-led emergency response — built at FlytBase.",
-    year: "2025",
+    // matches the study's own meta (Duration: March–April 2026)
+    year: "2026",
     tags: ["Product", "0→1", "FlytBase"],
     size: "lg",
   },
@@ -37,7 +38,8 @@ export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
     slug: "verkos-reports",
     summary:
       "AI-powered automated security report generation — designed and shipped at FlytBase.",
-    year: "2025",
+    // matches the study's own meta (Duration: April–June 2026)
+    year: "2026",
     tags: ["Product", "AI", "FlytBase"],
     size: "sm",
   },
