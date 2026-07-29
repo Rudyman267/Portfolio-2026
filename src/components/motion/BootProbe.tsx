@@ -131,22 +131,48 @@ export function BootProbe() {
         const frame = b.querySelector<HTMLElement>("[data-frame]");
         const img = frame?.querySelector<HTMLImageElement>("img");
         const skin = b.querySelector<HTMLElement>("[data-skin]");
+        const title = b.querySelector<HTMLElement>("[data-ptitle]");
+        if (title) out.push("title=" + title.textContent);
         if (frame) {
+          const fcs = getComputedStyle(frame);
           const fr = frame.getBoundingClientRect();
           out.push(
-            `frame op=${(+getComputedStyle(frame).opacity).toFixed(2)} ${Math.round(fr.width)}x${Math.round(fr.height)}`,
+            `frame op=${(+fcs.opacity).toFixed(2)} ${Math.round(fr.width)}x${Math.round(fr.height)} @${Math.round(fr.left)},${Math.round(fr.top)}`,
           );
+          // The loader bug hid an element while every one of these read normal,
+          // so report the properties that can hide pixels invisibly.
+          out.push(
+            `frame vis=${fcs.visibility} disp=${fcs.display} bg=${fcs.backgroundColor}`,
+          );
+          out.push(
+            `frame mask=${fcs.maskImage === "none" ? "none" : "SET"} clip=${fcs.clipPath === "none" ? "none" : "SET"} filt=${fcs.filter === "none" ? "none" : "SET"}`,
+          );
+          out.push(`frame xform=${fcs.transform.slice(0, 34)}`);
+          // is the frame the topmost thing at its own centre?
+          const cx = Math.round(fr.left + fr.width / 2);
+          const cy = Math.round(fr.top + fr.height / 2);
+          if (fr.width > 2 && cy > 0 && cy < window.innerHeight) {
+            const hit = document.elementFromPoint(cx, cy);
+            out.push(
+              "frame onTop=" +
+                (hit ? frame.contains(hit) || frame === hit : "?") +
+                " hit=" +
+                (hit ? hit.tagName + "." + String(hit.className).slice(0, 18) : "-"),
+            );
+          } else {
+            out.push("frame offscreen/zero-size");
+          }
+        } else {
+          out.push("frame=NO [data-frame] IN BEAT");
         }
         out.push(
           "img=" +
             (img
-              ? `${img.complete && img.naturalWidth > 0 ? "ok" : "PENDING"} nw=${img.naturalWidth} src=${(img.getAttribute("src") || "").split("/").pop()}`
-              : "NONE (no thumb for this slug)"),
+              ? `${img.complete && img.naturalWidth > 0 ? "ok" : "PENDING"} nw=${img.naturalWidth} op=${getComputedStyle(img).opacity} w=${Math.round(img.getBoundingClientRect().width)} ${(img.getAttribute("src") || "").split("/").pop()}`
+              : "NONE (unpublished beat)"),
         );
         if (skin)
           out.push("skin op=" + (+getComputedStyle(skin).opacity).toFixed(2));
-        const title = b.querySelector<HTMLElement>("[data-ptitle]");
-        if (title) out.push("title=" + title.textContent);
       }
       setSnap(out);
     };
