@@ -205,59 +205,60 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ## 6. Current State (as of Session 22)
 
-**Status (as of Session 22): THE /work INDEX IS REBUILT — cinematic particle field + alternating
-project plates (`e809c42`). The before/after slider no longer opens the lightbox and the zoom
-cursor is gone site-wide (`beae3ab`). Prod build clean (14 pages), typecheck clean.
-🚨 `rudyman.com` IS BLOCKED ON A VERCEL-SIDE BUG — NOT propagation (see §7 item 0000 and the
-DOMAIN section below). Vercel's own nameservers REFUSE the zone. **THE LINK TO SHARE REMAINS
-`https://portfolio-2026-psi-flax.vercel.app`.** Nothing else is waiting on it.
-Dev server + headless Chrome stopped at session end.**
+**Status (as of Session 22): 🎉 `rudyman.com` IS LIVE — THE SITE IS ON ITS CUSTOM DOMAIN.**
+Apex serves, `www` 308-redirects, Let's Encrypt cert valid, all routes 200, sitemap/robots emit the
+real domain, Vercel reports `misconfigured: false`. **THE LINK TO SHARE IS `https://rudyman.com`.**
+Also this session: the **/work index was REBUILT** — cinematic particle field + alternating project
+plates (`e809c42`) — and the before/after slider no longer opens the lightbox, with the zoom cursor
+removed site-wide (`beae3ab`). Prod build clean (14 pages), typecheck clean.
+⚠️ ONE THING STILL OPEN ON THE DOMAIN: **Sanity CORS** for the new origin, or `/studio` fails there
+(§7 item 0000). Dev server + headless Chrome stopped at session end.
 
-### 🚨 DOMAIN BLOCKED — Vercel never provisioned the DNS zone — Session 22
-Session 21 left this as "just wait for propagation". **That diagnosis was WRONG.** ~14h later the
-domain still did not resolve, and the real cause is now identified:
+### ✅ DOMAIN RESOLVED — `rudyman.com` live via Hostinger DNS — Session 22
+**Went live 2026-07-30.** The route there matters, because the first diagnosis was wrong.
 
-**`ns1/ns2.vercel-dns.com` answer `Query refused` for rudyman.com.** They are correctly delegated
-the domain at the .com registry, but the zone does not exist on Vercel's DNS infrastructure — so
-every public resolver returns **SERVFAIL (status 2)**, not a stale cache. This is a Vercel-side
-provisioning failure, not DNS latency, and waiting will not fix it.
+**What was actually broken:** Session 21 concluded "just waiting on DNS propagation". It was not.
+With the domain delegated to `ns1/ns2.vercel-dns.com`, **Vercel's own nameservers answered
+`Query refused`** — the zone was never provisioned on their DNS infrastructure, so every public
+resolver returned **SERVFAIL**, not a stale cache. Waiting could never have fixed it.
+`GET /v4/domains/<d>/records` was EMPTY and `POST` returned `invalid_zone`, while the API
+simultaneously reported `serviceType: zeit.world` + `verified: true` — which is exactly what made
+it look like latency.
 
-Diagnosis command that actually settles it (query the authoritative NS directly — bypasses every
-cache, which is what the propagation theory was hiding behind):
+⚠️ **THE DIAGNOSTIC THAT SETTLES THIS CLASS OF BUG — query the authoritative NS directly, which
+bypasses every cache.** Watching public resolvers hid the real cause for ~14 hours:
 ```
-nslookup -type=A rudyman.com ns1.vercel-dns.com     # → "Query refused"
-curl -s "https://dns.google/resolve?name=rudyman.com&type=A"   # → "Status": 2 (SERVFAIL)
+nslookup -type=A <domain> ns1.vercel-dns.com                # "Query refused" = zone doesn't exist
+curl -s "https://dns.google/resolve?name=<domain>&type=A"   # Status 2 = SERVFAIL (not a cache)
+curl -s "https://rdap.verisign.com/com/v1/domain/<domain>"  # registry delegation = source of truth
 ```
-Evidence the Vercel side *thinks* it is fine (which is why this is confusing):
-`serviceType: zeit.world`, `verified: true`, delegation confirmed via
-`rdap.verisign.com/com/v1/domain/rudyman.com` → `NS1/NS2.VERCEL-DNS.COM`. But
-`GET /v4/domains/rudyman.com/records` is **EMPTY** and
-`POST /v2/domains/rudyman.com/records` returns **`invalid_zone: "rudyman.com is not a DNS zone"`**.
 
-**Everything the API can do HAS been done and did not help:**
-- `POST /v9/projects/<id>/domains/<d>/verify` on both apex + www → passes, zone still empty.
-- Full **remove + re-add** of the account-level domain (`DELETE /v6/domains/<d>` then
-  `POST /v5/domains`) → re-added clean, zone STILL empty, NS still refusing.
-- ⚠️ **GOTCHA: `DELETE /v6/domains/<d>` ALSO drops the PROJECT domain bindings**, not just the
-  account entry. Both `rudyman.com` and `www.rudyman.com` vanished from the project and had to be
-  re-added via `POST /v10/projects/<id>/domains` — remember to restore
-  `{"redirect":"rudyman.com","redirectStatusCode":308}` on www, or the apex/www relationship is
-  silently lost. Bindings ARE currently restored and correct.
+**Tried, did NOT work** (don't repeat): force `POST /v9/projects/<id>/domains/<d>/verify` on both
+apex + www; a full remove + re-add of the account-level domain.
+⚠️ **`DELETE /v6/domains/<d>` ALSO drops the PROJECT domain bindings**, not just the account entry —
+both domains vanished from the project and had to be restored via
+`POST /v10/projects/<id>/domains`, re-applying `{"redirect":"rudyman.com","redirectStatusCode":308}`
+to www or the apex/www relationship is silently lost.
 
-**NEXT ACTION IS THE USER'S, and it is one of these two — do not keep poking the API:**
-  a. **Vercel support** (vercel.com/help) — quote "delegated to vercel-dns but ns1/ns2 return
-     Query refused; `/v4/domains/<d>/records` empty; `invalid_zone` on record create". This is the
-     correct fix if the domain should stay on Vercel DNS.
-  b. **FASTER WORKAROUND — switch back to Hostinger DNS and use A/CNAME instead.** Point the
-     nameservers back to `aurora.dns-parking.com` / `nebula.dns-parking.com`, then add in
-     Hostinger's DNS zone editor: **A `@` → `216.198.79.1`** and
-     **CNAME `www` → `8a0f233b3a7d8efb.vercel-dns-017.com.`** (values Vercel returned for this
-     project). This sidesteps Vercel DNS entirely and does not depend on their zone bug.
-     Recommend (b) if the user wants the domain live soon.
+**THE FIX — bypass Vercel DNS entirely.** Nameservers moved BACK to Hostinger
+(`aurora.dns-parking.com` / `nebula.dns-parking.com`), then two records added in Hostinger's zone
+editor (deleting the parking `A @ -> 2.57.91.91` first). Vercel's `serviceType` flipped
+`zeit.world` -> **`external`** on its own and the site was live within minutes:
 
-Unaffected + already correct, so no rework needed once DNS resolves: project bindings (apex
-serves, www 308-redirects), `NEXT_PUBLIC_SITE_URL=https://rudyman.com` on production, and the
-deployed sitemap/robots.
+| Type | Name | Content | TTL |
+|---|---|---|---|
+| `A` | `@` | `216.198.79.1` | 3600 |
+| `CNAME` | `www` | `8a0f233b3a7d8efb.vercel-dns-017.com.` | 3600 |
+
+(The CNAME target is **PROJECT-SPECIFIC** — re-read it from `GET /v6/domains/<d>/config` if ever
+needed again, don't copy it blind.)
+
+**Verified live:** apex 200 · `www` 308 -> apex · `http` 308 -> `https` · Let's Encrypt cert valid
+to 2026-10-27 (auto-renews) · `/`, `/work`, `/about`, both case studies, `/sitemap.xml`,
+`/robots.txt` all 200 · sitemap + robots emit `https://rudyman.com` · Vercel `misconfigured: false`.
+
+**Still open:** **Sanity CORS** for the new origin (§7 item 0000) — `/studio` fails on
+`rudyman.com` until it's added.
 
 ### PRIOR STATUS (Session 21)
 **CUSTOM DOMAIN `rudyman.com` BOUGHT + WIRED. Shipped in `91c68e3`: the iOS "can't scroll at all"
@@ -1414,32 +1415,20 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-0000. **🚨 `rudyman.com` IS BLOCKED BY A VERCEL BUG — THE NEXT MOVE IS THE USER'S, NOT MORE API
-    POKING.** Session 21 called this "waiting on propagation"; **that was wrong** and Session 22
-    proved it: Vercel's own nameservers return **`Query refused`** for the domain, so resolvers get
-    SERVFAIL. Full diagnosis + every API remedy already attempted is in §6 "DOMAIN BLOCKED".
-    a. **PICK ONE (recommend the workaround — it's much faster):**
-       - **WORKAROUND (recommended):** switch the nameservers at Hostinger back to
-         `aurora.dns-parking.com` / `nebula.dns-parking.com`, then in Hostinger's DNS zone editor
-         add **A `@` → `216.198.79.1`** and **CNAME `www` → `8a0f233b3a7d8efb.vercel-dns-017.com.`**
-         Sidesteps Vercel DNS entirely, so the zone bug stops mattering.
-       - **OR** open a **Vercel support ticket** (vercel.com/help) quoting: delegated to vercel-dns
-         but ns1/ns2 return Query refused; `/v4/domains/<d>/records` empty; `invalid_zone` when
-         creating records. Correct fix if the domain should stay on Vercel DNS.
-    b. **DO NOT re-run remove/re-add on the domain.** It was tried, didn't fix the zone, and
-       `DELETE /v6/domains/<d>` ALSO silently drops the PROJECT bindings (see the gotcha in §6).
-       Bindings are currently correct — apex serves, www 308-redirects — leave them alone.
-    c. **Then verify end-to-end:** `https://rudyman.com` serves the portfolio (NOT Hostinger's
-       "Parked Domain name" page), HTTPS cert valid, `https://www.rudyman.com` 308s to the apex.
-       Authoritative check that skips caches: `nslookup -type=A rudyman.com ns1.vercel-dns.com`.
-    d. **Add `rudyman.com` + `www.rudyman.com` to Sanity CORS**
-       (sanity.io/manage/project/4bo3ynjd/api) so `/studio` + live content work on the new domain.
-       NOT done yet — `/studio` will fail on the custom domain until it is.
-    e. `NEXT_PUBLIC_SITE_URL` is ALREADY `https://rudyman.com` on Vercel production — no action,
-       but it's build-time inlined, so it only took effect on the Session-21 redeploy.
-    f. **UNTIL (c) PASSES, THE LINK TO SHARE IS `https://portfolio-2026-psi-flax.vercel.app`.**
-       (Asked explicitly on 2026-07-29; user chose to wait rather than temporarily point
-       `NEXT_PUBLIC_SITE_URL` back at the vercel.app URL for link previews.)
+0000. **✅ `rudyman.com` IS LIVE (Session 22) — ONE ITEM LEFT.**
+    Full account of the Vercel zone bug + the Hostinger workaround that fixed it is in §6
+    "DOMAIN RESOLVED". Nothing about the domain needs re-doing; do NOT re-run remove/re-add.
+    a. **⚠️ ADD SANITY CORS FOR THE NEW ORIGIN — the only outstanding piece.**
+       sanity.io/manage/project/4bo3ynjd/api → CORS origins → add `https://rudyman.com`
+       (and `https://www.rudyman.com`), allow credentials. **`/studio` on the custom domain will
+       fail until this is done.** The CLI is not logged in, so use the web UI.
+    b. Already done, no action: project bindings (apex serves, www 308s),
+       `NEXT_PUBLIC_SITE_URL=https://rudyman.com` on production, sitemap + robots emitting the real
+       domain, TLS (Let's Encrypt, auto-renews).
+    c. **THE LINK TO SHARE IS NOW `https://rudyman.com`.** The `*.vercel.app` URL still works but
+       is no longer the one to give out.
+    d. Optional follow-ups now that the domain is real: submit the sitemap to Google Search
+       Console, and consider per-case-study OG images (§7 item 5).
 
 000b. **🔐 REVOKE THE VERCEL TOKEN pasted in Session 21** (`vcp_1fr3...`, in that session's
     transcript) now that the domain work is done — plus the older Session-8 tokens still listed
@@ -1571,12 +1560,14 @@ one — DISPROVED Session 21's domain diagnosis.**
   accent eyebrow + year. Full detail + the GLSL traps in §6.
 - **Lightbox/cursor (`beae3ab`)** — the drag slider no longer opens a full-screen view; the
   magnifier cursor is gone everywhere (lift + ring is the affordance now).
-- **DOMAIN: Session 21's "just waiting on propagation" was WRONG.** `ns1/ns2.vercel-dns.com`
-  return **`Query refused`** — the zone was never provisioned, so resolvers SERVFAIL. Verify,
-  and a full remove + re-add, both failed to create it. **Blocked on Vercel; the user must either
-  open a support ticket or (faster) move DNS back to Hostinger with A/CNAME records.** See §7
-  item 0000. ⚠️ Learned the hard way: `DELETE /v6/domains/<d>` also drops the PROJECT bindings —
-  they were restored, and are correct.
+- **🎉 DOMAIN LIVE — `rudyman.com` serves the site.** Session 21's "just waiting on propagation"
+  was WRONG: `ns1/ns2.vercel-dns.com` were answering **`Query refused`**, i.e. Vercel never
+  provisioned the zone, so resolvers SERVFAIL'd. Force-verify and a full remove + re-add both
+  failed to create it. **Fixed by bypassing Vercel DNS**: nameservers back to Hostinger + an
+  `A @ -> 216.198.79.1` and `CNAME www -> 8a0f233b3a7d8efb.vercel-dns-017.com.`; live within
+  minutes, cert issued, all routes 200. Full account + the cache-bypassing diagnostic in §6.
+  ⚠️ Learned the hard way: `DELETE /v6/domains/<d>` also drops the PROJECT bindings — restored.
+  **Only Sanity CORS for the new origin remains.**
 - Typecheck + prod build clean (14 pages). Dev server + headless Chrome stopped at session end.
 
 ### Session 21 — 2026-07-29
