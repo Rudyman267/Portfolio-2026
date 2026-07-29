@@ -235,14 +235,19 @@ export function Loader() {
 
   useGSAP(
     () => {
+      // ⚠️ DO NOT skip the intro on prefers-reduced-motion alone.
+      // iOS Safari reports `prefers-reduced-motion: reduce` whenever LOW POWER
+      // MODE is on, and plenty of people leave that on permanently. Skipping
+      // here meant those users never saw the loader at all — the overlay
+      // painted black for a single frame and then unmounted, which is the
+      // "flickers for a split second and disappears" bug.
+      //
+      // Reduced motion is a request to CALM MOTION, not to remove the intro.
+      // So the loader still runs and still waits for a real tap; what changes
+      // is that the tossing/flipping animation is replaced by a static pan.
       const prefersReduced = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
-
-      if (prefersReduced) {
-        finish();
-        return;
-      }
 
       document.body.classList.add("is-loading");
       window.scrollTo(0, 0); // start measuring from the top, always
@@ -274,6 +279,19 @@ export function Loader() {
           .to(".pan__cake", { rotation: 360, duration: 0.44, ease: "none" }, 0.49)
           .to(".pan__cake", { y: 0, duration: 0.22, ease: "power2.in" }, 0.71)
           .set(".pan__cake", { rotation: 0 });
+        return;
+      }
+
+      // ── REDUCED MOTION — the intro STILL RUNS and still waits for a tap;
+      //    only the motion is dropped. Everything is placed in its final state
+      //    (no entrance tween, no toss loop, no sizzle) and the counter jumps
+      //    straight to ready. iOS Low Power Mode lands here, so this is a very
+      //    common path, not an edge case — it must be a complete experience.
+      if (prefersReduced) {
+        gsap.set(".pan__group", { scale: 1, opacity: 1, y: 0 });
+        gsap.set(".pan__label", { opacity: 1, y: 0 });
+        gsap.set(".pan__count", { opacity: 0 }); // no count-up to show
+        setReady(true);
         return;
       }
 
@@ -457,6 +475,17 @@ export function Loader() {
       ScrollTrigger.refresh();
     };
 
+    // Reduced motion: the tap still WORKS, it just doesn't animate out — no
+    // throw, no expanding hole. Hand off and dismiss immediately.
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      handOff();
+      setDone(true);
+      return;
+    }
+
     // Take over from the loop wherever it is — snap pan & egg back to rest
     // (level, y:0) so the final throw starts from a clean, known state instead
     // of mid-arc. The sizzle stops too: the egg is about to leave the heat.
@@ -538,12 +567,19 @@ export function Loader() {
   // re-enabled until something forces a re-layout of its hit target.
   //
   // Two independent nets, neither of which can be starved by the tap:
-  //   1. Any pointer/touch/key ANYWHERE on the overlay opens the pan once
-  //      ready — the reader's instinct is to tap the screen, not to hit the
-  //      exact button rect.
+  //   1. A tap anywhere ON THE OVERLAY opens the pan once ready — the reader's
+  //      instinct is to tap the screen, not to hit the exact button rect.
   //   2. A hard ceiling: N seconds after mount the intro lifts itself. The
   //      site MUST become scrollable whether or not input is ever received.
   // Both funnel through openPan()/finish(), which are already idempotent.
+  //
+  // ⚠️ THE LISTENER IS ON THE OVERLAY (root), **NOT** ON `window`, AND IT IS
+  //    ARMED ONLY AFTER A SHORT DELAY. The first version listened on window for
+  //    pointerdown/touchend, which dismissed the intro from a touch the user
+  //    never aimed at it — e.g. the tap that opened the link, or a stray touch
+  //    while the page was still painting. On iOS that read as "the loader
+  //    flashes for a split second and is gone". A deliberate tap on the intro
+  //    is the ONLY thing that should open it.
   useEffect(() => {
     if (done) return;
     // never let the intro hold the page hostage — cap the whole thing.
@@ -558,18 +594,31 @@ export function Loader() {
       }, 1800);
     }, 12000);
 
-    // tap ANYWHERE (not just the button) once the dish is served
+    const el = root.current;
+    if (!el) return () => window.clearTimeout(ceiling);
+
+    // Ignore input for a beat after mount so a touch that was already in
+    // flight (or the tap that navigated here) can't dismiss the intro.
+    let armed = false;
+    const arm = window.setTimeout(() => {
+      armed = true;
+    }, 600);
+
     const anyTap = () => {
-      if (ready) openPan();
+      if (armed && ready) openPan();
     };
-    window.addEventListener("pointerdown", anyTap);
-    window.addEventListener("touchend", anyTap);
-    window.addEventListener("keydown", anyTap);
+    el.addEventListener("click", anyTap);
+    // keydown stays on window — a keyboard user has no "stray touch" problem
+    // and may not have focus inside the overlay.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (armed && ready && (e.key === "Enter" || e.key === " ")) openPan();
+    };
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.clearTimeout(ceiling);
-      window.removeEventListener("pointerdown", anyTap);
-      window.removeEventListener("touchend", anyTap);
-      window.removeEventListener("keydown", anyTap);
+      window.clearTimeout(arm);
+      el.removeEventListener("click", anyTap);
+      window.removeEventListener("keydown", onKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, done]);
