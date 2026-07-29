@@ -200,6 +200,8 @@ export function Loader() {
   const tossRef = useRef<gsap.core.Timeline | null>(null);
   const [done, setDone] = useState(false);
   const [ready, setReady] = useState(false); // load hit 100 → pan unlocks
+  /** the hole-punch mask is attached ONLY for the exit — see the style below */
+  const [maskOn, setMaskOn] = useState(false);
   const openedRef = useRef(false);
   // Mirror of `ready` for code that runs OUTSIDE the render cycle (timers,
   // event listeners registered once on mount). Those capture a stale `ready`
@@ -529,6 +531,18 @@ export function Loader() {
       return;
     }
 
+    // Attach the hole-punch mask NOW (it is deliberately absent at rest — see
+    // the style block). Set it straight on the node as well as via state, so
+    // the mask is definitely present before GSAP starts tweening --hole rather
+    // than waiting for React to re-render.
+    setMaskOn(true);
+    if (root.current) {
+      const MASK =
+        "radial-gradient(circle calc(var(--hole) * 1vmax) at 50% 46%, transparent 99%, black 100%)";
+      root.current.style.maskImage = MASK;
+      root.current.style.webkitMaskImage = MASK;
+    }
+
     // ⚠️ HAND-OFF MUST NOT DEPEND ON THE EXIT ANIMATION COMPLETING.
     // The reveal below is a GSAP timeline that schedules handOff() as a
     // callback (.add(handOff, OUT_REVEAL)) and again in onComplete. On real
@@ -736,10 +750,22 @@ export function Loader() {
           // the exit reveal: a transparent circle punched through the black,
           // radius driven by --hole (in vmax) from the pan's position.
           "--hole": 0,
-          maskImage:
-            "radial-gradient(circle calc(var(--hole) * 1vmax) at 50% 46%, transparent 99%, black 100%)",
-          WebkitMaskImage:
-            "radial-gradient(circle calc(var(--hole) * 1vmax) at 50% 46%, transparent 99%, black 100%)",
+          // ⚠️ NO mask-image AT REST — it is applied only when the exit starts
+          // (see openPan). The mask is `transparent 99%, black 100%`, and in a
+          // CSS mask TRANSPARENT MEANS HIDDEN, so with --hole:0 this gradient
+          // masks the entire overlay away. Desktop got away with it because
+          // GSAP animates --hole immediately; on iOS Safari a mask built from
+          // calc() on a custom property is evaluated differently and the whole
+          // intro simply never appeared. Applying the mask lazily means the
+          // overlay is plain opaque black until the reveal actually runs.
+          ...(maskOn
+            ? {
+                maskImage:
+                  "radial-gradient(circle calc(var(--hole) * 1vmax) at 50% 46%, transparent 99%, black 100%)",
+                WebkitMaskImage:
+                  "radial-gradient(circle calc(var(--hole) * 1vmax) at 50% 46%, transparent 99%, black 100%)",
+              }
+            : null),
         } as React.CSSProperties
       }
     >

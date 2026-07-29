@@ -3,6 +3,7 @@ import { draftMode } from "next/headers";
 import { VisualEditing } from "next-sanity/visual-editing";
 import { SmoothScrollProvider } from "@/components/motion/SmoothScrollProvider";
 import { Loader } from "@/components/motion/Loader";
+import { BootProbe } from "@/components/motion/BootProbe";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SanityLive } from "@/sanity/live";
@@ -36,6 +37,10 @@ export default async function SiteLayout({
 
   return (
     <SmoothScrollProvider>
+      {/* ?boot — independent on-screen boot diagnostic. Mounted HERE (outside
+          Hero) so it can report on the loader before the hero exists and can
+          never be covered by the hero's ScrollTrigger pin. */}
+      <BootProbe />
       <Loader />
       <div className="flex min-h-dvh flex-col">
         <Header brand={brand} nav={nav} />
