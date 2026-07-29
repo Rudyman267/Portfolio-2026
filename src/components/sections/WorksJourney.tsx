@@ -312,6 +312,10 @@ export function WorksOverlay({
 export type BeatDriver = {
   /** p: flight progress 0→1 (spawn→dock) · m: morph progress 0→1 (node→window) */
   proxy: { p: number; m: number };
+  /** the beat container. Its own visibility is the authority on whether the
+   *  beat is on stage — the ticker needs it because `proxy.p` can be reset to 0
+   *  by ScrollTrigger's invalidateOnRefresh while the beat is still showing. */
+  beat: HTMLElement;
   wrap: HTMLElement;
   frame: HTMLElement;
   /** the orange energy surface — ticker-owned (hidden on the live 3D path). */
@@ -418,6 +422,7 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
 
     const driver: BeatDriver = {
       proxy: { p: 0, m: 0 },
+      beat,
       wrap,
       frame,
       skin,
@@ -626,8 +631,32 @@ export function createWorksTicker(drivers: BeatDriver[]) {
     let activeIdx = -1;
 
     drivers.forEach((b, i) => {
-      const { p, m } = b.proxy;
-      if (p <= 0) return; // parked (beat not summoned / scrubbed back out)
+      const { m } = b.proxy;
+      let { p } = b.proxy;
+
+      // ⚠️ `p` CAN BE 0 WHILE THE BEAT IS ON STAGE — do not trust it alone.
+      // The hero's ScrollTrigger uses `invalidateOnRefresh: true`, and
+      // ScrollTrigger.refresh() (called by the loader's handOff, among others)
+      // invalidates the timeline, resetting every fromTo — including this
+      // proxy — back to its START value. On desktop the scrub immediately
+      // re-drives it so nothing is visible; on iOS the post-refresh scroll
+      // position does not always re-fire the tween, so `p` stays 0 forever.
+      // The old `if (p <= 0) return` then skipped this beat every frame and the
+      // window kept its initial inline opacity:0 — the reported "only title and
+      // subtext, no project card", with `frame op=0.00` + `skin op=1.00`
+      // captured on device.
+      //
+      // So: if the BEAT ITSELF is visible (its autoAlpha tween did run) but p
+      // never advanced, treat the beat as docked and dress the window anyway.
+      // The beat's own visibility is the authority on whether it is on stage.
+      if (p <= 0) {
+        const bcs = getComputedStyle(b.beat);
+        const onStage =
+          bcs.visibility !== "hidden" && parseFloat(bcs.opacity) > 0.05;
+        if (!onStage) return; // genuinely parked — skip, as before
+        p = 1; // on stage but un-driven → show the finished window
+      }
+
       activeIdx = i;
       const st = setters[i];
 
