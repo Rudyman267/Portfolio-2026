@@ -486,11 +486,12 @@ export function Hero() {
         const DISARM_T = scrub.labels["outro"] + 0.6;
 
         // --- 3. works chapter — project nodes summoned over the tunnel ------
-        const { worksStart, drivers, snapSpans } = addWorksBeats(scrub, root);
+        const { worksStart, drivers, snapSpans, introGuards } =
+          addWorksBeats(scrub, root);
 
         // the nodes ride the SAME snake path as the tunnel instances, per
         // frame (scroll flies them in; idle travel keeps them swaying)
-        const tick = createWorksTicker(drivers);
+        const tick = createWorksTicker(drivers, introGuards);
         gsap.ticker.add(tick);
 
         // Pin length: preserve the original scroll-per-timeline-unit (the old

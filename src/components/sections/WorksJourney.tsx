@@ -285,9 +285,20 @@ export function WorksOverlay({
       aria-label="Selected work"
     >
       {/* chapter intro (Figma 175) */}
+      {/* ⚠️ pointer-events-none is LOAD-BEARING.
+          This is a FULL-VIEWPORT (`absolute inset-0`) layer that sits over
+          every project beat. Its hide is a GSAP `autoAlpha: 0` at the end of
+          the intro sequence, and all of those tweens use
+          `immediateRender: false` — so a ScrollTrigger.refresh()/invalidate
+          (the loader's handOff calls one) can drop that end-state and leave
+          this layer interactive and hit-testable on top of the beats. On the
+          device that showed up as `frame onTop=false hit=SPAN.block
+          will-change-` while the project window sat right underneath.
+          It is pure decoration, so it must never take hits. */}
       <div
         data-works-intro
-        className="absolute inset-0 flex items-center justify-center"
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
         style={{ opacity: 0, visibility: "hidden" }}
       >
         <h2
@@ -338,8 +349,11 @@ export type SnapSpan = { from: number; to: number; rest: number };
 export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
   const drivers: BeatDriver[] = [];
   const snapSpans: SnapSpan[] = [];
+  /** per-frame guards that re-assert states an invalidate can drop */
+  const introGuards: (() => void)[] = [];
   const layer = root.querySelector<HTMLElement>("[data-works-layer]");
-  if (!layer) return { worksStart: tl.duration(), drivers, snapSpans };
+  if (!layer)
+    return { worksStart: tl.duration(), drivers, snapSpans, introGuards };
 
   // On TOUCH the ScrollTrigger snap (which is meant to glide a thumb-flick that
   // lands mid-flight to the fully-formed window) is unreliable — native
@@ -382,6 +396,20 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         { yPercent: -120, duration: 0.7, ease: "power2.in", immediateRender: false },
       )
       .to(intro, { autoAlpha: 0, duration: 0.2 }, "-=0.2");
+    // The intro layer covers the whole viewport, so it MUST be hidden whenever
+    // the playhead is past it — not merely "hidden by the last tween that ran".
+    // These tweens are immediateRender:false, so an invalidate can drop that
+    // end-state and strand the layer visible over the project windows. A
+    // ticker-independent guard keeps it correct at any playhead position.
+    introGuards.push(() => {
+      const t = tl.time();
+      // visible only for the intro's own span; hidden everywhere else
+      const inSpan = t >= worksStart && t <= worksStart + 2.1;
+      const cs = getComputedStyle(intro);
+      if (!inSpan && (cs.visibility !== "hidden" || +cs.opacity > 0.01)) {
+        gsap.set(intro, { autoAlpha: 0 });
+      }
+    });
     // resting mid-intro settles on the fully-risen line (hold runs 0.9→1.4);
     // resting mid-EXIT carries the line out to the clean tunnel (1.4→2.1)
     snapSpans.push({
@@ -550,7 +578,7 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
       .to(beat, { autoAlpha: 0, duration: 0.1 }, E + EXIT - 0.1);
   });
 
-  return { worksStart, drivers, snapSpans };
+  return { worksStart, drivers, snapSpans, introGuards };
 }
 
 /* ---------------------------------------------------- per-frame flight ---- */
@@ -598,7 +626,10 @@ function flightXY(
  * the scene — a pure function of both, so it's deterministic under scrubbing
  * in either direction AND keeps swaying with the idle drift between scrolls.
  */
-export function createWorksTicker(drivers: BeatDriver[]) {
+export function createWorksTicker(
+  drivers: BeatDriver[],
+  introGuards: (() => void)[] = [],
+) {
   const setters = drivers.map((d) => ({
     x: gsap.quickSetter(d.wrap, "x", "px") as (v: number) => void,
     y: gsap.quickSetter(d.wrap, "y", "px") as (v: number) => void,
@@ -629,6 +660,11 @@ export function createWorksTicker(drivers: BeatDriver[]) {
     // the active beat = the furthest one that has started (finished beats keep
     // p=1 but their 3D node has burned off with m=1; scrubbing back rewinds p)
     let activeIdx = -1;
+
+    // Re-assert states that a ScrollTrigger invalidate can drop (notably the
+    // full-viewport works-intro layer, which otherwise strands visible on top
+    // of the project windows).
+    for (const g of introGuards) g();
 
     drivers.forEach((b, i) => {
       const { m } = b.proxy;
