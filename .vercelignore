@@ -22,3 +22,8 @@ node_modules/
 
 # raw background-music source
 Background music/
+
+# Verkos exhibit BUILD SOURCE — kept in the repo as insurance, but the site
+# only ever serves the compiled output at public/verkos-demo/. Nothing here is
+# imported by the Next app, so it must never be uploaded or built.
+verkos-exhibit-src/

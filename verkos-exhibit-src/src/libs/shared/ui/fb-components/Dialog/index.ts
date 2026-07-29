@@ -1,0 +1,31 @@
+export {
+  Dialog,
+  ConfirmDialog,
+  DialogRoot,
+  DialogTrigger,
+  DialogPortal,
+  DialogClose,
+  DialogOverlay,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+  dialogOverlayVariants,
+  dialogContentVariants,
+  dialogHeaderVariants,
+  dialogFooterVariants,
+  dialogTitleVariants,
+  dialogDescriptionVariants,
+} from './Dialog';
+export type {
+  DialogProps,
+  ConfirmDialogProps,
+  DialogOverlayProps,
+  DialogContentProps,
+  DialogHeaderProps,
+  DialogFooterProps,
+  DialogTitleProps,
+  DialogDescriptionProps,
+} from './Dialog';
+export { Dialog as default } from './Dialog';

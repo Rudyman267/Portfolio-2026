@@ -1,0 +1,4 @@
+project_id = "zjtezfqffbebzxbhsflk"
+
+[functions.webhook-flight-events]
+verify_jwt = false

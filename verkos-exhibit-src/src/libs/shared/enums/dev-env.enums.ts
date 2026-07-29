@@ -1,0 +1,6 @@
+export const DEV_ORGS = {
+  REAL_DEVICES: '64ba7374f8b63db2083b2665',
+  THREE_D_MAP: '663cb7eb26b3ef56b1f3a202',
+  ASSET_MANAGEMENT: '68edfa4d56b0eedad4f01854',
+  SRV_DEV: '643969ebd433e41b9b3b3d63',
+};

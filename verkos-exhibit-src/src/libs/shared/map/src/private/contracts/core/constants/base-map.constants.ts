@@ -1,0 +1,18 @@
+export const MAP_MAX_ZOOM = 4800000;
+export const MAP_MIN_ZOOM = 90;
+export const EARTH_RADIUS = 6371000;
+
+export const MAP_MIN_ZOOM_FACTOR_DIFFERENCE = 10;
+
+export const DISTANCE_LABEL_OFF_SET = 0.0001;
+export const CENTER_LABEL_OFFSET = 0.0002;
+
+export const ENTITY_ZOOM_LEVEL = {
+  POINT: 800,
+  MARKER: 800,
+  LABEL: 800,
+  POLYLINE: 1000,
+  POLYGON: 1000,
+  CIRCLE: 2500,
+  MODEL: 800,
+};

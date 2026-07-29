@@ -1,0 +1,137 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@auth": [
+        "./src/libs/core/auth-frontend"
+      ],
+      "@auth/*": [
+        "./src/libs/core/auth-frontend/*"
+      ],
+      "@components": [
+        "./src/libs/shared/ui"
+      ],
+      "@components/*": [
+        "./src/libs/shared/ui/*"
+      ],
+      "@env": [
+        "./src/environments/environment.dev.ts",
+        "./src/environments/environment.*.ts"
+      ],
+      "@hardware-controls": [
+        "./src/libs/shared/hardware-controls/src/index.ts"
+      ],
+      "@hardware-controls/keyboard": [
+        "./src/libs/shared/hardware-controls/src/keyboard/index.ts"
+      ],
+      "@hooks": [
+        "./src/libs/shared/hooks/index.ts"
+      ],
+      "@hooks/*": [
+        "./src/libs/shared/hooks/*"
+      ],
+      "@libs/shared": [
+        "./src/libs/shared/index.ts"
+      ],
+      "@libs/shared/*": [
+        "./src/libs/shared/*"
+      ],
+      "@libs/shared/api-modules": [
+        "./src/libs/shared/api-modules/index.ts"
+      ],
+      "@libs/shared/api-modules/*": [
+        "./src/libs/shared/api-modules/*"
+      ],
+      "@libs/shared/components/ui": [
+        "./src/libs/shared/ui/index.ts"
+      ],
+      "@libs/shared/components/ui/*": [
+        "./src/libs/shared/ui/*"
+      ],
+      "@libs/shared/socket": [
+        "./src/libs/shared/socket/index.ts"
+      ],
+      "@libs/shared/socket/*": [
+        "./src/libs/shared/socket/*"
+      ],
+      "@libs/shared/types": [
+        "./src/libs/shared/types/index.ts"
+      ],
+      "@libs/shared/utils": [
+        "./src/libs/shared/utils/index.ts"
+      ],
+      "@map/private": [
+        "./src/libs/shared/map/src/private"
+      ],
+      "@map/private/*": [
+        "./src/libs/shared/map/src/private/*"
+      ],
+      "@map/public": [
+        "./src/libs/shared/map/src/public/index.ts"
+      ],
+      "@map/public/*": [
+        "./src/libs/shared/map/src/public/*"
+      ],
+      "@shadcn": [
+        "./src/libs/shared/ui"
+      ],
+      "@shadcn/*": [
+        "./src/libs/shared/ui/*"
+      ],
+      "@state": [
+        "./src/libs/shared/state"
+      ],
+      "@state/*": [
+        "./src/libs/shared/state/*"
+      ],
+      "@types": [
+        "./src/libs/shared/types"
+      ],
+      "@types/*": [
+        "./src/libs/shared/types/*"
+      ],
+      "@ui": [
+        "./src/libs/shared/ui"
+      ],
+      "@ui/*": [
+        "./src/libs/shared/ui/*"
+      ]
+    },
+    "resolveJsonModule": true,
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "strictNullChecks": false,
+    "target": "ES2020"
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
+}

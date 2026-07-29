@@ -1,0 +1,20 @@
+{
+  "greeting": "Hello from Lingo.dev",
+  "Actions": "Actions",
+  "search": "Search",
+  "clearSearch": "Clear search",
+  "visible": "Visible",
+  "hidden": "Hidden",
+  "pinned": "Pinned",
+  "selectAll": "Select all {{type}} drones",
+  "panToVisibleDrones": "Pan to visible drones",
+  "switchLanguage": "Switch Language",
+  "welcomeMessage": "Welcome to the drone management system. Here you can monitor and control all your connected devices.",
+  "labels": {
+    "visible": "Visible",
+    "pilot": "Pilot",
+    "battery": "Battery",
+    "systemState": "System State"
+  },
+  "textV2Version": "Welcome to the drone management system. Here you can monitor and control all your connected devices."
+}

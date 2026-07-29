@@ -1,0 +1,20 @@
+{
+  "greeting": "Bonjour de Lingo.dev",
+  "Actions": "Actions",
+  "search": "Rechercher",
+  "clearSearch": "Effacer la recherche",
+  "visible": "Visible",
+  "hidden": "Masqué",
+  "pinned": "Épinglé",
+  "selectAll": "Sélectionner tous les drones {{type}}",
+  "panToVisibleDrones": "Centrer sur les drones visibles",
+  "switchLanguage": "Changer de langue",
+  "welcomeMessage": "Bienvenue dans le système de gestion des drones. Ici, vous pouvez surveiller et contrôler tous vos appareils connectés.",
+  "labels": {
+    "visible": "Visible",
+    "pilot": "Pilote",
+    "battery": "Batterie",
+    "systemState": "État du système"
+  },
+  "textV2Version": "Bienvenue dans le système de gestion des drones. Ici, vous pouvez surveiller et contrôler tous vos appareils connectés."
+}
