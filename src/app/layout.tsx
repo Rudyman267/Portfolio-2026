@@ -66,6 +66,43 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${geistMono.variable} ${ebGaramond.variable} ${tanker.variable} h-full`}
     >
       <body className="min-h-full antialiased" suppressHydrationWarning>
+        {/*
+          FIRST-PAINT SCROLL LOCK.
+
+          The intro loader locks scrolling via `body.is-loading`, but React can
+          only do that once it has hydrated — and the server HTML paints well
+          before that. On a real iPhone the gap is long enough to SEE: the hero
+          renders first, the pan appears over it a moment later, and the lock
+          arrives after the hero's ScrollTrigger has already measured against a
+          scrollable page, which leaves scrolling broken.
+
+          This runs before first paint and closes that window. The Loader
+          re-asserts the same class during render and removes it on hand-off,
+          so this only ever covers the pre-hydration gap.
+
+          Skipped when the page was opened by an in-app nav (NAV_FLAG): that
+          path auto-plays the pan and lifts itself, and must not be pre-locked
+          in case its JS never runs.
+        */}
+        <script
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{
+              if(sessionStorage.getItem('rt:nav')==='1')return;
+            }catch(e){}
+            try{document.body.classList.add('is-loading');}catch(e){}
+            // Safety net: if the Loader never hydrates (JS chunk fails, very
+            // slow network), this lock must NOT freeze the page forever.
+            setTimeout(function(){
+              try{
+                if(!window.__loaderOpened && !window.__loaderHandoff){
+                  document.body.classList.remove('is-loading');
+                }
+              }catch(e){}
+            },15000);
+            })();`,
+          }}
+        />
         {children}
       </body>
     </html>

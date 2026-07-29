@@ -232,6 +232,21 @@ export function Loader() {
   }
   const isNav = navModeRef.current;
 
+  // ⚠️ LOCK DURING RENDER, NOT IN AN EFFECT.
+  // `is-loading` used to be added inside useGSAP, which runs AFTER React has
+  // mounted and the browser has painted. On a fast desktop that gap is
+  // invisible; on a real iPhone it is very visible and produces exactly the
+  // reported sequence: the HERO paints first ("I AM A PRODUCT—DESIGN
+  // BUILDER"), THEN the pan appears over it, and the lock lands late — after
+  // the hero's ScrollTrigger has already measured against an unlocked,
+  // scrollable page. Everything downstream is then measuring the wrong thing,
+  // which is why scrolling ends up stuck.
+  // Doing it during render means the class is on <body> before the first
+  // paint that includes this component, so the pan is the FIRST thing seen.
+  if (typeof document !== "undefined" && !done) {
+    document.body.classList.add("is-loading");
+  }
+
   const finish = () => {
     // hard guarantee: the experience always starts at frame zero. Browsers
     // can deferred-restore a clamped scroll position AFTER the provider's
