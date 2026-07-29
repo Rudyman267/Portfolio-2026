@@ -210,6 +210,8 @@ export function Loader() {
     readyRef.current = true;
     setReady(true);
   };
+  /** wall-clock failsafes started by openPan; cleared on unmount */
+  const exitTimersRef = useRef<number[]>([]);
 
   // Was this load triggered by an in-app nav click (hardNavigate)? If so the
   // Loader runs in "transition" mode: pan ONLY (no counter, no label, no click
@@ -474,6 +476,12 @@ export function Loader() {
     // to slip past this guard and re-open a dismissed loader.
     if ((!readyRef.current && !isNav) || openedRef.current) return;
     openedRef.current = true;
+    try {
+      (window as unknown as Record<string, unknown>).__loaderOpened =
+        Math.round(performance.now());
+    } catch {
+      /* ignore */
+    }
 
     // Hand off to the hero partway through — while the hole is opening — so
     // the headline rises as the scene is being unveiled.
@@ -481,6 +489,14 @@ export function Loader() {
     const handOff = () => {
       if (handedOff) return;
       handedOff = true;
+      // breadcrumb for ?herodebug — records WHICH path completed the hand-off
+      // so a device that misbehaves tells us directly instead of us guessing.
+      try {
+        (window as unknown as Record<string, unknown>).__loaderHandoff =
+          Math.round(performance.now());
+      } catch {
+        /* ignore */
+      }
       window.scrollTo(0, 0); // same frame-zero guarantee as finish()
       window.dispatchEvent(new Event(LOADER_DONE_EVENT));
       document.body.classList.remove("is-loading");
@@ -497,6 +513,28 @@ export function Loader() {
       setDone(true);
       return;
     }
+
+    // ⚠️ HAND-OFF MUST NOT DEPEND ON THE EXIT ANIMATION COMPLETING.
+    // The reveal below is a GSAP timeline that schedules handOff() as a
+    // callback (.add(handOff, OUT_REVEAL)) and again in onComplete. On real
+    // iOS Safari those callbacks can be skipped or indefinitely deferred —
+    // gsap.ticker stalls when the compositor is busy or the tab is
+    // backgrounded — while the CSS `--hole` mask keeps animating on the
+    // compositor thread. The overlay therefore DISAPPEARS while handOff()
+    // never runs, leaving `body.is-loading` (overflow:hidden) set forever and
+    // the hero un-revealed: the exact on-device state captured by ?herodebug
+    // (isLoading=true, REVEALED=0, heroProgress=0.000, pan not visible).
+    //
+    // So: a wall-clock timer, independent of GSAP, guarantees the hand-off.
+    // handOff() is idempotent, so whichever fires first wins and the other is
+    // a no-op. Same for setDone.
+    const HANDOFF_FAILSAFE_MS = 1400;
+    const handoffTimer = window.setTimeout(handOff, HANDOFF_FAILSAFE_MS);
+    const doneTimer = window.setTimeout(() => {
+      handOff(); // belt and braces — never unmount without handing off
+      setDone(true);
+    }, 2600);
+    exitTimersRef.current.push(handoffTimer, doneTimer);
 
     // Take over from the loop wherever it is — snap pan & egg back to rest
     // (level, y:0) so the final throw starts from a clean, known state instead
@@ -654,7 +692,11 @@ export function Loader() {
 
   useEffect(() => {
     // and if the component is torn down for ANY reason mid-intro, unlock.
-    return () => document.body.classList.remove("is-loading");
+    return () => {
+      document.body.classList.remove("is-loading");
+      exitTimersRef.current.forEach((t) => window.clearTimeout(t));
+      exitTimersRef.current = [];
+    };
   }, []);
 
   if (done) return null;

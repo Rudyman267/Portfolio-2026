@@ -112,6 +112,16 @@ export function HeroDebug() {
             : "never"),
       );
       out.push("heroProgress=" + heroScroll.progress.toFixed(3));
+      // Loader breadcrumbs — the pair that identifies a stuck intro:
+      //   opened set but handoff MISSING  => the exit ran but never handed off
+      //   (that leaves body.is-loading on and the page unscrollable).
+      const w = window as unknown as Record<string, unknown>;
+      out.push(
+        "loader: opened=" +
+          (w.__loaderOpened ?? "no") +
+          " handoff=" +
+          (w.__loaderHandoff ?? "NO"),
+      );
       out.push(
         "worksNode: on=" +
           heroScroll.worksNode.on +
