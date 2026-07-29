@@ -82,6 +82,10 @@ export function BootProbe() {
       const hero = document.querySelector<HTMLElement>(".hero-dark");
       const body = document.body;
 
+      // Build marker — bump on every probe change. If the phone does not show
+      // the CURRENT value, it is running a cached bundle and the readout is
+      // stale (this already wasted one round trip).
+      out.push("PROBE v4");
       out.push("scrollY=" + Math.round(window.scrollY));
       out.push("docH=" + document.documentElement.scrollHeight);
       out.push("vh=" + window.innerHeight);
@@ -152,20 +156,10 @@ export function BootProbe() {
             `frame mask=${fcs.maskImage === "none" ? "none" : "SET"} clip=${fcs.clipPath === "none" ? "none" : "SET"} filt=${fcs.filter === "none" ? "none" : "SET"}`,
           );
           out.push(`frame xform=${fcs.transform.slice(0, 34)}`);
-          // is the frame the topmost thing at its own centre?
-          const cx = Math.round(fr.left + fr.width / 2);
-          const cy = Math.round(fr.top + fr.height / 2);
-          if (fr.width > 2 && cy > 0 && cy < window.innerHeight) {
-            const hit = document.elementFromPoint(cx, cy);
-            out.push(
-              "frame onTop=" +
-                (hit ? frame.contains(hit) || frame === hit : "?") +
-                " hit=" +
-                (hit ? hit.tagName + "." + String(hit.className).slice(0, 18) : "-"),
-            );
-          } else {
-            out.push("frame offscreen/zero-size");
-          }
+          // NOTE: no elementFromPoint / "onTop" check here. The whole works
+          // layer is pointer-events-none, so hit-testing skips the frame BY
+          // DESIGN and onTop always reads false — it is not evidence of
+          // anything covering the card. It misled two diagnoses. Don't add it.
         } else {
           out.push("frame=NO [data-frame] IN BEAT");
         }
