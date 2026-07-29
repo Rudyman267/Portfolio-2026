@@ -100,6 +100,23 @@ const THUMB_SRC: Record<string, string> = {
 
 /* ------------------------------------------------------------- markup ---- */
 
+/** The orange energy skin — the node's surface, which burns off across the
+ *  morph. Shared by both window variants (real study / in-progress plate), and
+ *  it MUST carry `data-skin`: the works ticker drives its opacity. */
+function PlateSkin() {
+  return (
+    <span
+      data-skin
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 rounded-[inherit]"
+      style={{
+        background:
+          "radial-gradient(120% 120% at 30% 22%, #ffd9a8 0%, #ff8a2a 42%, #c2540e 78%, #8a3506 100%)",
+      }}
+    />
+  );
+}
+
 function ProjectBeat({
   project,
   index,
@@ -174,48 +191,68 @@ function ProjectBeat({
                 filter: "blur(14px)",
               }}
             />
-            <Link
-              data-frame
-              href={href}
-              aria-label={`${project.title} — open case study`}
-              className="group relative block overflow-hidden bg-white"
-              style={{
-                width: NODE_W,
-                height: NODE_H,
-                borderRadius: NODE_R,
-                // hidden + inert until the morph — the flight is the 3D cuboid
-                // in the canvas (or, on the video fallback, the ticker raises
-                // this during the flight instead). The ticker owns both.
-                opacity: 0,
-                pointerEvents: "none",
-              }}
-            >
-              {/* window content — revealed as the energy skin burns off */}
-              {thumb ? (
+            {/* The window is a LINK only for studies that actually exist. The
+                placeholder slugs 404, so their beats render as a non-clickable
+                "in progress" plate instead of a blank white box that looks
+                like a broken image (which is how it read on device). */}
+            {thumb ? (
+              <Link
+                data-frame
+                href={href}
+                aria-label={`${project.title} — open case study`}
+                className="group relative block overflow-hidden bg-white"
+                style={{
+                  width: NODE_W,
+                  height: NODE_H,
+                  borderRadius: NODE_R,
+                  // hidden + inert until the morph — the flight is the 3D cuboid
+                  // in the canvas (or, on the video fallback, the ticker raises
+                  // this during the flight instead). The ticker owns both.
+                  opacity: 0,
+                  pointerEvents: "none",
+                }}
+              >
+                {/* window content — revealed as the energy skin burns off */}
                 <img
                   src={thumb}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                 />
-              ) : null}
-              <span
-                className={`absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${
-                  thumb ? "bg-black/35 text-white" : "bg-black/8 text-black/70"
-                }`}
-              >
-                <ArrowUpRight size={18} />
-              </span>
-              {/* orange energy skin — the node's surface; fades away in the morph */}
-              <span
-                data-skin
+                <span className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <ArrowUpRight size={18} />
+                </span>
+                <PlateSkin />
+              </Link>
+            ) : (
+              <div
+                data-frame
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 rounded-[inherit]"
+                className="relative block overflow-hidden"
                 style={{
+                  width: NODE_W,
+                  height: NODE_H,
+                  borderRadius: NODE_R,
+                  opacity: 0,
+                  pointerEvents: "none",
+                  // deliberately NOT white — a dark plate with a hairline reads
+                  // as "not published yet", where an empty white rectangle just
+                  // reads as a failed image load.
                   background:
-                    "radial-gradient(120% 120% at 30% 22%, #ffd9a8 0%, #ff8a2a 42%, #c2540e 78%, #8a3506 100%)",
+                    "linear-gradient(160deg,#141821 0%,#0d1016 60%,#0a0c11 100%)",
+                  border: "1px solid rgba(255,255,255,0.14)",
                 }}
-              />
-            </Link>
+              >
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/40">
+                    In progress
+                  </span>
+                  <span className="text-[12px] font-medium text-white/25">
+                    Case study coming soon
+                  </span>
+                </span>
+                <PlateSkin />
+              </div>
+            )}
           </div>
         </div>
 

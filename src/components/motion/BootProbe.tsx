@@ -115,7 +115,39 @@ export function BootProbe() {
       }
       out.push("opened=" + (w.__loaderOpened ?? "no"));
       out.push("handoff=" + (w.__loaderHandoff ?? "NO"));
-      out.push("lenis=" + (document.documentElement.className || "-"));
+
+      // ── works-journey beats: which one is on stage, and is its window +
+      //    image actually there? This is what the thumbnail report needs.
+      const beats = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-beat]"),
+      );
+      const active = beats.findIndex((b) => {
+        const cs = getComputedStyle(b);
+        return cs.visibility !== "hidden" && parseFloat(cs.opacity) > 0.05;
+      });
+      out.push("beats=" + beats.length + " active=" + (active < 0 ? "none" : active));
+      if (active >= 0) {
+        const b = beats[active];
+        const frame = b.querySelector<HTMLElement>("[data-frame]");
+        const img = frame?.querySelector<HTMLImageElement>("img");
+        const skin = b.querySelector<HTMLElement>("[data-skin]");
+        if (frame) {
+          const fr = frame.getBoundingClientRect();
+          out.push(
+            `frame op=${(+getComputedStyle(frame).opacity).toFixed(2)} ${Math.round(fr.width)}x${Math.round(fr.height)}`,
+          );
+        }
+        out.push(
+          "img=" +
+            (img
+              ? `${img.complete && img.naturalWidth > 0 ? "ok" : "PENDING"} nw=${img.naturalWidth} src=${(img.getAttribute("src") || "").split("/").pop()}`
+              : "NONE (no thumb for this slug)"),
+        );
+        if (skin)
+          out.push("skin op=" + (+getComputedStyle(skin).opacity).toFixed(2));
+        const title = b.querySelector<HTMLElement>("[data-ptitle]");
+        if (title) out.push("title=" + title.textContent);
+      }
       setSnap(out);
     };
     snapshot();
