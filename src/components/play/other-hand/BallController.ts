@@ -15,6 +15,12 @@ export class BallController {
   private mouseY: number = 0;
   private isMouseDown: boolean = false;
   private isMouseActive: boolean = false;
+
+  // Disc geometry in viewport px — overwritten by setBounds(). Defaults match
+  // the original's assumption so the class still works standalone.
+  private centerX: number = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
+  private centerY: number = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
+  private radius: number = 180;
   
   constructor() {
     window.addEventListener("gamepadconnected", (e) => {
@@ -26,31 +32,66 @@ export class BallController {
       this.gamepadIndex = null;
     });
 
-    // Mouse & Touch support
+    // ── Mouse & Touch ─────────────────────────────────────────────────────
+    // PORTFOLIO CHANGE (touch support). Three problems with the original on a
+    // phone, all of which made the piece unplayable there:
+    //   1. `isMouseActive` was only cleared by `pointerleave`, which touch
+    //      never fires — so after one tap the last finger position stuck and
+    //      the AI read a permanent input it could not escape.
+    //   2. Hover does not exist on touch, so "follow the pointer" has no
+    //      meaning. Touch must be CLICK-AND-DRAG: input only while held.
+    //   3. The hit zone was a hardcoded 180px radius around the WINDOW centre,
+    //      but the disc is `min(360px, 74vw)` and is not vertically centred in
+    //      the page. See setBounds() — the component now feeds the real rect.
+    const isTouch = (e: PointerEvent) => e.pointerType !== "mouse";
+
     const handlePointerMove = (e: PointerEvent) => {
+      // On touch, only track while the finger is down (drag).
+      if (isTouch(e) && !this.isMouseDown) return;
       this.mouseX = e.clientX;
       this.mouseY = e.clientY;
       this.isMouseActive = true;
     };
     const handlePointerDown = (e: PointerEvent) => {
-      if (e.button === 0) { // Primary click
-        this.isMouseDown = true;
-      }
+      // touch/pen report button 0 too, but be explicit about primary only
+      if (e.button !== 0 && !isTouch(e)) return;
+      this.isMouseDown = true;
+      // A tap should register immediately, not wait for the first move.
+      this.mouseX = e.clientX;
+      this.mouseY = e.clientY;
+      this.isMouseActive = true;
     };
     const handlePointerUp = (e: PointerEvent) => {
-      if (e.button === 0) {
-        this.isMouseDown = false;
-      }
+      this.isMouseDown = false;
+      // Releasing a finger ends the interaction outright — otherwise the last
+      // position keeps driving the sim (there is no hover to fall back to).
+      if (isTouch(e)) this.isMouseActive = false;
     };
     const handlePointerLeave = () => {
       this.isMouseActive = false;
       this.isMouseDown = false;
     };
 
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerdown", handlePointerDown, { passive: true });
+    window.addEventListener("pointerup", handlePointerUp, { passive: true });
+    window.addEventListener("pointercancel", handlePointerUp, { passive: true });
     window.addEventListener("pointerleave", handlePointerLeave);
+  }
+
+  /**
+   * The disc's real position + radius in viewport pixels.
+   *
+   * The original assumed a 360px disc centred in the window. In the portfolio
+   * the disc is responsive (`min(360px, 74vw)`) and sits above the caption and
+   * volume bar, so both the centre and the radius differ — most visibly on a
+   * phone, where the hit zone would otherwise sit off the disc entirely.
+   * OtherHandGame feeds this from a ResizeObserver.
+   */
+  public setBounds(cx: number, cy: number, radius: number) {
+    this.centerX = cx;
+    this.centerY = cy;
+    this.radius = radius;
   }
 
   public poll(): MovementIntent {
@@ -82,19 +123,19 @@ export class BallController {
         }
     }
 
-    // 2. Poll Mouse/Pointer (Only if active and inside the circular frame)
+    // 2. Poll Mouse/Pointer (only while active and inside the disc).
+    //    Geometry comes from setBounds() — the disc is responsive and is not
+    //    at the window centre, so the old hardcoded 180px/window-centre hit
+    //    zone missed it entirely on a phone.
     if (this.isMouseActive) {
-      const centerX = window.innerWidth / 2;
-      const centerY = window.innerHeight / 2;
-      const dx = this.mouseX - centerX;
-      const dy = this.mouseY - centerY;
+      const dx = this.mouseX - this.centerX;
+      const dy = this.mouseY - this.centerY;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // The circular frame's radius is 180px (360px diameter)
-      if (distance <= 180) {
+      if (distance <= this.radius) {
         // Map distance to a [-1, 1] range vector
-        rawX = dx / 180;
-        rawY = dy / 180;
+        rawX = dx / this.radius;
+        rawY = dy / this.radius;
         btnPressed = btnPressed || this.isMouseDown;
       }
     }

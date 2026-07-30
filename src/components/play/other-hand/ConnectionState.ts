@@ -8,6 +8,10 @@ export class ConnectionState {
   public simState: SimulationState;
   
   private controller: BallController;
+  /** Pass the disc's real viewport geometry through to the input controller. */
+  public setInputBounds(cx: number, cy: number, radius: number) {
+    this.controller.setBounds(cx, cy, radius);
+  }
   private ai: OtherHandAI;
   private audio: AmbientVoice;
   

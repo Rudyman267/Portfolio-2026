@@ -78,7 +78,6 @@ type Curve = {
   years: string;
 };
 
-// TODO(content): PLAYS points at /work until a playground route exists.
 const CURVES: Curve[] = [
   {
     side: "left",
@@ -90,7 +89,9 @@ const CURVES: Curve[] = [
   {
     side: "right",
     title: "PLAYS",
-    href: "/work",
+    // now a real route — this used to fall back to /work because no playground
+    // page existed yet.
+    href: "/play",
     desc: "Experiments, prototypes and playful builds from the edge of AI",
     years: "2025–Today",
   },

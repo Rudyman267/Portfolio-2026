@@ -82,21 +82,35 @@ const FIELD_GLSL = /* glsl */ `
   }
   /* Total travel for an instance: idle flight + scroll throttle, both scaled by
      the instance's depth band so the strata separate. TOWARD the camera (+z). */
+  /* rate deliberately varies per DEPTH BAND so the three strata never share a
+     wrap phase. Combined with the narrow dead band above, this guarantees the
+     field can never blink out as a whole — at any scroll position the strata
+     are at different points in their cycle.
+     (No backticks in these comments: this is inside a JS template literal.) */
   float travelZ(float z0, float depth, float t, float baseSpeed, float scrollT){
     float rate = 0.35 + depth * 1.25;
     return wrapAxis(z0 + (t * baseSpeed + scrollT) * rate, 26.0);
   }
   /* Rule 4: dissolve before the camera plane, materialise in the far distance.
-     Camera sits at z=+20, so anything past ~18 would smear through the lens. */
+     Camera sits at z=+20, so anything past ~18 would smear through the lens.
+
+     ⚠️ THE DEAD BAND MUST STAY NARROW. Every instance shares ONE uScroll, so
+     the whole field moves in lockstep — if the fully-faded region is a big
+     slice of the 52-unit wrap range, then at certain scroll positions the
+     ENTIRE field lands in it at once and the background visibly blinks out.
+     That is the "particles disappear when I scroll back up" bug: with the old
+     window (fade-in -26..-18, fade-out 9..17.5) ~31% of positions were dead.
+     Now the crossfade happens right at the wrap seam, so something is always
+     lit: fading out over 14..24 while the re-entry fades in over -26..-20. */
   float travelFade(float z){
-    return smoothstep(-26.0, -18.0, z) * (1.0 - smoothstep(9.0, 17.5, z));
+    return smoothstep(-26.0, -20.0, z) * (1.0 - smoothstep(14.0, 24.0, z));
   }
   /* Nodes need a MUCH earlier dissolve than motes. They're real geometry (up to
      ~1.3 world units), so within ~12 units of the lens they blow up into flat
      opaque cubes instead of distant glowing boxes — which is exactly what the
      first build looked like. Gone by z=4 keeps them in the mid-field. */
   float travelFadeNode(float z){
-    return smoothstep(-26.0, -18.0, z) * (1.0 - smoothstep(-4.0, 4.0, z));
+    return smoothstep(-26.0, -20.0, z) * (1.0 - smoothstep(-2.0, 8.0, z));
   }
 `;
 
@@ -530,14 +544,23 @@ export function PageGlow() {
     };
   }, [enabled]);
 
+  // ⚠️ NO IntersectionObserver GATE HERE — deliberately.
+  // This wrapper is `fixed inset-0`, so it is ALWAYS on screen and observing it
+  // tells us nothing. Worse, it was actively harmful: if the observer ever
+  // reported false (it fires once on observe, and Safari reports a fixed
+  // element as non-intersecting while a scroll/refresh is in flight),
+  // `frameloop` flipped to "never" and the R3F canvas FROZE on its last frame
+  // — the field looked correct on load and then died as soon as you scrolled
+  // back up, which is exactly the reported bug on /work and /play.
+  //
+  // Instead pause only when the TAB is hidden, which is the case that actually
+  // wastes battery. The field is the page's atmosphere for its entire scroll.
   useEffect(() => {
-    if (!enabled || !wrap.current) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setVisible(entry.isIntersecting),
-      { rootMargin: "120px" },
-    );
-    io.observe(wrap.current);
-    return () => io.disconnect();
+    if (!enabled) return;
+    const onVis = () => setVisible(!document.hidden);
+    onVis();
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [enabled]);
 
   return (

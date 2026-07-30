@@ -17,8 +17,12 @@ export type NavItem = { label: string; href: string };
 // Home-page section anchors for now — standalone pages replace them as they
 // are built (Me → /about). (Figma 25:144 nav: Work Play Me Resume Contact)
 export const DEFAULT_NAV: NavItem[] = [
-  { label: "Work", href: "/#work" },
-  { label: "Play", href: "/#play" },
+  // Work + Play are REAL PAGES now. They used to be `/#work` / `/#play`
+  // in-page anchors — `#work` glided into the home hero's pinned works chapter
+  // and `#play` resolved to nothing at all. Both indexes exist, so the nav
+  // should go to them.
+  { label: "Work", href: "/work" },
+  { label: "Play", href: "/play" },
   { label: "Me", href: "/about" },
   { label: "Resume", href: "/#resume" },
   { label: "Contact", href: "/#contact" },

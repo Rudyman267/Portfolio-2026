@@ -36,7 +36,7 @@ const EXPERIMENTS: Experiment[] = [
   {
     title: "The Other Hand",
     blurb:
-      "A spiritual digital experience about consciousness searching for meaning and direction — the invisible guiding hand. Creation only happens when something pushes an idea, because entropy is always pulling the other way. No score, no win state. Vibe-coded, playable here in the browser.",
+      "A spiritual digital experience about consciousness searching for meaning and direction — the invisible guiding hand. Creation only happens when something pushes an idea, because entropy is always pulling the other way. Hold the sync and the shape and sound evolve, particles drawing together into a black-hole galaxy. Vibe-coded, playable here in the browser.",
     meta: ["Playable", "React · Web Audio", "2026"],
     href: "/play/the-other-hand" as Route,
     thumb: "otherHand",

@@ -47,6 +47,7 @@ export function OtherHandGame() {
   const loopRef = useRef<number>(0);
   const gameRef = useRef<ConnectionState | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const discRef = useRef<HTMLDivElement>(null);
 
   // Boot the engine ONLY once the player has pressed start. Mounting it behind
   // the intro would run the rAF loop (and the audio graph) while nobody is
@@ -82,6 +83,32 @@ export function OtherHandGame() {
     gameRef.current?.setVolume(volume / 100);
   }, [volume]);
 
+  // Feed the disc's REAL viewport geometry to the input controller. The engine
+  // originally assumed a fixed 360px disc at the window centre; here it is
+  // responsive and sits above the caption + volume bar, so on a phone the hit
+  // zone would otherwise be nowhere near the disc. Re-measured on resize and
+  // on scroll, since the rect is viewport-relative.
+  useEffect(() => {
+    if (phase !== "playing") return;
+    const measure = () => {
+      const el = discRef.current;
+      const game = gameRef.current;
+      if (!el || !game) return;
+      const r = el.getBoundingClientRect();
+      game.setInputBounds(r.left + r.width / 2, r.top + r.height / 2, r.width / 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (discRef.current) ro.observe(discRef.current);
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [phase]);
+
   // keep our button state in step with the real fullscreen state (Esc, etc.)
   useEffect(() => {
     const sync = () => setFullscreen(!!document.fullscreenElement);
@@ -111,8 +138,15 @@ export function OtherHandGame() {
         <IntroCard onStart={() => setPhase("playing")} />
       ) : (
         <>
-          {/* the device — a black disc the presence lives inside */}
-          <div className="relative flex h-[min(360px,74vw)] w-[min(360px,74vw)] cursor-crosshair items-center justify-center overflow-hidden rounded-full border-4 border-[#1a1a1a] bg-black shadow-[0_0_50px_rgba(20,20,20,0.5)]">
+          {/* the device — a black disc the presence lives inside.
+              touchAction:none is required: without it a drag inside the disc
+              scrolls the page instead of reaching the sim, and iOS also fires
+              pointercancel mid-gesture. */}
+          <div
+            ref={discRef}
+            style={{ touchAction: "none" }}
+            className="relative flex h-[min(360px,74vw)] w-[min(360px,74vw)] cursor-crosshair items-center justify-center overflow-hidden rounded-full border-4 border-[#1a1a1a] bg-black shadow-[0_0_50px_rgba(20,20,20,0.5)]"
+          >
             {simState && <Visualizer simState={simState} />}
 
             <div
@@ -134,7 +168,7 @@ export function OtherHandGame() {
           </div>
 
           <p className="px-6 text-center text-[12px] tracking-[0.18em] text-white/25">
-            MOVE YOUR POINTER INSIDE THE DISC — OR CONNECT A GAMEPAD
+            DRAG INSIDE THE DISC — MOUSE, FINGER, OR A GAMEPAD STICK
           </p>
 
           {/* volume + fullscreen */}
@@ -213,8 +247,9 @@ function IntroCard({ onStart }: { onStart: () => void }) {
       </p>
       <p className="mt-4 text-[15px] leading-relaxed text-white/60">
         Entropy always pulls toward dissolution. Nothing is made unless
-        something pushes. Stop pushing and it scatters; stay with it and it
-        holds a shape.
+        something pushes. Hold the sync long enough and the shape and the sound
+        begin to evolve — scattered particles drawing together into something
+        with a gravity of its own.
       </p>
 
       {/* How to play — plain and short. The piece has no score and no fail
@@ -226,10 +261,10 @@ function IntroCard({ onStart }: { onStart: () => void }) {
         </p>
         <ul className="mt-4 space-y-2.5">
           {[
-            ["Move", "Drag your pointer inside the disc. A gamepad stick works too — that is what it was built for."],
-            ["Push", "Keep moving to hold a shape. Go still and entropy takes it back."],
+            ["Move", "Press and drag inside the disc — with a finger on touch, or the mouse. A gamepad stick works too; that is what it was built for."],
+            ["Hold", "Stay in sync to hold a shape. Break it and entropy takes it back."],
             ["Listen", "Sound is half the piece. Use the volume slider below the disc."],
-            ["Stay", "There is no score and no end. It responds to how long you remain."],
+            ["Evolve", "The longer you sustain it, the further the shape and the sound go. There is somewhere to reach."],
           ].map(([k, v]) => (
             <li key={k} className="flex gap-3 text-[13px] leading-relaxed">
               <span className="w-[52px] shrink-0 pt-px text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
