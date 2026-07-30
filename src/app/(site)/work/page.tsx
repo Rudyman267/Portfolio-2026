@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
-import { sanityFetch } from "@/sanity/live";
-import { SITE_SETTINGS_QUERY } from "@/sanity/queries";
-import { ContactCTA } from "@/components/sections/ContactCTA";
 import { WorkShowcase } from "@/components/sections/WorkShowcase";
 import { PageHeading } from "@/components/sections/PageHeading";
 // client boundary — `ssr:false` dynamic imports can't live in a Server Component
@@ -14,11 +11,11 @@ export const metadata: Metadata = {
   description: "Selected case studies — process, decisions, and outcomes.",
 };
 
-export default async function WorkPage() {
-  const { data: settings } = await sanityFetch({
-    query: SITE_SETTINGS_QUERY,
-    tags: ["siteSettings"],
-  });
+export default function WorkPage() {
+  // NOTE: no `sanityFetch` here any more. The ContactCTA was the only consumer
+  // of siteSettings on this page and it has been removed at the user's request
+  // (the footer already carries the contact affordance), so the page is fully
+  // static — nothing to await.
 
   // Only the studies that actually exist get a card. The placeholder slugs
   // (nightshift/atlas/ember) 404, so they're filtered out rather than shown as
@@ -57,10 +54,6 @@ export default async function WorkPage() {
             <WorkShowcase projects={projects} />
           </div>
         </section>
-      </div>
-
-      <div className="relative z-[1]">
-        <ContactCTA email={settings?.email} resumeUrl={settings?.resumeUrl} />
       </div>
     </div>
   );
