@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { HeroCanvas } from "@/components/hero3d/HeroCanvas";
 import { heroScroll } from "@/components/hero3d/heroScroll";
 import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
-import { LOADER_DONE_EVENT } from "@/components/motion/Loader";
+import { LOADER_DONE_EVENT, loaderAlreadyDone } from "@/components/motion/Loader";
 import {
   WorksOverlay,
   addWorksBeats,
@@ -209,10 +209,79 @@ export function Hero() {
 
   useGSAP(
     () => {
+      // ── ?herodebug — ON-SCREEN READOUT ───────────────────────────────────
+      // Rebuilt because this bug class (hero paints, text does not) has never
+      // once been solved from local repro: the headline is CLIPPED, not faded,
+      // so every DOM-level check reports it healthy while the screen is empty.
+      // Add `?herodebug` to the URL to get a live panel showing exactly which
+      // reveal path ran and where the text actually is.
+      let dbg: HTMLElement | null = null;
+      let dbgTimer = 0;
+      if (typeof window !== "undefined" && /[?&]herodebug/.test(location.search)) {
+        dbg = document.createElement("div");
+        dbg.style.cssText =
+          "position:fixed;left:8px;bottom:8px;z-index:99999;font:11px/1.45 ui-monospace,monospace;" +
+          "background:rgba(0,0,0,.88);color:#0f0;padding:8px 10px;border:1px solid #0f0;" +
+          "border-radius:6px;white-space:pre;pointer-events:none;max-width:92vw";
+        document.body.appendChild(dbg);
+        const paint = () => {
+          const root = ref.current;
+          const h1 = document.querySelector("h1");
+          const intro = h1?.querySelector("[data-intro]") as HTMLElement | null;
+          const readY = (el: HTMLElement | null) => {
+            if (!el) return "n/a";
+            const m = getComputedStyle(el).transform.match(/matrix\(([^)]+)\)/);
+            return m ? parseFloat(m[1].split(",")[5]).toFixed(0) : "0";
+          };
+          const r = intro?.getBoundingClientRect();
+          const par = intro?.parentElement?.getBoundingClientRect();
+          dbg!.textContent =
+            "HERO DEBUG\n" +
+            "reduced-motion : " + window.matchMedia("(prefers-reduced-motion: reduce)").matches + "\n" +
+            "mm block ran   : " + (root?.getAttribute("data-mm") ?? "NO") + "\n" +
+            "revealed       : " + (root?.getAttribute("data-revealed") ?? "NO") + "\n" +
+            "loaderDone     : " + loaderAlreadyDone() + "\n" +
+            "is-loading     : " + document.body.classList.contains("is-loading") + "\n" +
+            "loader in DOM  : " + !!document.querySelector('[aria-label="Site intro"]') + "\n" +
+            "intro translateY: " + readY(intro) + "px  (0 = visible, ~126 = CLIPPED)\n" +
+            "intro top/par top: " + (r ? r.top.toFixed(0) : "?") + " / " + (par ? par.top.toFixed(0) : "?") + "\n" +
+            "h1 opacity     : " + (h1 ? getComputedStyle(h1).opacity : "?") + "\n" +
+            "phrase display : " + [...document.querySelectorAll("[data-phrase]")]
+              .map((p) => getComputedStyle(p as HTMLElement).display).join(",") + "\n" +
+            // WHO IS ON TOP? Everything above can read perfectly healthy while
+            // another layer paints over the text — hit-test the headline itself.
+            (() => {
+              if (!r) return "hitTest        : (no rect)";
+              const cx = Math.round(r.left + r.width / 2);
+              const cy = Math.round(r.top + r.height / 2);
+              const stack = (document.elementsFromPoint(cx, cy) || []).slice(0, 4)
+                .map((el) => {
+                  const c = getComputedStyle(el as HTMLElement);
+                  return el.tagName.toLowerCase() +
+                    (el.className ? "." + String(el.className).trim().split(/\s+/)[0] : "") +
+                    "[z" + c.zIndex + " op" + c.opacity + "]";
+                });
+              return "hitTest@" + cx + "," + cy + " : " + stack.join("\n                 < ");
+            })() + "\n" +
+            "scrollY        : " + Math.round(window.scrollY) +
+            "   pinned: " + (document.querySelector(".pin-spacer") ? "yes" : "no");
+        };
+        paint();
+        dbgTimer = window.setInterval(paint, 250);
+      }
+
       const mm = gsap.matchMedia();
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         const root = ref.current;
         if (!root) return;
+        // proves THIS callback actually ran (vs being skipped by the query)
+        // COUNT the runs, don't just flag one — this callback re-running is the
+        // root of the "only the first text appears" bug (see the yPercent note
+        // in the scroll-flow section below).
+        root.setAttribute(
+          "data-mm",
+          String((Number(root.getAttribute("data-mm")) || 0) + 1),
+        );
 
         const phrases = gsap.utils.toArray<HTMLElement>(
           root.querySelectorAll("[data-phrase]"),
@@ -227,8 +296,34 @@ export function Hero() {
         // Animates the [data-intro] layer ONLY — [data-line] belongs to the
         // scroll scrub below. Keeping the owners separate is what prevents the
         // "both phrases overlapped" bug.
-        gsap.set(introsOf(0), { yPercent: 120 });
-        if (items.length) gsap.set(items, { opacity: 0, y: 18 });
+        // ⚠️ ONLY HIDE THE HEADLINE IF AN INTRO IS ACTUALLY STILL COMING.
+        //
+        // `yPercent: 120` pushes the text out of its `overflow-hidden` parent —
+        // it is CLIPPED, not faded, so while parked it is completely invisible
+        // while `<h1>` still reports `opacity: 1; visibility: visible`. (That is
+        // why DOM-level checks kept "passing" on a hero that rendered no text.)
+        // Only `reveal()` brings it back, so hiding it when no reveal is going
+        // to run leaves the shader painting over an empty stage.
+        //
+        // The hand-off can ALREADY have happened by the time this effect runs —
+        // routine in nav mode, where the curtain is a brief pan flip rather than
+        // a counter hold. In that case there is nothing left to sync to, so
+        // start in the FINAL state instead of hiding and hoping something
+        // un-hides us. Measured before this guard, arriving home from the nav:
+        // `h1IntroYs: [126,126,126]` with `revealed: null` for ~3s.
+        const introPending = !loaderAlreadyDone();
+        if (introPending) {
+          // clearProps first — same idempotency rule as the phrase park below:
+          // yPercent compounds on a re-run, and a double-parked headline can
+          // never be pulled back to 0 by the reveal.
+          gsap.set(introsOf(0), { clearProps: "transform" });
+          gsap.set(introsOf(0), { yPercent: 120 });
+          if (items.length) gsap.set(items, { opacity: 0, y: 18 });
+        } else {
+          gsap.set(introsOf(0), { yPercent: 0 });
+          if (items.length) gsap.set(items, { opacity: 1, y: 0 });
+          root.setAttribute("data-revealed", "1");
+        }
 
         const reveal = () => {
           // marker for the ?herodebug probe: proves reveal() actually ran.
@@ -266,7 +361,10 @@ export function Hero() {
         //   3. A hard timeout ceiling as the last resort.
         //   4. Cleanup FORCE-SHOWS the elements — if we tear down before the
         //      reveal ran, they must never be left invisible.
-        let revealed = false;
+        // Already in the final state (see `introPending` above) → the entrance
+        // has nothing to play, so mark it spent rather than re-animating text
+        // that is already on screen.
+        let revealed = !introPending;
         const forceShow = () => {
           // snap to the visible state without animating (last-resort recovery)
           gsap.set(introsOf(0), { yPercent: 0, clearProps: "opacity,visibility" });
@@ -280,14 +378,27 @@ export function Hero() {
           reveal();
         };
 
-        // (2) poll: the moment the loader clears is-loading, reveal.
+        // (2) poll: reveal as soon as the intro has handed off.
+        // ⚠️ TEST THE LATCH FIRST, not just `is-loading`. The Loader re-adds
+        // `is-loading` DURING RENDER when it mounts late, so this poll used to
+        // watch it go false -> true -> false and could latch the wrong edge. The
+        // latch is monotonic (never un-sets) so it cannot do that. Measured
+        // failure without it, on a nav-home load: the headline sat at
+        // `yPercent: 120` — clipped, invisible — with `revealed: null` for ~3s.
         const revealPoll = window.setInterval(() => {
-          if (!document.body.classList.contains("is-loading")) revealOnce();
+          if (loaderAlreadyDone() || !document.body.classList.contains("is-loading")) {
+            revealOnce();
+          }
         }, 120);
         // (3) hard ceiling: reveal no matter what within 2.5s of mount.
         const revealCeiling = window.setTimeout(revealOnce, 2500);
 
-        if (!document.body.classList.contains("is-loading")) {
+        // ⚠️ `loaderAlreadyDone()` closes the RACE THIS COMPONENT CANNOT WIN.
+        // LOADER_DONE_EVENT is one-shot and we subscribe from inside useGSAP —
+        // if the loader handed off before this effect ran (routine in nav mode,
+        // where the curtain is a brief pan flip) the event is already gone and
+        // the headline would stay parked off-screen forever.
+        if (loaderAlreadyDone() || !document.body.classList.contains("is-loading")) {
           // (1) loader already finished (event long gone) OR client-side nav —
           // reveal on a deferred frame so it doesn't collide with the
           // SmoothScrollProvider's queued ScrollTrigger.refresh (that refresh's
@@ -386,9 +497,28 @@ export function Hero() {
         // --- 2. scroll flow: pin + cycle the phrases ------------------------
         // Overlay phrases start hidden (display:none for reduced-motion safety);
         // reveal them for the scrub and park their lines below the mask.
+        // ⚠️⚠️ THIS PARK MUST BE IDEMPOTENT — IT IS THE "ONLY THE FIRST TEXT
+        // APPEARS" BUG.
+        //
+        // `gsap.set(el, { yPercent: 120 })` is NOT absolute in practice here:
+        // GSAP resolves yPercent against the element's own height and ADDS it to
+        // whatever transform the element already carries. This callback re-runs
+        // (matchMedia re-evaluates on resize, and the Loader remounting on a nav
+        // load triggers it too — PROJECT_LOG §6), so a second run parked the
+        // lines at 228px instead of 114px. The scrub only ever animates them
+        // back to yPercent 0, which now lands 114px SHORT — so phrases 2 and 3
+        // stayed masked below their `overflow-hidden` line boxes at every scroll
+        // position, while phrase 1 (parked by a different, guarded block) was
+        // fine. Measured on a nav load: lineY 0/228/228 at rest, and 0/76 at the
+        // end of the journey instead of -114/-38.
+        //
+        // `clearProps` first makes the park absolute: whatever a previous run
+        // left behind is wiped, so N runs land in exactly the same place as one.
         phrases.slice(1).forEach((p) => {
           gsap.set(p, { display: "block" });
-          gsap.set(p.querySelectorAll("[data-line]"), { yPercent: 120 });
+          const lines = p.querySelectorAll("[data-line]");
+          gsap.set(lines, { clearProps: "transform" });
+          gsap.set(lines, { yPercent: 120 });
         });
 
         // The timeline is built FIRST (phrases + works chapter), THEN pinned —
@@ -604,14 +734,25 @@ export function Hero() {
           window.clearTimeout(revealCeiling);
           cancelAnimationFrame(revealRaf1);
           cancelAnimationFrame(revealRaf2);
-          // if we tear down before the reveal ran, DON'T leave the headline +
-          // Portfolio mark stranded invisible (the iOS failure mode) — snap them
-          // visible. A fresh mount will re-hide + re-reveal cleanly.
-          if (!revealed) forceShow();
+          // ⚠️ ALWAYS force-show on teardown — do NOT gate this on `revealed`.
+          // `revealed` is now pre-set to true when the loader had already handed
+          // off (see `introPending`), so gating here meant a matchMedia re-run
+          // could tear down WITHOUT restoring, and the fresh run would re-hide
+          // the text. `matchMedia` callbacks re-run whenever the query
+          // re-evaluates (PROJECT_LOG §6) — a resize is enough. forceShow() is
+          // an idempotent snap to the visible state, so running it
+          // unconditionally is always safe and never leaves text stranded.
+          forceShow();
           gsap.ticker.remove(tick);
           curveCleanups.forEach((fn) => fn());
         };
       });
+
+      // tear down the ?herodebug panel with the effect
+      return () => {
+        if (dbgTimer) window.clearInterval(dbgTimer);
+        dbg?.remove();
+      };
     },
     { scope: ref },
   );

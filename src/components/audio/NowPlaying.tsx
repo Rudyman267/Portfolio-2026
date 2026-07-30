@@ -82,26 +82,38 @@ export function NowPlaying({
               playing ? "np-bar" : ""
             }`}
             style={{
-              // Off: every bar collapses to the same 2px baseline dash, which
-              // is what makes the slash read as cancelling a flat signal.
-              height: playing ? `${Math.round(b.h * 18)}px` : "2px",
-              opacity: playing ? 0.85 : 0.4,
+              // ⚠️ OFF = THE SHAPE FREEZES, IT DOES NOT COLLAPSE.
+              // The bars used to drop to a 2px dash when muted, which turned the
+              // waveform into a row of dots with a line over it — the silhouette
+              // that identifies the control vanished, so the muted state read as
+              // "broken" rather than "paused". Now the bars KEEP their heights
+              // and simply stop animating, and the slash is drawn across that
+              // intact shape: a paused waveform, which is what muting actually
+              // is. Dimming carries the state change instead of the geometry.
+              height: `${Math.round(b.h * 18)}px`,
+              opacity: playing ? 0.85 : 0.45,
               animationDelay: b.delay,
               animationDuration: b.dur,
             }}
           />
         ))}
 
-        {/* the slash — only when muted. The whole transform is written in ONE
-            inline string (rotate AND the scale that hides it): mixing a Tailwind
-            `scale-x-0` with an inline `transform` means the inline value wins
-            outright and the class silently does nothing, so the slash would
-            never hide. */}
+        {/* THE SLASH — only when muted, drawn ACROSS the frozen bars (see the
+            bar comment above: the shape stays, this cancels it).
+            It carries a thin dark outline so it stays legible where it crosses
+            a bar — without it the stroke and the bars are the same colour and
+            the line disappears into them exactly where it needs to read most.
+
+            The whole transform is written in ONE inline string (rotate AND the
+            scale that hides it): mixing a Tailwind `scale-x-0` with an inline
+            `transform` means the inline value wins outright and the class
+            silently does nothing, so the slash would never hide. */}
         <span
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[1.5px] w-[26px] origin-center rounded-full bg-current transition-all duration-300"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[2px] w-[26px] origin-center rounded-full bg-current transition-all duration-300"
           style={{
             transform: `translate(-50%,-50%) rotate(-45deg) scaleX(${playing ? 0 : 1})`,
-            opacity: playing ? 0 : 0.75,
+            opacity: playing ? 0 : 1,
+            boxShadow: playing ? "none" : "0 0 0 1.5px rgb(0 0 0 / 0.55)",
           }}
         />
       </span>

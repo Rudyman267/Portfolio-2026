@@ -4,11 +4,46 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 import { whenHeroVideoReady } from "@/components/motion/heroReady";
-import { NAV_FLAG } from "@/components/motion/routeTransitionBridge";
+import { isNavLoad } from "@/components/motion/routeTransitionBridge";
 import { useSiteAudio } from "@/components/audio/AudioProvider";
 
 /** Fired on window when the intro finishes so the hero can begin its reveal. */
 export const LOADER_DONE_EVENT = "loader:done";
+
+/**
+ * ⚠️ A LATCH TO GO WITH THE EVENT — the event ALONE is not safe.
+ *
+ * `LOADER_DONE_EVENT` is one-shot. The Hero subscribes to it from inside
+ * `useGSAP`, so if the loader hands off BEFORE that effect runs, the event is
+ * gone forever and the headline stays parked at `yPercent: 120` (clipped by its
+ * `overflow-hidden` parent) — the hero paints its shader with NO TEXT.
+ *
+ * That race is rare on a cold load (the counter holds the intro for ~2s) but
+ * routine in NAV MODE, where the curtain is a brief pan flip. Measured on a
+ * nav-home load: `revealed: null` with `h1IntroYs: [126,126,126]` for ~3s.
+ *
+ * `is-loading` could not be used as the fallback signal because the Loader
+ * re-adds it DURING RENDER after a late mount, so the Hero observed it going
+ * false -> true -> false and its poll latched onto the wrong edge.
+ *
+ * So the hand-off is also recorded as a plain boolean on `window`, set at the
+ * same moment the event fires. It cannot be missed by a late subscriber and it
+ * cannot flap. Read it with `loaderAlreadyDone()`.
+ */
+const DONE_LATCH = "__loaderDone";
+
+/** True once the intro has handed off in THIS page load. Safe to call anytime. */
+export function loaderAlreadyDone(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as unknown as Record<string, unknown>)[DONE_LATCH] === true;
+}
+
+/** Set the latch and fire the event — always use this, never dispatch directly. */
+export function markLoaderDone() {
+  if (typeof window === "undefined") return;
+  (window as unknown as Record<string, unknown>)[DONE_LATCH] = true;
+  window.dispatchEvent(new Event(LOADER_DONE_EVENT));
+}
 
 /**
  * Frying-pan intro — this IS the loader (Figma 124:80).
@@ -234,19 +269,34 @@ export function Loader() {
   // gate), a brief flip, then it lifts itself. A cold first visit (no flag)
   // keeps the full click-to-enter experience. Read once + clear immediately so
   // a subsequent manual refresh is treated as a cold visit again.
+  // ⚠️ Read through `isNavLoad()`, NOT sessionStorage directly. The flag is
+  // one-shot and this component can mount more than once per page load, so a
+  // local ref guard is not enough — the second mount found the flag already
+  // consumed and fell back to "cold visit", which is what put the sound gate
+  // over the home page when arriving via the Rudyman link. `isNavLoad` latches
+  // the answer on `window` for the life of the document. Full account there.
   const navModeRef = useRef<boolean | null>(null);
   if (navModeRef.current === null) {
-    let flagged = false;
-    try {
-      flagged = typeof window !== "undefined" &&
-        sessionStorage.getItem(NAV_FLAG) === "1";
-      if (flagged) sessionStorage.removeItem(NAV_FLAG);
-    } catch {
-      flagged = false;
-    }
-    navModeRef.current = flagged;
+    navModeRef.current = isNavLoad();
   }
-  const isNav = navModeRef.current;
+  /**
+   * ⚠️ THE SOUND GATE IS A **HOME-PAGE-ONLY** MOMENT.
+   *
+   * `isNav` alone was not enough. It is only true when the load came from an
+   * in-app nav CLICK (hardNavigate sets the flag), so any OTHER way of landing
+   * on an inner route — typing /play in the address bar, a bookmark, an external
+   * link, a shared URL, or a plain refresh of that route — had no flag and fell
+   * through to the full cold-visit path. The reader was then asked to "Enter
+   * with sound" on /play, /work, /about… which is not an entrance at all.
+   *
+   * The gate exists to (a) introduce the site and (b) harvest the user gesture
+   * browsers require before audio can play. Both only make sense at the front
+   * door. So every non-home route now takes the nav path: pan flip, no counter,
+   * no choice, lifts itself.
+   *
+   * Home still shows it on every reload — the user explicitly wants that.
+   */
+  const isNav = navModeRef.current || !isHome;
 
   // ⚠️ LOCK DURING RENDER, NOT IN AN EFFECT.
   // `is-loading` used to be added inside useGSAP, which runs AFTER React has
@@ -261,6 +311,18 @@ export function Loader() {
   // paint that includes this component, so the pan is the FIRST thing seen.
   if (typeof document !== "undefined" && !done) {
     document.body.classList.add("is-loading");
+    // Marks "the SOUND GATE is on screen" — i.e. this load actually renders the
+    // two choice buttons. AudioProvider reads it to decide whether a resumed
+    // track should start ducked.
+    //
+    // ⚠️ It must NOT be `is-loading`: that is also set in nav mode (the pan-flip
+    // curtain on every page change), where there are no buttons and so nothing
+    // would ever unduck — which started the music silent on every navigation.
+    // Set DURING RENDER for the same reason as the scroll lock: the provider's
+    // resume effect runs before any effect of ours could add it.
+    if (!isNav) {
+      document.documentElement.setAttribute("data-sound-gate", "");
+    }
   }
 
   const finish = () => {
@@ -269,7 +331,7 @@ export function Loader() {
     // reset (the pin spacers grow the page late), so re-assert top at the
     // exact moment the overlay lifts — nothing can have scrolled since.
     window.scrollTo(0, 0);
-    window.dispatchEvent(new Event(LOADER_DONE_EVENT));
+    markLoaderDone(); // latch + event — see markLoaderDone's note
     document.body.classList.remove("is-loading");
     ScrollTrigger.refresh();
     setDone(true);
@@ -580,9 +642,21 @@ export function Loader() {
         /* ignore */
       }
       window.scrollTo(0, 0); // same frame-zero guarantee as finish()
-      window.dispatchEvent(new Event(LOADER_DONE_EVENT));
+      markLoaderDone(); // latch + event — see markLoaderDone's note
       document.body.classList.remove("is-loading");
       ScrollTrigger.refresh();
+
+      // ⚠️ STRUCTURAL GUARANTEE, not a tuned delay: once the hand-off has run,
+      // the page underneath is live and correct, so the overlay has no reason to
+      // exist. In NAV MODE there is no hole-punch reveal dissolving it, so
+      // without this it lingers until the `done` timer — painting black over a
+      // fully-revealed hero (measured: ~2.9s of blank screen).
+      // Cold visits keep their reveal: the mask is already eating the overlay,
+      // and unmounting early would cut that animation short.
+      if (isNav) {
+        const t = window.setTimeout(() => setDone(true), 260);
+        exitTimersRef.current.push(t);
+      }
     };
 
     // Reduced motion: the tap still WORKS, it just doesn't animate out — no
@@ -593,6 +667,37 @@ export function Loader() {
     ) {
       handOff();
       setDone(true);
+      return;
+    }
+
+    // ── NAV MODE: SHORT EXIT, BEFORE ANY MASK WORK ───────────────────────────
+    // Placed ahead of the hole-punch setup on purpose — nav mode must not touch
+    // the mask at all. The mask exists to dissolve the overlay for the cold
+    // visit's reveal; here the overlay simply fades and unmounts.
+    //
+    // WHY THIS EXISTS (the reported "hero loads with no text"): the full exit
+    // below runs ~1.5s of pan choreography AFTER the hand-off has already made
+    // the page underneath live. During that window everything reports healthy —
+    // revealed:1, loaderDone:true, text at yPercent 0 — while the black overlay
+    // is still painted on top. Measured 2.9s of blank screen on a nav-home load;
+    // shortening the timers alone only got it to 1.5s, because the ANIMATION was
+    // the length. A navigation does not need the curtain call, so it doesn't get
+    // one.
+    if (isNav && root.current) {
+      // ⚠️ CSS TRANSITION, NOT A GSAP TWEEN, AND A WALL-CLOCK UNMOUNT.
+      // The hero's WebGL scene boots in this exact window and saturates the main
+      // thread, so `gsap.ticker` stalls — a GSAP `onComplete` here landed ~1.3s
+      // late and the overlay sat over a live page for that whole time (the same
+      // stalled-ticker failure documented for the iOS hand-off in §6).
+      // A CSS transition runs on the compositor and a setTimeout is wall-clock,
+      // so neither can be starved by the busy main thread.
+      handOff(); // page underneath goes live immediately
+      const el = root.current;
+      el.style.transition = "opacity 300ms ease-out";
+      el.style.opacity = "0";
+      el.style.pointerEvents = "none";
+      const t = window.setTimeout(() => setDone(true), 320);
+      exitTimersRef.current.push(t);
       return;
     }
 
@@ -622,12 +727,30 @@ export function Loader() {
     // So: a wall-clock timer, independent of GSAP, guarantees the hand-off.
     // handOff() is idempotent, so whichever fires first wins and the other is
     // a no-op. Same for setDone.
-    const HANDOFF_FAILSAFE_MS = 1400;
+    // ⚠️ THE OVERLAY MUST NEVER OUTLIVE THE HAND-OFF BY LONG.
+    // handOff() clears `is-loading` and tells the hero to reveal, but the
+    // overlay itself only disappears when `setDone(true)` unmounts it. Any gap
+    // between the two is a window where the page is "ready" — hero revealed,
+    // text at yPercent 0, everything reporting healthy — while the BLACK PAN
+    // OVERLAY IS STILL PAINTED ON TOP. That is exactly the reported bug: a
+    // debug readout showing revealed:1 / loaderDone:true over a blank screen.
+    //
+    // Measured on a nav-home load before this fix:
+    //   3742ms openPan · 5173ms hand-off · 8039ms unmount
+    //   -> ~2.9s of correct-but-invisible page.
+    //
+    // The old 1400/2600 pair was tuned for the COLD visit, where the gap is
+    // covered by the 1.15s hole-punch reveal that dissolves the overlay as it
+    // grows. NAV MODE HAS NO SUCH REVEAL — the curtain just needs to leave — so
+    // it gets a much tighter pair, and the unmount is pinned close behind the
+    // hand-off in both modes.
+    const HANDOFF_FAILSAFE_MS = isNav ? 420 : 1400;
+    const DONE_MS = isNav ? 700 : 2600;
     const handoffTimer = window.setTimeout(handOff, HANDOFF_FAILSAFE_MS);
     const doneTimer = window.setTimeout(() => {
       handOff(); // belt and braces — never unmount without handing off
       setDone(true);
-    }, 2600);
+    }, DONE_MS);
     exitTimersRef.current.push(handoffTimer, doneTimer);
 
     // Take over from the loop wherever it is — snap pan & egg back to rest
@@ -712,12 +835,20 @@ export function Loader() {
    */
   const enterWithSound = () => {
     if (!armedRef.current) return;
+    // `enable()` starts the track if it wasn't running; `unduck()` restores the
+    // level if it WAS running and the intro had ducked it (home reload with the
+    // preference already "on"). Both are safe to call in either case.
     audio.enable();
+    audio.unduck();
     openPan();
   };
   const enterWithoutSound = () => {
     if (!armedRef.current) return;
+    // disable() pauses and records the preference. Restore the element's volume
+    // too, so a later un-mute from the widget doesn't come back silent — the
+    // duck lowered the ELEMENT, and pausing does not undo that.
     audio.disable();
+    audio.unduck();
     openPan();
   };
 
@@ -804,18 +935,47 @@ export function Loader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── DUCK THE MUSIC WHILE THE FRONT DOOR IS OPEN ────────────────────────────
+  // On a HOME reload the track resumes from sessionStorage (AudioProvider), so
+  // without this the reader is asked to choose sound while sound is already
+  // audible behind the intro. Fade it out for as long as the choice is on
+  // screen; `enterWithSound` / `enterWithoutSound` both unduck.
+  //
+  // Only the states that actually SHOW the choice duck: nav mode is a curtain
+  // over a page change (no buttons, and ducking there would chop the track on
+  // every navigation — the exact thing we just fixed).
+  // ⚠️ The PRIMARY duck for a home reload happens in AudioProvider's resume
+  // path, which starts the element at volume 0 when `body.is-loading` is set.
+  // It has to live there because CHILD effects run before PARENT ones: this
+  // effect fires before the provider has created the <audio> element, so a
+  // duck() from here alone hit a null ref and did nothing (measured: vol 0.5
+  // with the gate up). This call is the belt-and-braces for the other order —
+  // audio that somehow starts WHILE the intro is still on screen — and is a
+  // no-op when the element is already silent.
+  useEffect(() => {
+    if (isNav || done) return;
+    audio.duck();
+    // If the loader is torn down by any path that skipped the two buttons
+    // (reduced-motion auto-dismiss, an unmount mid-intro), the level must not
+    // be left at zero.
+    return () => audio.unduck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNav, done]);
+
   // Last-resort guarantee: once the intro is gone, the scroll lock MUST be
   // gone with it. If any path above unmounted the loader without clearing the
   // class, clear it here — an orphaned `is-loading` freezes the entire site.
   useEffect(() => {
     if (!done) return;
     document.body.classList.remove("is-loading");
+    document.documentElement.removeAttribute("data-sound-gate");
   }, [done]);
 
   useEffect(() => {
     // and if the component is torn down for ANY reason mid-intro, unlock.
     return () => {
       document.body.classList.remove("is-loading");
+      document.documentElement.removeAttribute("data-sound-gate");
       exitTimersRef.current.forEach((t) => window.clearTimeout(t));
       exitTimersRef.current = [];
     };
@@ -969,8 +1129,30 @@ export function Loader() {
           className="absolute left-1/2 top-full flex -translate-x-1/2 flex-col items-center"
           aria-hidden={false}
         >
-        {ready ? (
-          <span className="pan__label loader-choice mt-10 flex flex-col items-center">
+        {/* ⚠️ `!isNav` GUARD — NAV MODE SHOWS THE PAN FLIP AND NOTHING ELSE.
+            An in-app navigation is a curtain over a real page load, not an
+            entry point: the reader already chose their sound preference on the
+            cold visit, so asking again mid-navigation is wrong.
+            The nav branch does `gsap.set(".pan__label", {opacity: 0})`, but its
+            `onComplete` calls `markReady()` — which flips `ready` and makes
+            React mount the choice block as a BRAND-NEW element that never
+            received that opacity:0. That is why the buttons were flashing up
+            during page transitions. Not rendering them at all in nav mode is the
+            only reliable fix; hiding them after the fact always races the swap. */}
+        {/* ⚠️ VERTICAL SPACING BELOW IS `mt-*` (MARGIN), NEVER A TRANSFORM.
+            GSAP owns `.pan__label`'s `transform` (the entrance `y: 8`, and the
+            exit fade), so any translate there would be silently overwritten —
+            the exact collision documented for `.pan__label` above. Margin is a
+            different property, so layout and animation can coexist.
+
+            The choice block's `mt` sets how far it sits BELOW the pan. It is
+            deliberately large: the pan is the hero of this screen and the
+            buttons sit low, in the lower-middle of the viewport (pill centre
+            ~74% of vh), matching the user's reference. vh-based so it scales
+            with the screen, with px floor/ceiling so it neither collapses on a
+            short window nor runs off a tall one. */}
+        {isNav ? null : ready ? (
+          <span className="pan__label loader-choice mt-[clamp(5.5rem,16vh,11rem)] flex flex-col items-center">
             {/* PRIMARY — white pill. Hover: lifts a touch, and a soft halo
                 breathes out from the edge (see `.loader-pill--ready`) so it
                 invites a click without a shouty transition. */}
@@ -997,12 +1179,14 @@ export function Loader() {
               onClick={enterWithoutSound}
               onTouchEnd={enterWithoutSound}
               style={{ touchAction: "manipulation" }}
-              // Sits WELL below the pill — a big gap is what makes the two read
-              // as a primary choice and a quiet opt-out rather than a stacked
-              // pair of equal buttons (matches the user's reference, where it
-              // sits far down the viewport). vh-based so it scales with the
-              // screen, with a px floor so it never collapses on a short window.
-              className="group/quiet mt-[clamp(3.5rem,13vh,9rem)] inline-flex flex-col items-center whitespace-nowrap text-[14px] font-normal leading-none text-white/40 transition-colors duration-300 hover:text-white/80 focus-visible:outline-none focus-visible:text-white/80"
+              // Sits below the pill — enough separation that the two read as a
+              // primary choice and a quiet opt-out rather than a stacked pair of
+              // equal buttons, but TIGHTER than it once was: the whole choice
+              // block now sits low on the screen as one group, so a huge gap
+              // here pushed the opt-out toward the bottom edge and broke the
+              // pairing. vh-based so it scales with the screen, with a px floor
+              // so it never collapses on a short window.
+              className="group/quiet mt-[clamp(1.75rem,6.5vh,4.5rem)] inline-flex flex-col items-center whitespace-nowrap text-[14px] font-normal leading-none text-white/40 transition-colors duration-300 hover:text-white/80 focus-visible:outline-none focus-visible:text-white/80"
             >
               Enter without sound
               <span
@@ -1021,7 +1205,13 @@ export function Loader() {
             // NO positioning and NO transform here — the wrapper above owns
             // both, because GSAP writes this element's transform (`y: 8` on
             // entrance, and the letter wave targets its children).
-            className="pan__label mt-6 flex text-[clamp(24px,2.6vw,40px)] font-medium leading-none tracking-[-0.01em] text-white"
+            // `mt-*` (margin), NOT a transform — GSAP owns this element's
+            // transform (the entrance `y: 8` and the per-letter wave), so a
+            // translate here would be overwritten. Sits further below the pan
+            // than it used to, so the loading state breathes the same way the
+            // ready state does; it stays well above the buttons' own gap since
+            // "cooking" is a single line where the choice block is a stack.
+            className="pan__label mt-[clamp(2.25rem,6vh,4rem)] flex text-[clamp(24px,2.6vw,40px)] font-medium leading-none tracking-[-0.01em] text-white"
             aria-label="cooking"
             role="text"
           >

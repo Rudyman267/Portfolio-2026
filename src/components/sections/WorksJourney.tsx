@@ -472,6 +472,20 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
 
     // pre-park the text (the beat container is inline-hidden, but it fades in
     // BEFORE these animate — they must not flash during the node's flight)
+    //
+    // ⚠️ `clearProps` FIRST — THIS PARK MUST BE IDEMPOTENT.
+    // `yPercent` resolves against the element's own height and ADDS to whatever
+    // transform is already on the node, so running this twice parks the title at
+    // 240% instead of 120%. The reveal only ever animates back to yPercent 0,
+    // which then lands a full title-height short and the title stays masked —
+    // while `pindex`/`desc`/`tags` (parked with `opacity`, which is absolute and
+    // therefore safe to re-apply) all appear normally. That is the reported
+    // "everything on the card shows except the project title".
+    //
+    // This block re-runs whenever the hero's matchMedia callback re-runs — a
+    // resize, or the Loader remounting on a nav load (PROJECT_LOG §6). Same bug
+    // class as the phrase park in Hero.tsx; fixed the same way.
+    gsap.set(title, { clearProps: "transform" });
     gsap.set(title, { yPercent: 120 });
     gsap.set([pindex, desc, tags], { opacity: 0 });
 

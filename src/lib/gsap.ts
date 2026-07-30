@@ -22,6 +22,15 @@ gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
 // resizes instead (ScrollTrigger's documented mobile guidance).
 ScrollTrigger.config({ ignoreMobileResize: true });
 
+// DEV ONLY: expose the configured instances for debugging from the console or a
+// CDP probe (e.g. checking whether a `gsap.set` park is idempotent, or dumping
+// ScrollTrigger.getAll() when a pin misbehaves). Never ships to production.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  const w = window as unknown as Record<string, unknown>;
+  w.gsap = gsap;
+  w.ScrollTrigger = ScrollTrigger;
+}
+
 // Durations in seconds (CSS tokens are in ms).
 export const duration = {
   fast: 0.18,

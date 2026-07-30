@@ -79,7 +79,16 @@ export function NowPlayingMount() {
       // `hidden sm:block` — DESKTOP ONLY. On a phone the compact waveform lives
       // in the header (always on screen, next to the hamburger), so showing this
       // one too would put two identical controls on a small viewport.
-      className={`pointer-events-none fixed bottom-[clamp(14px,2.5vh,28px)] right-[clamp(14px,2.5vw,36px)] z-[60] hidden sm:block ${
+      // ⚠️ `text-white` IS LOAD-BEARING — without it this widget is INVISIBLE.
+      // NowPlaying paints itself with `bg-current` / currentColor so it can adapt
+      // to the light header and the dark footer alike. But this mount is a
+      // `fixed` layer that is NOT inside `hero-dark`, so it inherited the LIGHT
+      // theme's `--color-fg` — measured `rgb(23,23,23)` sitting on the page's
+      // `rgb(6,8,12)`, i.e. near-black on near-black. The other three mounts
+      // (header/footer/case-study rail) all sit inside a themed ancestor and
+      // were fine, which is why only this one disappeared.
+      // Same class of bug as the `/work` page needing `hero-dark` (PROJECT_LOG §6).
+      className={`pointer-events-none fixed bottom-[clamp(14px,2.5vh,28px)] right-[clamp(14px,2.5vw,36px)] z-[60] hidden text-white sm:block ${
         visible ? "opacity-100" : "opacity-0"
       }`}
       style={{

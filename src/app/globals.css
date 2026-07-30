@@ -382,7 +382,12 @@ header[data-over-hero] nav a[aria-current="page"] {
   animation-iteration-count: infinite;
   animation-timing-function: ease-in-out;
 }
-/* Reduced motion: the waveform still SHOWS state, it just doesn't dance.
+/* When MUTED the `.np-bar` class is dropped entirely, so the bars simply hold
+   their natural (inline `height`) profile — the waveform's silhouette stays
+   intact and the slash is drawn across it. That is deliberate: collapsing the
+   bars to dots erased the shape that identifies the control. See NowPlaying.tsx.
+
+   Reduced motion: the waveform still SHOWS state, it just doesn't dance.
    Bars hold a static stepped profile — the slash remains the real off signal,
    so no information is lost. */
 @media (prefers-reduced-motion: reduce) {
