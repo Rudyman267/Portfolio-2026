@@ -576,6 +576,38 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         E,
       )
       .to(beat, { autoAlpha: 0, duration: 0.1 }, E + EXIT - 0.1);
+
+    // ⚠️ A BEAT MUST NEVER BE LEFT PART-WAY THROUGH ITS EXIT.
+    // The exit fades `inner` (which holds the title, the window and the copy)
+    // to opacity 0 and then hides the whole beat. Every tween here is
+    // immediateRender:false, so if the playhead lands inside the exit and the
+    // scrub stops updating — which is what happens on iOS, where the beat is
+    // still marked visible while `inner` sits at a partial opacity — the
+    // reader is stranded looking at a ghost: `inner` at ~0.7 with the project
+    // window inside it invisible. The device readout showed exactly that:
+    //     ANCESTORS HIDING IT: !DIV.flex w-full flex-c op=0.70
+    // with drv 0:p=1,m=1 1:p=1,m=1 (two beats finished) and active=1.
+    //
+    // This guard runs every frame from the ticker and forces `inner` to a
+    // clean state based purely on the playhead: fully opaque while the beat
+    // owns the stage, fully hidden once the exit is done. It never fights the
+    // tween mid-exit — it only corrects states the tween should have reached.
+    introGuards.push(() => {
+      const t = tl.time();
+      const cs = getComputedStyle(inner);
+      const op = parseFloat(cs.opacity);
+      // On stage (docked, before the exit begins) → must be fully visible.
+      if (t >= M && t < E && op < 0.99) {
+        gsap.set(inner, { opacity: 1, scale: 1, filter: "blur(0px)" });
+      }
+      // Past the exit → the beat must be gone, not a lingering ghost.
+      else if (t > E + EXIT) {
+        const bcs = getComputedStyle(beat);
+        if (bcs.visibility !== "hidden" || parseFloat(bcs.opacity) > 0.01) {
+          gsap.set(beat, { autoAlpha: 0 });
+        }
+      }
+    });
   });
 
   return { worksStart, drivers, snapSpans, introGuards };
