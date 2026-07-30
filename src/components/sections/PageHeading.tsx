@@ -49,18 +49,32 @@ export function PageHeading({
         }
 
         // departure — lifts + fades as the reader scrolls into the cards, so
-        // the title never fights the first plate for attention
-        gsap.to([word, sub].filter(Boolean), {
-          yPercent: -38,
-          autoAlpha: 0,
-          ease: "none",
-          scrollTrigger: {
-            trigger: root.current,
-            start: "top top",
-            end: "bottom top",
-            scrub: 0.5,
+        // the title never fights the first plate for attention.
+        //
+        // fromTo (not to) + immediateRender:false: a bare `.to()` scrub
+        // implicitly captures "whatever the element's value is right now" as
+        // its start state. `sub`'s entrance overlaps `word`'s at "-=0.55" and
+        // both are still mid-flight (delay: 0.15) when this runs — so word and
+        // sub could each capture a DIFFERENT current yPercent/opacity as their
+        // scrub start, and the two would desync while scrubbing: one back at
+        // full opacity, the other stuck faded. Explicit start values make the
+        // scrub deterministic no matter when the entrance settles.
+        gsap.fromTo(
+          [word, sub].filter(Boolean),
+          { yPercent: 0, autoAlpha: 1 },
+          {
+            yPercent: -38,
+            autoAlpha: 0,
+            ease: "none",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: root.current,
+              start: "top top",
+              end: "bottom top",
+              scrub: 0.5,
+            },
           },
-        });
+        );
       });
     },
     { scope: root },

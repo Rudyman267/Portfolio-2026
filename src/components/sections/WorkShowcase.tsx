@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
+import { gsap, useGSAP, ease } from "@/lib/gsap";
 import type { GalleryProject } from "@/lib/placeholderProjects";
 
 /**
@@ -187,17 +187,28 @@ export function WorkShowcase({ projects }: { projects: GalleryProject[] }) {
             );
           }
         });
-
-        return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+        // NOTE: no manual `ScrollTrigger.getAll().forEach(kill)` cleanup here.
+        // `useGSAP` already auto-reverts everything created in this context —
+        // including its own ScrollTriggers — on cleanup/re-run. A global kill
+        // was reaching outside this component's scope: `gsap.matchMedia()`
+        // callbacks re-run on any media-query re-evaluation (e.g. a resize),
+        // and `.getAll()` returns EVERY ScrollTrigger on the page, including
+        // PageHeading's scrubbed fade-out. Killing that trigger mid-scrub
+        // froze the heading/subtitle at whatever opacity they were passing
+        // through — sometimes fully transparent — which is what showed up as
+        // "the WORK heading disappears and never comes back" after a resize.
       });
     },
     { scope: root },
   );
 
   return (
-    <div ref={root} // Gaps are capped in px as well as vh: on a tall/wide monitor a bare
+    <div
+      ref={root}
+      // Gaps are capped in px as well as vh: on a tall/wide monitor a bare
       // 18vh became ~200px of dead space between plates.
-      className="flex flex-col gap-[clamp(3rem,10vh,7rem)]">
+      className="flex flex-col gap-[clamp(3rem,10vh,7rem)]"
+    >
       {projects.map((p, i) => (
         <ProjectPlate key={p.slug} project={p} index={i} />
       ))}
