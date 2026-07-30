@@ -222,11 +222,138 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 23)
+## 6. Current State (as of Session 24)
 
-**Status (as of Session 23): 🎉 LIVE ON `rudyman.com`, iOS FIXED, AND `/play` IS SHIPPED.**
-Apex serves, `www` 308s, Let's Encrypt cert valid, `misconfigured: false`.
+**Status (as of Session 24): LIVE ON `rudyman.com`. The /work cards got their Figma hover
+transition, the site got BACKGROUND MUSIC with a sound gate on the intro, and The Other Hand's
+mobile layout is fixed.** Prod build clean (**16 routes**), typecheck clean.
 **THE LINK TO SHARE IS `https://rudyman.com`.**
+
+Session 24 shipped three commits to `main`:
+- **`f131f88` — /work cards: GSAP hover reveal** (Figma section `322:130`, frames 1→2→3).
+- **`dabc817` — The Other Hand mobile fixes** (sizing, overlap, invisible particles).
+- **`8b79a9a` — Background music + loader sound gate.**
+See the three subsections directly below for the detail and the traps.
+
+### 🎴 /work CARD HOVER TRANSITION — Session 24 (`f131f88`)
+Rebuilt `WorkShowcase` as a **paused GSAP timeline** played/reversed on enter/leave, from the
+user's Figma storyboard: cover darkens → inner screenshot rises from the frame's bottom edge and
+seats centred at **75.6%** of the frame width (Figma 75.8%) → title lifts and the copy stack
+(kicker / accent eyebrow / build note / FlytBase + duration) staggers up behind it.
+- **Why a timeline, not `group-hover:` CSS:** the reveal is a SEQUENCE, and an interrupted hover
+  has to reverse from wherever it actually is. A paused timeline gives both for free.
+- **MOBILE IS A DIFFERENT LAYOUT.** Gated on `(hover: hover) and (pointer: fine)`, so the desktop
+  timeline is **never built** on touch; the card ships permanently in the end state (title above
+  the plate, darkened cover, smaller UI inside, copy below). Verified a tap changes nothing.
+- **Alignment (the user gave grid lines):** title exactly on the thumbnail's horizontal centreline
+  at rest (**0.0px**), whole title+copy group centred on it while hovered (**0.1px**), title
+  travelling further than the supporting text.
+- ⚠️ **`image-1.webp` IS THE LIR APP SCREENSHOT**, despite the generic name. Using it as the cover
+  put the same picture in the plate AND the reveal, so the rest state already showed what hover was
+  meant to bring in. LIR's plate is now **`cover/lir-plate.webp`**; its inner image is
+  **`cover/lir-ui.webp`**. `image-1.webp` is still used by WorksJourney + the case study — don't
+  delete it.
+- ⚠️ **A hard-coded `yPercent: 100` overshot the inner image's park by ~262px** on a 405px frame
+  (the image is shorter than the frame AND inset 12% from its top), leaving a dead run where the
+  reveal looked stalled. The park distance AND the hover re-centre lift are now **FUNCTIONS**,
+  re-measured on invalidate — card width is `vw`-driven, so a resize changes frame height without
+  changing the media query, `matchMedia` does NOT re-run, and a captured value goes stale. Same
+  staleness class as the works-journey ticker.
+- ⚠️ **Two Tailwind `translate-x-*` classes on one element silently conflict** (both compile to
+  `--tw-translate-x`, the later wins). Write the whole transform inline instead.
+- **Verkos** uses the annotated **car-detection** frame as its inner image (user's call, not a UI
+  shot) and the **LIGHTER** grade of the CCTV/skyline shot as its plate
+  (`cover/verkos-plate.webp`) — the old `verkos-cover-bg.webp` was already near-black so the hover
+  scrim had nothing to darken.
+- **ContactCTA REMOVED from /work** (the footer already carries contact), which left the page fully
+  static → its orphaned `sanityFetch`/`SITE_SETTINGS_QUERY` went with it.
+- `flytbase-logo-light.svg` added: the committed `flytbase-logo.svg` has a `fill="black"` wordmark,
+  invisible on this dark page.
+
+### 🎵 BACKGROUND MUSIC + LOADER SOUND GATE — Session 24 (`8b79a9a`)
+**"Friendship" by wooll**, optional, off unless chosen. Source stays in the gitignored
+`Background music/` (already in `.vercelignore`); the web encodes are `public/audio/` —
+**7 MB → 2.79 MB mp3 + 2.31 MB opus**, cover art stripped, title/artist read from the file's ID3
+tags. **Default volume 0.5**, looping.
+- **`AudioProvider`** (site layout) owns **ONE** `<audio>` element so the loader's choice and the
+  home widget drive the same track. Two tags would double the audio.
+- ⚠️ **`enable()` MUST be called synchronously in the click handler.** Browsers only grant
+  `play()` inside a real user-gesture task; deferring it into a GSAP callback or past the exit
+  animation puts it outside that window and it is rejected silently. A `blocked` flag exists for
+  when a browser refuses anyway, so the UI never lies about a playing track.
+- **Preference is `sessionStorage`, NOT localStorage** — music resuming on a page opened days later
+  is startling. Deliberate; don't "upgrade" it. Auto-pauses on tab hide.
+- **`NowPlaying`** (home page only, bottom-right): animated waveform + title/artist, whole lockup
+  is the button. **The waveform IS the state indicator** — bars moving = on, bars collapsed to a
+  flat line with a slash = off. Bars are **CSS-animated, not GSAP**: a decorative idle loop belongs
+  on the compositor where a stalled main thread can't freeze it (the iOS lesson from §6).
+- **The loader's ready state is now a sound gate.** "click to enter" and its **EB Garamond italic
+  are GONE** from the ready state (the italic still renders "cooking" while loading). The pill and
+  the quiet "Enter without sound" link are Plus Jakarta Sans.
+- **"cooking" is per-letter with a left-to-right bounce** riding the pan's whip-up.
+  ⚠️ It was first anchored to the **CATCH** and measured *completely dead*. The animation was
+  correct; IMPACT is ~2.5s after mount and on a warm load "cooking" is replaced by the buttons in
+  under 2s, so **it literally never ran**. Anchored to `LAUNCH_AT` it lands inside the window every
+  cycle. A dev-only `window.__panToss` handle exists to scrub the toss for exactly this kind of
+  check.
+
+#### ⚠️⚠️ THE INTRO NO LONGER OPENS ITSELF — read before touching Loader.tsx
+The 12s ceiling used to call `markReady()` + `openPan()` unaided (plus a 1.8s secondary calling
+`finish()`), so **waiting let you into the site without clicking**. That was added in Session 21 as
+the blunt fix for the iOS "page won't scroll at all" bug. It now **ONLY RELEASES THE SCROLL LOCK**
+— it does not dismiss the intro or hand off to the hero. A reader who waits is left looking at the
+intro (correct) on a page that is not frozen (safe). **Keep that distinction if you touch it: the
+lock still needs an escape hatch, but it must not enter the site.**
+Also removed: the **tap-anywhere-on-the-overlay** handler and the **global Enter/Space**. With two
+choices, entering from a stray click would have to silently pick one — usually the wrong one
+(silent, while the reader was reaching for the pill). The two buttons are the only way in; keyboard
+works natively through them.
+
+#### ⚠️⚠️ NEVER PUT CSS POSITIONING AND GSAP TRANSFORMS ON THE SAME ELEMENT
+This caused the reported entrance glitch — *"the pan starts higher then glitches and comes below,
+then the buttons and cooking start offset weird and then the buttons move to position"*.
+An inline `transform: translate(-50%, …)` was doing the centring while
+`gsap.set(".pan__group", {scale, y})` **rewrote `transform` wholesale and ate it**; same collision
+on `.pan__label`, where `{y: 8}` wiped out its `translateX(-50%)`.
+**Fix: two nested boxes — OUTER = CSS positioning, INNER = the GSAP target.** Verified across 400
+frames from first paint: `jumpAtSwap 0`, pan top identical at start and at the swap, label/pill
+horizontal range **0**.
+Related: the cooking→buttons swap used to move everything because the group is centred with
+`-translate-y-1/2`, which resolves against its OWN height — and "cooking" (~40px) vs the choice
+block (~230px) are wildly different. **Both label states are absolutely positioned** so they
+contribute zero height and the pan cannot move.
+**Layout (the user's grid lines):** pill and "Enter without sound" sit exactly on the viewport's
+vertical centre axis (**720/720**); the pan is nudged right so the **BOWL** — the mass the eye
+centres on, since the handle drags the geometric middle right — lands on that axis (egg 6px off).
+⚠️ `.loader-choice`'s intro animation needs `backwards`, **not `both`**: with `both` a running CSS
+animation pins opacity at 1 and beats inline styles, so GSAP's exit fade does nothing.
+
+### 🎮 THE OTHER HAND — MOBILE FIXED — Session 24 (`dabc817`)
+User-reported on a real Android phone: cramped, running under the nav bar, back button written
+over by the text, disc small with the particle shapes invisible inside it. **Four causes.**
+- **Back link was `absolute top-24`** → outside the flow, so the game content (centred in its own
+  `min-h-svh` box) ran underneath it. Now an in-flow flex child (27px clearance).
+- **Two stacked full viewports.** The page was `min-h-svh` AND the stage was another with
+  `justify-center`, so the card overflowed at BOTH ends while `overflow-hidden` clipped it.
+  ⚠️ **The page is now a FIXED `h-svh`** — with `min-h-svh` the stage's `flex-1` grew past the
+  viewport so `overflow-y-auto` never engaged and Begin sat ~35px below the fold, unreachable.
+  Plus `env(safe-area-inset-bottom)` padding.
+- **Disc `min(360px,74vw)` → `min(420px,88vw,52svh)`** (266→317px), bounded on both axes so it
+  can't crowd out the controls in landscape.
+- ⚠️ **THE ENGINE'S SHAPE GEOMETRY IS HARD-CODED IN PIXELS** against a ~360px disc (spiral arm
+  140, main-sequence star 100, pulsar jet 250). On a 266px disc those radii overflowed and only
+  the middle of each shape landed inside the circle. A **scale factor is applied at the single
+  point where the offsets are consumed**, so the eight stages' maths stays byte-identical and a
+  re-sync from the standalone Vite app is still a straight file copy. **Keep it that way.**
+- ⚠️ **The canvas ignored `devicePixelRatio`** (drawing 266×266 and upscaling on DPR 3 — hence
+  soft blobs, not lit points) **and only sized itself once on mount**, so an orientation change
+  left it stretched. Now DPR-scaled + re-measured on resize/orientationchange. Dot radius scales
+  by **sqrt**, not linearly — at full linear scale the dots stop reading as lit points.
+- Fixed a latent input bug: `setInputBounds` listened for scroll on `window`, but the stage is now
+  the scroller and **its scroll events don't bubble there** — the drag hit-zone went stale as soon
+  as you scrolled inside the stage.
+
+### PRIOR STATUS (Session 23)
 Session 23 added the **/play page** — a wall of AI explorations with **The Other Hand playable
 in-browser** at `/play/the-other-hand` (touch drag supported) — wired **/work + /play into the
 nav and the hero curves**, and fixed the **heading scroll bug** on both pages: `WorkShowcase` was
@@ -1517,7 +1644,24 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
     d. Optional follow-ups now that the domain is real: submit the sitemap to Google Search
        Console, and consider per-case-study OG images (§7 item 5).
 
-000a. **🎮 THE OTHER HAND — verify on a real iPhone (new in Session 23).**
+000z. **🍎 SESSION 24 NEEDS ONE REAL-DEVICE PASS — highest-value check right now.**
+    Everything in Session 24 was verified via CDP on emulated viewports. Given §6's iOS BUG RUN
+    (three defects that every local and emulated check passed while the phone failed), treat these
+    as unverified until touched on a real device:
+    a. **THE INTRO CAN NO LONGER OPEN ITSELF** (`8b79a9a`). The 12s ceiling now only releases the
+       scroll lock; it does NOT enter the site. This is what the user asked for, but it deliberately
+       undoes part of the Session-21 iOS fix — so if a tap is ever swallowed on iOS the reader is
+       stuck looking at the intro (on a scrollable page). **Confirm both buttons take a real tap on
+       an iPhone.** The `disabled`→`aria-disabled` fix and `onTouchEnd` are still in place.
+    b. **Audio actually starting from the tap.** Playback was verified with Chrome's autoplay policy
+       relaxed, so the gesture path itself is untested on-device. iOS is strictest here, and Low
+       Power Mode reports `prefers-reduced-motion: reduce`. The provider's `blocked` flag exists for
+       a refusal — check the widget shows the muted state rather than lying.
+    c. **The Other Hand's mobile layout on a real phone** (`dabc817`) — the Android report is what
+       started it, so re-check there first, then iOS.
+    d. **The /work hover transition on a trackpad/real GPU**, and that the touch cards look right.
+
+000a. **🎮 THE OTHER HAND — verify on a real iPhone (from Session 23).**
     The game ships at `/play/the-other-hand` and touch drag works, but **only in emulation**.
     Given this project's track record (§6 "iOS BUG RUN" — three defects that every local and
     emulated check passed while the phone failed), treat emulated touch as unverified. Things
@@ -1579,8 +1723,10 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    c. **Footer shaders on mobile** — believed wired; confirm on-device.
    d. **The Session-16 LIR blocks on a phone** (decision cards, media rows, image-cycle boxes,
       before/after slider, demo video player) — still unverified on a real device.
-   e. **`/work` cards have no description on touch** — the kicker/eyebrow are hover-only, so phone
-      users get image + title only. Add a static line under the title for coarse pointers.
+   e. ✅ **RESOLVED (Session 24, `f131f88`) — `/work` cards on touch.** The hover-only kicker/eyebrow
+      problem is gone: the mobile card now ships in the FULL end state (title above the plate,
+      darkened cover with the inner UI seated inside, kicker + eyebrow + build note + FlytBase and
+      duration below). It is a separate layout, not a scaled-down desktop card.
    ⚠️ **When touching hero/works motion again, read the PATTERN note at the end of §6 "iOS BUG
    RUN" first** — three separate bugs there had the same root shape.
 
@@ -1596,8 +1742,8 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
    Also `#play` + `#resume` nav anchors still have no destinations.
 
 0c. **`/work` follow-ups (Session 22).**
-   a. **Touch users get no description** — the card kicker/eyebrow are hover-only. Add a static
-      line under the title for coarse pointers if wanted (flagged to the user, not yet decided).
+   a. ✅ **RESOLVED (Session 24, `f131f88`)** — see item 0e above. The mobile card carries the full
+      description; the desktop reveal is the GSAP hover timeline.
    b. **Feel the field on a real GPU.** The 5 cinematic rules, the scroll flare and the ignition
       were only verified in software-rendered headless Chrome. Dials at the top of `PageGlow.tsx`
       (`DENSITY`, `BASE_SPEED`, `SCROLL_TRAVEL`) and the two fade windows in `FIELD_GLSL`.
@@ -1641,6 +1787,50 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 24 — 2026-07-30
+**Shipped the /work card hover transition from Figma, background music with a sound gate on the
+intro loader, and fixed The Other Hand's mobile layout. Three commits to `main`.**
+
+- **`f131f88` — /work hover transition.** `WorkShowcase` rebuilt as a paused GSAP timeline from
+  Figma section `322:130` (frames 1→2→3): cover darkens → inner screenshot rises from the frame's
+  bottom edge and seats at 75.6% width → title lifts and the copy stack staggers up behind it.
+  Mobile is a genuinely different layout (`(hover: hover) and (pointer: fine)` gate, so the desktop
+  timeline is never built on touch — the card ships in the end state). Assets pulled from Figma via
+  the Dev Mode MCP. Title on the thumbnail's centreline at rest (0.0px), group centred while
+  hovered (0.1px). ContactCTA removed from /work, which made the page fully static.
+- **`dabc817` — The Other Hand mobile.** Back link taken out of `absolute` so the game no longer
+  runs under it; page pinned to a FIXED `h-svh` so the stage is a real scroll container (Begin was
+  unreachable below the fold); disc 266→317px; and the two reasons the particles were invisible —
+  the engine's pixel-space shape radii overflowing a small disc, and a canvas that ignored DPR and
+  never re-measured.
+- **`8b79a9a` — background music.** "Friendship" by wooll, one `<audio>` element behind an
+  `AudioProvider`, 50% default volume. The loader's ready state became a sound gate ("Enter with
+  sound" pill / "Enter without sound"), "cooking" moved to Plus Jakarta Sans with a per-letter
+  bounce, and a `NowPlaying` waveform widget landed on the home page.
+
+**Four things in this session were the same shape of bug and are worth remembering:**
+1. **An animation that was correct but never ran.** The "cooking" letter wave was anchored to the
+   pan's CATCH (~2.5s after mount); on a warm load the label is gone in under 2s. Measured as
+   `[0,0,0,0,0,0,0]` travel. *Check that the window your animation needs actually exists.*
+2. **CSS positioning and GSAP transforms on the same element.** GSAP rewrites `transform`
+   wholesale, so it ate the centring translate — which is what the user saw as the pan starting
+   high and the buttons sliding into place. Split into outer-positions / inner-animates.
+3. **A captured measurement going stale.** A hard-coded `yPercent: 100` (and later a fixed em lift)
+   can't track a `vw`-driven card through a resize that doesn't re-run `matchMedia`. Function-based
+   values re-measure on invalidate.
+4. **A generic filename lying about its contents.** `image-1.webp` is the LIR app screenshot, so
+   using it as the card cover put the reveal's own image in the rest state.
+
+**Process note:** the user corrected my read of their grid-line screenshot — I inferred "the
+buttons are right, the pan is wrong" and shifted the pan the wrong way, making it worse. The actual
+spec was "buttons on the viewport's vertical axis, pan slightly right of it." **When a visual
+reference is ambiguous about which element is the reference and which is the error, ask instead of
+inferring a rule from it.**
+
+**Still open:** the intro's no-auto-enter change means the site is now unreachable if input never
+lands — the scroll lock still lifts, but nothing enters. That is the intended behaviour, but it
+undoes part of the Session-21 iOS safety net, so **it wants a check on a real iPhone** (§7 item 0).
 
 ### Session 23 — 2026-07-30
 **Built the /play page (The Other Hand playable in-browser), wired /work + /play into the nav and
