@@ -360,6 +360,89 @@ header[data-over-hero] nav a[aria-current="page"] {
   color: rgb(255 255 255);
 }
 
+/* ── NOW-PLAYING WAVEFORM ──────────────────────────────────────────────────
+   The bars in NowPlaying.tsx. Deliberately CSS, not GSAP: a decorative idle
+   loop with no scroll/timeline coupling belongs on the compositor, where it is
+   free and — unlike a GSAP tween — cannot be stalled by a busy main thread.
+   `scaleY` (not `height`) so it never triggers layout.
+   Each bar sets its own animation-delay/duration inline, which is what stops
+   the five bars pulsing in lockstep. */
+@keyframes np-bar-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.np-bar {
+  transform-origin: bottom center;
+  animation-name: np-bar-pulse;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+/* Reduced motion: the waveform still SHOWS state, it just doesn't dance.
+   Bars hold a static stepped profile — the slash remains the real off signal,
+   so no information is lost. */
+@media (prefers-reduced-motion: reduce) {
+  .np-bar {
+    animation: none;
+  }
+}
+
+/* The loader's sound-choice block fades itself in on mount.
+   It is a DIFFERENT element from the "cooking" label it replaces, so it never
+   got the GSAP entrance tween that animated `.pan__label` — without this it
+   would appear instantly at full opacity. CSS keeps it independent of the GSAP
+   timeline, which also means it still animates on the reduced-motion path where
+   most of the loader's tweens are skipped. */
+@keyframes loader-choice-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* `backwards`, NOT `both`. With `both` the animation's final keyframe keeps
+   opacity pinned at 1 FOREVER, and a running CSS animation beats an inline
+   style — so GSAP's exit tween (`.to(".pan__label", {opacity: 0})`) would have
+   had no visible effect and the buttons would stay solid while the hole opened
+   around them. `backwards` still applies the from-state before the animation
+   starts (no flash of un-animated content) but releases the property afterwards,
+   leaving GSAP in control of the exit. */
+.loader-choice {
+  animation: loader-choice-in 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader-choice {
+    animation: none;
+  }
+}
+
+/* The intro loader's pill: a soft breathing halo so "Enter with sound" reads as
+   inviting rather than a plain form button. Paused unless the pill is ready. */
+@keyframes loader-pill-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(255 255 255 / 0);
+  }
+}
+.loader-pill--ready {
+  animation: loader-pill-breathe 2.8s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader-pill--ready {
+    animation: none;
+  }
+}
+
 /* Solid header (scrolled past the hero): pure white bar, black nav links. */
 header:not([data-over-hero]) nav a {
   color: rgb(0 0 0 / 0.7);

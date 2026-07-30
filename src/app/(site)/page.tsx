@@ -1,6 +1,7 @@
 import { Hero } from "@/components/sections/Hero";
 import { WorksIndexStatic } from "@/components/sections/WorksJourney";
 import { HomeDarkBody } from "@/app/(site)/HomeDarkBody";
+import { NowPlayingMount } from "@/components/audio/NowPlayingMount";
 
 export default async function HomePage() {
   // The work showcase lives INSIDE the hero's pinned journey now (project-node
@@ -18,6 +19,8 @@ export default async function HomePage() {
       <HomeDarkBody />
       <Hero />
       <WorksIndexStatic />
+      {/* Music control — home page only, per the brief. */}
+      <NowPlayingMount />
     </div>
   );
 }

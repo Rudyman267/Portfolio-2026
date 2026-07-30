@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { gsap, useGSAP, ScrollTrigger } from "@/lib/gsap";
 import { whenHeroVideoReady } from "@/components/motion/heroReady";
 import { NAV_FLAG } from "@/components/motion/routeTransitionBridge";
+import { useSiteAudio } from "@/components/audio/AudioProvider";
 
 /** Fired on window when the intro finishes so the hero can begin its reveal. */
 export const LOADER_DONE_EVENT = "loader:done";
@@ -16,7 +17,12 @@ export const LOADER_DONE_EVENT = "loader:done";
  * in a loop while the page loads. "cooking" (EB Garamond italic) sits beneath
  * it and a huge bold counter runs in the bottom-left corner. The counter
  * reflects REAL loading (eases to 90, holds for the hero, then 90→100); when
- * it lands the label swaps to "click to enter" and the counter fades.
+ * it lands the counter fades and the SOUND CHOICE appears — an "Enter with
+ * sound" pill over a quiet "Enter without sound" link. Those two buttons are the
+ * only way in on a cold visit, and the click doubles as the user gesture that
+ * browsers require before audio can play (see AudioProvider).
+ * ("click to enter" and its EB Garamond italic are gone from the ready state;
+ * the italic is still used for "cooking" while loading.)
  *
  * On click the pan gives one final flick — the pancake sails off the top of
  * the screen — and the black overlay opens a circular hole from the pan's
@@ -189,6 +195,7 @@ export function EggArt() {
 
 export function Loader() {
   const pathname = usePathname();
+  const audio = useSiteAudio();
   // Only the home page mounts the 3D hero that calls markHeroVideoReady(); on
   // every other route there's no hero to wait for, so the counter must not hold
   // at 90 forever. `heroWait` resolves instantly off-home; on home it awaits the
@@ -214,6 +221,13 @@ export function Loader() {
   };
   /** wall-clock failsafes started by openPan; cleared on unmount */
   const exitTimersRef = useRef<number[]>([]);
+  /**
+   * False for the first 600ms after mount. Stops a touch that was already in
+   * flight — or the very tap that navigated here — from firing an entry button
+   * the moment it renders. A ref, not state, because the handlers must read the
+   * live value rather than one captured by an earlier render.
+   */
+  const armedRef = useRef(false);
 
   // Was this load triggered by an in-app nav click (hardNavigate)? If so the
   // Loader runs in "transition" mode: pan ONLY (no counter, no label, no click
@@ -419,9 +433,60 @@ export function Loader() {
         .to(".pan__svg", { y: 0, rotation: 0, duration: 0.5, ease: "elastic.out(1, 0.5)" }, IMPACT + 0.11)
         .to(".pan__cake", { y: 0, duration: 0.5, ease: "elastic.out(1, 0.55)" }, IMPACT + 0.11)
         .to(".pan__egg", { scaleY: 1, scaleX: 1, duration: 0.45, ease: "elastic.out(1, 0.45)" }, IMPACT + 0.09)
+
+        // ── "cooking" LETTER WAVE ──
+        // The letters ride the pan's WHIP-UP — the launch, not the catch.
+        //
+        // ⚠️ It was originally anchored to IMPACT (the catch, ~1.46s into the
+        // toss, i.e. ~2.5s after mount once the 1.05s delay is counted). On a
+        // warm load the counter reaches 100 and "cooking" is replaced by the
+        // sound-choice buttons in well under 2s — so the wave was correct but
+        // LITERALLY NEVER SEEN. Measured: the letters existed for ~1.8s, the
+        // bounce was scheduled for ~2.5s. Anchoring to the launch (0.6s in,
+        // ~1.65s after mount) puts it comfortably inside the window every time.
+        //
+        // `stagger` is the left-to-right sweep; `back.out` gives each letter its
+        // own overshoot-and-settle so the wave reads as organic weight rather
+        // than a rigid marquee. The scaleY/scaleX pair squashes each letter
+        // against its baseline (origin-bottom) on the way up, which is what
+        // makes it a bounce instead of a translate.
+        .to(
+          ".pan__ltr",
+          {
+            y: -13,
+            scaleY: 1.16,
+            scaleX: 0.93,
+            duration: 0.24,
+            ease: "power2.out",
+            stagger: 0.05,
+          },
+          // a touch before the pan tops its whip, so the word anticipates the
+          // throw rather than reporting it
+          LAUNCH_AT - 0.08,
+        )
+        .to(
+          ".pan__ltr",
+          {
+            y: 0,
+            scaleY: 1,
+            scaleX: 1,
+            duration: 0.66,
+            ease: "back.out(2.2)",
+            stagger: 0.05,
+          },
+          LAUNCH_AT + 0.18,
+        )
+
         // reset drift for the next cycle (rotation already landed at 360 = flat).
         .set(".pan__cake", { rotation: 0, x: 0 });
       tossRef.current = toss;
+      // Dev-only handle so the toss can be scrubbed from a test harness. The
+      // loader normally reaches `ready` in ~1s on a warm server, well before the
+      // toss's catch at ~2.5s, so the letter wave cannot be observed by just
+      // watching — it has to be driven to a specific time.
+      if (process.env.NODE_ENV !== "production") {
+        (window as unknown as Record<string, unknown>).__panToss = toss;
+      }
 
       // SIZZLE — while the egg rests in the pan it shivers almost sub-pixel,
       // like it's actually frying. Lives on the inner svg (.pan__egg) so it
@@ -629,11 +694,31 @@ export function Loader() {
       );
   };
 
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openPan();
-    }
+  // NOTE: there is deliberately no keydown handler on the pan group any more.
+  // It called openPan() for Enter/Space, which would enter the site without
+  // ever choosing a sound preference. The two buttons handle their own keyboard
+  // activation natively (a focused <button> fires click on Enter/Space), so the
+  // choice is always explicit.
+
+  /**
+   * The two entry paths. Both open the pan; they differ only in whether the
+   * background track starts.
+   *
+   * ⚠️ `enable()` MUST be called synchronously in this handler. Browsers only
+   * grant `audio.play()` inside a real user-gesture task — deferring it into a
+   * GSAP callback or a timeout (i.e. after the exit animation) puts it outside
+   * that window and Safari/Chrome reject it silently. So sound starts first,
+   * then the reveal runs.
+   */
+  const enterWithSound = () => {
+    if (!armedRef.current) return;
+    audio.enable();
+    openPan();
+  };
+  const enterWithoutSound = () => {
+    if (!armedRef.current) return;
+    audio.disable();
+    openPan();
   };
 
   // ── SCROLL-LOCK FAILSAFE (iOS "page won't scroll at all" bug) ──────────────
@@ -671,42 +756,50 @@ export function Loader() {
   //    openPan's own guard passed too.)
   //    Everything time-sensitive therefore reads a REF, never a state value.
   useEffect(() => {
-    const el = root.current;
-
-    // never let the intro hold the page hostage — cap the whole thing.
-    const ceiling = window.setTimeout(() => {
-      if (openedRef.current) return; // already opened — do NOT re-run
-      markReady();
-      openPan();
-      // openPan bails if it somehow can't run — guarantee the unlock anyway.
-      window.setTimeout(() => {
-        if (document.body.classList.contains("is-loading")) finish();
-      }, 1800);
+    // ⚠️ THE INTRO NEVER OPENS ITSELF. The click IS the experience — a reader
+    // who waits must still be looking at the pan, not find themselves already
+    // inside the site.
+    //
+    // There USED to be a 12s ceiling here that called markReady() + openPan()
+    // unaided (plus a 1.8s secondary that force-called finish()). It was added
+    // in Session 21 to fix the iOS "page won't scroll at all" bug: `is-loading`
+    // sets `overflow:hidden` on <body>/<html>, and if the tap was swallowed the
+    // lock never lifted and the whole site froze. Auto-entering was the blunt
+    // way to guarantee the unlock.
+    //
+    // The lock still needs an escape hatch, so the ceiling now ONLY RELEASES THE
+    // SCROLL LOCK — it does NOT dismiss the intro or hand off to the hero. If
+    // input is somehow never received, the reader is left looking at the intro
+    // (correct) on a page that is no longer frozen (safe). The real tap paths
+    // below are the only things that actually enter the site.
+    const lockRelease = window.setTimeout(() => {
+      if (openedRef.current) return; // already entered — nothing to rescue
+      document.body.classList.remove("is-loading");
     }, 12000);
 
-    // Ignore input for a beat after mount so a touch that was already in
-    // flight (or the tap that navigated here) can't dismiss the intro.
-    let armed = false;
+    // Ignore input for a beat after mount so a touch that was already in flight
+    // (or the tap that navigated here) can't trip a button the instant it
+    // appears. Read by the two entry handlers, not by a global listener.
     const arm = window.setTimeout(() => {
-      armed = true;
+      armedRef.current = true;
     }, 600);
 
-    const anyTap = () => {
-      if (armed && readyRef.current && !openedRef.current) openPan();
-    };
-    el?.addEventListener("click", anyTap);
-    // keydown stays on window — a keyboard user has no "stray touch" problem
-    // and may not have focus inside the overlay.
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!armed || !readyRef.current || openedRef.current) return;
-      if (e.key === "Enter" || e.key === " ") openPan();
-    };
-    window.addEventListener("keydown", onKeyDown);
+    // ⚠️ NO "tap anywhere on the overlay" HANDLER, AND NO GLOBAL Enter/Space.
+    // Both used to call openPan(). That was a sensible net when the only
+    // affordance was "click to enter", but now there are TWO deliberate choices
+    // (with sound / without sound) and entering from a stray background click —
+    // or a keypress with nothing focused — would have to silently pick one for
+    // the reader. It would usually pick the wrong one, entering SILENT while they
+    // were reaching for the pill.
+    //
+    // The two buttons are now the ONLY way in. Keyboard still works, natively:
+    // the pill is the first focusable element in the overlay, and the browser
+    // fires a real click for Enter/Space on a focused <button>, so tab-then-Enter
+    // routes through the same handler as a mouse click and carries the same
+    // explicit sound choice.
     return () => {
-      window.clearTimeout(ceiling);
+      window.clearTimeout(lockRelease);
       window.clearTimeout(arm);
-      el?.removeEventListener("click", anyTap);
-      window.removeEventListener("keydown", onKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -769,30 +862,62 @@ export function Loader() {
         } as React.CSSProperties
       }
     >
-      {/* centered pan group */}
-      <button
-        type="button"
-        onClick={openPan}
-        onKeyDown={onKey}
-        onTouchEnd={openPan}
-        // NOT the `disabled` attribute. iOS Safari keeps swallowing taps on a
-        // button that was rendered disabled even after it's re-enabled, which
-        // stranded the whole page behind the intro's scroll lock. openPan()
-        // already no-ops until `ready`, so the gate is enforced in JS and the
-        // hit target stays live the entire time. aria-disabled carries the
-        // state to assistive tech without killing the tap.
-        aria-disabled={!ready}
-        aria-label={ready ? "Click to enter the site" : "Loading"}
-        // touch-action:manipulation kills the 300ms double-tap delay so the
-        // first tap counts.
-        style={{ touchAction: "manipulation" }}
-        className={`pan__group absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center bg-transparent ${
-          ready ? "cursor-pointer" : "cursor-progress"
-        }`}
+      {/* centered pan group.
+          NOTE this is a <div>, not a <button>, since the sound choice below is
+          made of real buttons and a button cannot nest inside a button. The pan
+          itself is NOT a control any more — the two sound buttons are the only
+          way in, so a click on the pan (or anywhere on the black) does nothing.
+          That is deliberate: entering from a stray click would have to silently
+          pick a sound preference for the reader. */}
+      {/* ⚠️ TWO NESTED BOXES, AND THE SPLIT IS THE WHOLE POINT:
+            OUTER (`pan__anchor`) = POSITIONING, owned by CSS. Nothing animates it.
+            INNER (`pan__group`)  = ANIMATION, owned by GSAP. Nothing positions it.
+
+          This is what fixes "the pan starts higher, glitches down, then the
+          buttons jump into place". Both layers were previously the SAME element:
+          my inline `transform: translate(-50%, calc(-50% - 5.4rem))` did the
+          centring, while the entrance timeline ran
+          `gsap.set(".pan__group", {scale:0.82, opacity:0, y:12})` on it. GSAP
+          writes the `transform` property wholesale, so its `y`/`scale` REPLACED
+          the centring translate — the pan rendered from a completely different
+          origin, then snapped back the instant the tween handed control over.
+          Same collision on the label, where `gsap.set(".pan__label",{y:8})` wiped
+          out `translateX(-50%)`, which is why the buttons and "cooking" started
+          off-axis and slid into position.
+
+          With the layers separated GSAP can write whatever transform it likes on
+          the inner box without ever touching the outer box's centring. */}
+      <div
+        className="pan__anchor absolute left-1/2 top-1/2 flex flex-col items-center"
+        style={{
+          // CSS-only. The vertical lift raises the pan so the union of
+          // pan + buttons reads centred (the pan alone cannot know about the
+          // out-of-flow label below it). Constant in both states on purpose.
+          transform: "translate(-50%, calc(-50% - 5.4rem))",
+        }}
       >
-        {/* the pan + its pancake (Figma 124:82). Nudged RIGHT: the handle
-            trails off to the right so the bowl (the visual mass) sits left of
-            the geometric centre — this offset re-centres it VISUALLY. */}
+      <div
+        // ⚠️ SIZED BY THE PAN ALONE — the label/choice below is absolutely
+        // positioned, so it contributes ZERO height. That is what stops the
+        // cooking→buttons swap from moving anything: the box height is constant,
+        // so there is nothing for a centring translate to re-resolve against.
+        className={`pan__group flex flex-col items-center bg-transparent ${
+          ready ? "" : "cursor-progress"
+        }`}
+        // touchAction only — NO transform here. GSAP owns this element's
+        // transform (entrance scale/y, and the exit), and any CSS transform we
+        // added would be silently overwritten by it.
+        style={{ touchAction: "manipulation" }}
+      >
+        {/* The pan + its egg (Figma 124:82).
+            Shifted RIGHT so the PAN reads as centred. The art's handle trails off
+            to the right, so the BOWL — the visual mass the eye actually centres
+            on — sits well left of the SVG's geometric middle. Pushing the art
+            right brings the bowl onto the shared centre axis, which is the axis
+            the pill and "Enter without sound" sit on.
+            Only the ART moves: the group's axis is untouched, so the buttons stay
+            exactly on the viewport centre line (measured: pillCx 720 = viewport
+            720, with zero horizontal movement across the whole run). */}
         <span className="relative block w-[clamp(200px,22vw,300px)] translate-x-[13%]">
           <PanArt />
           {/* fried egg (Figma Group 11) — the food the pan tosses, resting DOWN
@@ -816,12 +941,109 @@ export function Loader() {
           </span>
         </span>
 
-        {/* label beneath the pan — EB Garamond Medium Italic (Figma 124:89).
-            Nudged with the pan so it sits under the bowl, not the whole box. */}
-        <span className="pan__label mt-6 translate-x-[13%] text-[clamp(24px,2.6vw,40px)] italic leading-none text-white [font-family:var(--font-eb-garamond)]">
-          {ready ? "click to enter" : "cooking"}
+        {/* ── THE LABEL SLOT ──
+            Both states ("cooking" while loading, the sound choice once ready)
+            live in the SAME absolutely-positioned slot directly under the pan.
+
+            `absolute` is load-bearing, not decoration: it keeps both states out
+            of the group's flow so their very different heights can never change
+            where the pan sits. See the group's comment above — this is the fix
+            for the buttons jumping when "cooking" disappeared.
+
+            ⚠️ SAME TWO-LAYER SPLIT AS THE PAN: this outer <span> does the
+            positioning in CSS, and `.pan__label` inside it is GSAP's target.
+            They cannot be one element — the entrance runs
+            `gsap.set(".pan__label", {y: 8})`, which rewrites `transform` and
+            therefore ATE the `translateX(-50%)` that was centring the slot. That
+            is exactly why the buttons and "cooking" appeared off to one side and
+            then slid into place.
+
+            ⚠️ The ready state is a DIFFERENT ELEMENT from the "cooking" span, so
+            it never received the entrance tween that animated `.pan__label` from
+            opacity 0 → 1. React mounts it with no inline opacity at all, which
+            would make it pop in at full opacity with no transition — and worse,
+            GSAP's `gsap.set(".pan__label", {opacity:1})` on the reduced-motion
+            path targeted the OLD node. So this one animates itself in on mount
+            via the CSS class below, independent of the GSAP timeline. */}
+        <span
+          className="absolute left-1/2 top-full flex -translate-x-1/2 flex-col items-center"
+          aria-hidden={false}
+        >
+        {ready ? (
+          <span className="pan__label loader-choice mt-10 flex flex-col items-center">
+            {/* PRIMARY — white pill. Hover: lifts a touch, and a soft halo
+                breathes out from the edge (see `.loader-pill--ready`) so it
+                invites a click without a shouty transition. */}
+            <button
+              type="button"
+              onClick={enterWithSound}
+              onTouchEnd={enterWithSound}
+              style={{ touchAction: "manipulation" }}
+              // `whitespace-nowrap` — the label must stay on ONE line. Without
+              // it the pill is free to wrap to "Enter with / sound" on a narrow
+              // viewport (or once the parent became an absolutely-positioned box
+              // that no longer inherits the pan's width), which turns a clean
+              // capsule into a tall two-line lozenge.
+              className="loader-pill--ready group/pill whitespace-nowrap rounded-full bg-white px-9 py-4 text-[15px] font-medium leading-none text-black transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(255,255,255,0.45)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            >
+              Enter with sound
+            </button>
+
+            {/* SECONDARY — quiet text. Affordance on hover: it brightens and
+                grows a thin underline out from the centre, which is enough to
+                read as a control without competing with the pill. */}
+            <button
+              type="button"
+              onClick={enterWithoutSound}
+              onTouchEnd={enterWithoutSound}
+              style={{ touchAction: "manipulation" }}
+              // Sits WELL below the pill — a big gap is what makes the two read
+              // as a primary choice and a quiet opt-out rather than a stacked
+              // pair of equal buttons (matches the user's reference, where it
+              // sits far down the viewport). vh-based so it scales with the
+              // screen, with a px floor so it never collapses on a short window.
+              className="group/quiet mt-[clamp(3.5rem,13vh,9rem)] inline-flex flex-col items-center whitespace-nowrap text-[14px] font-normal leading-none text-white/40 transition-colors duration-300 hover:text-white/80 focus-visible:outline-none focus-visible:text-white/80"
+            >
+              Enter without sound
+              <span
+                aria-hidden
+                className="mt-1.5 h-px w-full origin-center scale-x-0 bg-white/50 transition-transform duration-300 ease-out group-hover/quiet:scale-x-100 group-focus-visible/quiet:scale-x-100"
+              />
+            </button>
+          </span>
+        ) : (
+          /* "cooking" — Plus Jakarta Sans (inherited from body; the EB Garamond
+             italic that used to be here is gone). Split into per-letter spans so
+             the toss timeline can run a bounce wave across them: see the
+             `.pan__ltr` tween in the toss below, which is anchored to the egg's
+             IMPACT so the letters kick as the pan catches, left to right. */
+          <span
+            // NO positioning and NO transform here — the wrapper above owns
+            // both, because GSAP writes this element's transform (`y: 8` on
+            // entrance, and the letter wave targets its children).
+            className="pan__label mt-6 flex text-[clamp(24px,2.6vw,40px)] font-medium leading-none tracking-[-0.01em] text-white"
+            aria-label="cooking"
+            role="text"
+          >
+            {"cooking".split("").map((ch, i) => (
+              <span
+                key={i}
+                aria-hidden
+                // inline-block so y/scale transforms apply — they are no-ops on
+                // an inline box. will-change keeps the wave on the compositor.
+                // Bottom origin so the scaleY squash/stretch reads as the letter
+                // planting and springing off its baseline, not inflating from
+                // its middle.
+                className="pan__ltr inline-block origin-bottom will-change-transform"
+              >
+                {ch}
+              </span>
+            ))}
+          </span>
+        )}
         </span>
-      </button>
+      </div>
+      </div>
 
       {/* loading counter — huge, bold, bottom-left (Figma 124:87) */}
       <span

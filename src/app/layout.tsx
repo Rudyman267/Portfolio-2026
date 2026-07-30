@@ -20,7 +20,8 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-// Loader label ("cooking" / "click to enter") — Figma 124:80 uses EB Garamond
+// Loader label ("cooking", while loading) — Figma 124:80 uses EB Garamond.
+// The ready state is now the sound-choice pill in Plus Jakarta Sans, not italic.
 // Medium Italic. Italic-only, single weight, so the extra font cost is tiny.
 const ebGaramond = EB_Garamond({
   variable: "--font-eb-garamond",

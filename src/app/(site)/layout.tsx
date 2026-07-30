@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { draftMode } from "next/headers";
 import { VisualEditing } from "next-sanity/visual-editing";
 import { SmoothScrollProvider } from "@/components/motion/SmoothScrollProvider";
+import { AudioProvider } from "@/components/audio/AudioProvider";
 import { Loader } from "@/components/motion/Loader";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -35,7 +36,12 @@ export default async function SiteLayout({
     })) ?? [];
 
   return (
+    // AudioProvider wraps the Loader because the loader's two entry buttons are
+    // what start (or decline) the track — that click is the user gesture browsers
+    // require for playback, so it has to reach the same single <audio> element
+    // the home-page NowPlaying widget controls.
     <SmoothScrollProvider>
+      <AudioProvider>
       <Loader />
       <div className="flex min-h-dvh flex-col">
         <Header brand={brand} nav={nav} />
@@ -60,6 +66,7 @@ export default async function SiteLayout({
           <DisableDraftMode />
         </>
       )}
+      </AudioProvider>
     </SmoothScrollProvider>
   );
 }
