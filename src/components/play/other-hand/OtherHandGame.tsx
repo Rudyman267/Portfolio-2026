@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX, Maximize2, Minimize2 } from "lucide-react";
 import { ConnectionState } from "./ConnectionState";
 import { Visualizer } from "./Visualizer";
+import { Joystick } from "./Joystick";
+import { useSiteAudio } from "@/components/audio/AudioProvider";
 import type { SimulationState } from "./types";
 
 /**
@@ -49,6 +51,15 @@ export function OtherHandGame() {
   const stageRef = useRef<HTMLDivElement>(null);
   const discRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * The site's background track. The game has its own generative audio and
+   * "sound is half the piece", so the two must not play over each other.
+   * We remember whether the site track was playing when the game started, and
+   * restore only that — a reader who had already muted it stays muted.
+   */
+  const siteAudio = useSiteAudio();
+  const restoreSiteAudioRef = useRef(false);
+
   // Boot the engine ONLY once the player has pressed start. Mounting it behind
   // the intro would run the rAF loop (and the audio graph) while nobody is
   // looking, and on this site the page also carries a particle field.
@@ -82,6 +93,23 @@ export function OtherHandGame() {
   useEffect(() => {
     gameRef.current?.setVolume(volume / 100);
   }, [volume]);
+
+  // Give the site's track back when the player leaves the page — but ONLY if we
+  // were the ones who paused it. Runs on unmount, so navigating away restores
+  // the music the reader chose to have on.
+  //
+  // ⚠️ The cleanup calls through a REF, not the captured `siteAudio.enable`.
+  // The effect is mount-scoped (empty deps) so it would otherwise close over the
+  // FIRST render's context value, and `enable` is a useCallback that depends on
+  // `volume` — restoring through a stale copy could set the wrong level. The ref
+  // always points at the current one.
+  const enableSiteAudioRef = useRef(siteAudio.enable);
+  enableSiteAudioRef.current = siteAudio.enable;
+  useEffect(() => {
+    return () => {
+      if (restoreSiteAudioRef.current) enableSiteAudioRef.current();
+    };
+  }, []);
 
   // Feed the disc's REAL viewport geometry to the input controller. The engine
   // originally assumed a fixed 360px disc at the window centre; here it is
@@ -157,7 +185,17 @@ export function OtherHandGame() {
       onPointerDown={() => gameRef.current?.resumeAudio()}
     >
       {phase === "intro" ? (
-        <IntroCard onStart={() => setPhase("playing")} />
+        <IntroCard
+          onStart={() => {
+            // Duck the site's background track for the duration of the game.
+            // Remember whether it WAS playing so we only restore what we took —
+            // if the reader had already muted it, leaving the game must not
+            // turn music on for them.
+            restoreSiteAudioRef.current = siteAudio.playing;
+            if (siteAudio.playing) siteAudio.disable();
+            setPhase("playing");
+          }}
+        />
       ) : (
         <>
           {/* the device — a black disc the presence lives inside.
@@ -199,11 +237,42 @@ export function OtherHandGame() {
               wide-tracked caps right under the disc. Same information, sized to
               the space it has. */}
           <p className="max-w-[34ch] shrink-0 px-6 text-center text-[11px] tracking-[0.14em] text-white/25 sm:max-w-none sm:text-[12px] sm:tracking-[0.18em]">
-            <span className="sm:hidden">DRAG INSIDE THE DISC</span>
+            {/* Different instruction per input, because they ARE different
+                controls now: the stick below on a phone, the disc itself on
+                desktop. */}
+            <span className="sm:hidden">USE THE STICK BELOW</span>
             <span className="hidden sm:inline">
               DRAG INSIDE THE DISC — MOUSE, FINGER, OR A GAMEPAD STICK
             </span>
           </p>
+
+          {/* ── ON-SCREEN STICK — MOBILE ONLY ──
+              `sm:hidden`: desktop has the mouse and the gamepad, and the brief is
+              explicit that the joystick is a phone-only affordance.
+              Sits BELOW the disc, in the bottom third where the thumb already
+              rests, so the hand never covers the thing it is steering. */}
+          <div className="flex shrink-0 items-center justify-center sm:hidden">
+            <Joystick
+              onChange={(x, y, active) =>
+                gameRef.current?.setJoystick(x, y, active)
+              }
+              // A short tick on engage — the same "you are connected" cue the
+              // gamepad gives when you first push its stick.
+              onEngage={() => {
+                if (
+                  typeof navigator !== "undefined" &&
+                  typeof navigator.vibrate === "function"
+                ) {
+                  try {
+                    navigator.vibrate(12);
+                  } catch {
+                    /* non-fatal */
+                  }
+                }
+                gameRef.current?.resumeAudio();
+              }}
+            />
+          </div>
 
           {/* volume + fullscreen */}
           <div className="z-10 flex shrink-0 items-center gap-2.5 rounded-full border border-white/10 bg-black/40 px-3.5 py-2 backdrop-blur-md transition-all duration-300 hover:border-white/20 sm:gap-3 sm:px-4">
@@ -299,7 +368,7 @@ function IntroCard({ onStart }: { onStart: () => void }) {
         </p>
         <ul className="mt-3.5 space-y-2.5 sm:mt-4">
           {[
-            ["Move", "Press and drag inside the disc — with a finger on touch, or the mouse. A gamepad stick works too; that is what it was built for."],
+            ["Move", "On a phone, use the stick below the disc. On a desktop, press and drag inside the disc — or use a gamepad stick, which is what it was built for."],
             ["Hold", "Stay in sync to hold a shape. Break it and entropy takes it back."],
             ["Listen", "Sound is half the piece. Use the volume slider below the disc."],
             ["Evolve", "The longer you sustain it, the further the shape and the sound go. There is somewhere to reach."],

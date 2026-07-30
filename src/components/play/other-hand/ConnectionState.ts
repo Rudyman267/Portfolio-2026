@@ -12,6 +12,14 @@ export class ConnectionState {
   public setInputBounds(cx: number, cy: number, radius: number) {
     this.controller.setBounds(cx, cy, radius);
   }
+
+  /**
+   * Drive the sim from the on-screen joystick (mobile only).
+   * `x`/`y` are unit-circle normalised, matching a gamepad stick.
+   */
+  public setJoystick(x: number, y: number, active: boolean) {
+    this.controller.setJoystick(x, y, active);
+  }
   private ai: OtherHandAI;
   private audio: AmbientVoice;
   

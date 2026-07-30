@@ -123,11 +123,22 @@ export class BallController {
         }
     }
 
-    // 2. Poll Mouse/Pointer (only while active and inside the disc).
-    //    Geometry comes from setBounds() — the disc is responsive and is not
-    //    at the window centre, so the old hardcoded 180px/window-centre hit
-    //    zone missed it entirely on a phone.
-    if (this.isMouseActive) {
+    // 2. Poll the on-screen JOYSTICK (mobile). Checked BEFORE the pointer path
+    //    and short-circuits it: while a thumb is on the stick, the same finger
+    //    must not also be read as a position inside the disc. The joystick is
+    //    already a direction+force in [-1,1], exactly like a gamepad axis, so it
+    //    feeds rawX/rawY directly with no disc geometry involved.
+    if (this.joyActive) {
+      rawX = this.joyX;
+      rawY = this.joyY;
+      // Holding the stick off-centre IS the press — there is no separate button
+      // on a phone, and the piece needs `isPressing` to build sync.
+      btnPressed = btnPressed || Math.hypot(this.joyX, this.joyY) > PHY.DEADZONE;
+    } else if (this.isMouseActive) {
+      // 3. Poll Mouse/Pointer (only while active and inside the disc).
+      //    Geometry comes from setBounds() — the disc is responsive and is not
+      //    at the window centre, so the old hardcoded 180px/window-centre hit
+      //    zone missed it entirely on a phone.
       const dx = this.mouseX - this.centerX;
       const dy = this.mouseY - this.centerY;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -183,8 +194,21 @@ export class BallController {
     };
   }
   
-  // Haptic feedback trigger
+  /**
+   * Haptic feedback.
+   *
+   * PORTFOLIO CHANGE: the original only rumbled a connected GAMEPAD, so on a
+   * phone every haptic cue the piece fires was silently dropped — and the
+   * feedback is part of how it communicates (sync, break, ascension). Phones
+   * fall back to `navigator.vibrate`, which takes a plain duration in ms.
+   *
+   * The two motors map onto one crude buzz, so the gamepad's weak/strong pair is
+   * collapsed into a single intensity that scales the DURATION instead — the
+   * Vibration API has no amplitude control, and a longer buzz is the only lever
+   * that reads as "stronger" on hardware that has just one motor.
+   */
   public vibrate(duration: number, weak: number, strong: number) {
+    // 1. Gamepad — the intended instrument, unchanged.
     if (this.gamepadIndex !== null) {
         const gp = navigator.getGamepads()[this.gamepadIndex];
         if (gp && gp.vibrationActuator) {
@@ -194,7 +218,49 @@ export class BallController {
                 weakMagnitude: weak,
                 strongMagnitude: strong,
             }).catch(() => {}); // Ignore errors if not supported
+            return;
         }
     }
+
+    // 2. Phone — Vibration API. Gated on coarse pointer so a desktop with a
+    //    touchscreen (and no controller) doesn't buzz unexpectedly; the brief is
+    //    mobile + gamepad ONLY, nowhere else.
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.vibrate === "function" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches
+    ) {
+      const intensity = Math.min(1, Math.max(0, Math.max(weak, strong)));
+      if (intensity <= 0.02) return;
+      // Scale the requested duration by intensity and clamp: iOS ignores
+      // navigator.vibrate entirely, and Android throttles very long buzzes.
+      const ms = Math.round(
+        Math.min(180, Math.max(8, duration * (0.35 + intensity * 0.65))),
+      );
+      try {
+        navigator.vibrate(ms);
+      } catch {
+        /* some browsers throw if the page isn't focused — never fatal */
+      }
+    }
   }
+
+  /**
+   * Feed the on-screen joystick's stick position (mobile).
+   *
+   * Normalised to the unit circle: (0,0) at rest, magnitude 1 at the ring's
+   * edge. Kept SEPARATE from the pointer path above because the joystick is not
+   * a position inside the disc — it is a direction+force, exactly like a gamepad
+   * stick, and `poll()` treats it that way.
+   */
+  public setJoystick(x: number, y: number, active: boolean) {
+    this.joyX = x;
+    this.joyY = y;
+    this.joyActive = active;
+  }
+
+  private joyX = 0;
+  private joyY = 0;
+  private joyActive = false;
 }
