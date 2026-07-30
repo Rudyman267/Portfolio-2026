@@ -635,8 +635,25 @@ export function createWorksTicker(
     y: gsap.quickSetter(d.wrap, "y", "px") as (v: number) => void,
     s: gsap.quickSetter(d.wrap, "scale") as (v: number) => void,
     r: gsap.quickSetter(d.wrap, "rotation", "deg") as (v: number) => void,
-    f: gsap.quickSetter(d.frame, "opacity") as (v: number) => void,
-    k: gsap.quickSetter(d.skin, "opacity") as (v: number) => void,
+    // ⚠️ OPACITY IS WRITTEN DIRECTLY, NOT VIA quickSetter.
+    // A quickSetter caches the element it was built for. `gsap.matchMedia()`
+    // re-runs its callback whenever the query re-evaluates — and on iOS Safari
+    // the collapsing browser toolbar makes that happen during scroll — so the
+    // beats can be rebuilt while a previously registered ticker still holds
+    // setters bound to the OLD nodes. The writes then land on detached
+    // elements and the on-screen window keeps its initial inline opacity:0
+    // while the skin keeps opacity:1. That is exactly what the device
+    // reported: ticker computing frame=1.00/skin=0.00, element showing
+    // 0.00/1.00 — the inverse, i.e. untouched markup defaults. Android's
+    // browser chrome doesn't trigger the re-evaluation, which is why it only
+    // ever broke on iPhone.
+    // Reading d.frame/d.skin per call always hits the CURRENT node.
+    f: (v: number) => {
+      d.frame.style.opacity = String(v);
+    },
+    k: (v: number) => {
+      d.skin.style.opacity = String(v);
+    },
     motes: d.motes.map((m) => ({
       x: gsap.quickSetter(m, "x", "px") as (v: number) => void,
       y: gsap.quickSetter(m, "y", "px") as (v: number) => void,

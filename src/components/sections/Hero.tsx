@@ -491,7 +491,17 @@ export function Hero() {
 
         // the nodes ride the SAME snake path as the tunnel instances, per
         // frame (scroll flies them in; idle travel keeps them swaying)
+        // Defensive: if a previous run of this matchMedia callback left its
+        // ticker registered (iOS Safari re-evaluates the query when the
+        // browser toolbar collapses during scroll), drop it before adding
+        // ours. Two tickers driving two generations of DOM nodes is how the
+        // project window ended up stuck at its initial opacity on iPhone.
+        const prev = (window as unknown as Record<string, unknown>)
+          .__worksTick as gsap.TickerCallback | undefined;
+        if (prev) gsap.ticker.remove(prev);
+
         const tick = createWorksTicker(drivers, introGuards);
+        (window as unknown as Record<string, unknown>).__worksTick = tick;
         gsap.ticker.add(tick);
 
         // Pin length: preserve the original scroll-per-timeline-unit (the old
