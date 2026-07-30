@@ -662,29 +662,37 @@ export function createWorksTicker(
   drivers: BeatDriver[],
   introGuards: (() => void)[] = [],
 ) {
+  // Transforms are batched per beat and applied to the CURRENT wrap node (see
+  // the note on f/k below — any of these can be replaced by React or by a
+  // matchMedia re-run). Writing one composite transform string is also cheaper
+  // than four separate quickSetters.
+  const applyWrap = (d: BeatDriver, x: number, y: number, s: number, r: number) => {
+    const el =
+      (d.beat.querySelector("[data-node-wrap]") as HTMLElement | null) ?? d.wrap;
+    el.style.transform = `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`;
+  };
+
   const setters = drivers.map((d) => ({
-    x: gsap.quickSetter(d.wrap, "x", "px") as (v: number) => void,
-    y: gsap.quickSetter(d.wrap, "y", "px") as (v: number) => void,
-    s: gsap.quickSetter(d.wrap, "scale") as (v: number) => void,
-    r: gsap.quickSetter(d.wrap, "rotation", "deg") as (v: number) => void,
-    // ⚠️ OPACITY IS WRITTEN DIRECTLY, NOT VIA quickSetter.
-    // A quickSetter caches the element it was built for. `gsap.matchMedia()`
-    // re-runs its callback whenever the query re-evaluates — and on iOS Safari
-    // the collapsing browser toolbar makes that happen during scroll — so the
-    // beats can be rebuilt while a previously registered ticker still holds
-    // setters bound to the OLD nodes. The writes then land on detached
-    // elements and the on-screen window keeps its initial inline opacity:0
-    // while the skin keeps opacity:1. That is exactly what the device
-    // reported: ticker computing frame=1.00/skin=0.00, element showing
-    // 0.00/1.00 — the inverse, i.e. untouched markup defaults. Android's
+    // ⚠️ RE-RESOLVE THE NODE ON EVERY WRITE — never cache it.
+    // gsap.quickSetter (and any held reference) binds to one element. React can
+    // replace these nodes — the window is a <Link> for published studies and a
+    // <div> for unpublished ones — and gsap.matchMedia() re-runs its callback
+    // whenever the query re-evaluates, which iOS Safari does when the browser
+    // toolbar collapses during scroll. Either way the driver ends up pointing
+    // at a detached element, the writes vanish, and the on-screen node keeps
+    // its markup defaults: frame 0 / skin 1 — the exact INVERSE of what the
+    // ticker computed. That is what the device kept reporting. Android's
     // browser chrome doesn't trigger the re-evaluation, which is why it only
     // ever broke on iPhone.
-    // Reading d.frame/d.skin per call always hits the CURRENT node.
     f: (v: number) => {
-      d.frame.style.opacity = String(v);
+      const el =
+        (d.beat.querySelector("[data-frame]") as HTMLElement | null) ?? d.frame;
+      el.style.opacity = String(v);
     },
     k: (v: number) => {
-      d.skin.style.opacity = String(v);
+      const el =
+        (d.beat.querySelector("[data-skin]") as HTMLElement | null) ?? d.skin;
+      el.style.opacity = String(v);
     },
     motes: d.motes.map((m) => ({
       x: gsap.quickSetter(m, "x", "px") as (v: number) => void,
@@ -766,10 +774,13 @@ export function createWorksTicker(
       const pos = flightXY(
         travel, p, b.scatter, NODE_D_FAR, NODE_D_NEAR, vw, vh, tanX, tanY,
       );
-      st.x(pos.x * damp);
-      st.y(pos.y * damp);
-      st.s(0.14 + 0.86 * (1 - Math.pow(1 - p, 2.2)));
-      st.r((pos.x / vw) * 8 * (1 - m)); // a whisper of bank into the turn
+      applyWrap(
+        b,
+        pos.x * damp,
+        pos.y * damp,
+        0.14 + 0.86 * (1 - Math.pow(1 - p, 2.2)),
+        (pos.x / vw) * 8 * (1 - m), // a whisper of bank into the turn
+      );
 
       // While the 3D scene renders the cuboid, the DOM frame exists only for
       // the morph — it crossfades in over the fading mesh. On the video
