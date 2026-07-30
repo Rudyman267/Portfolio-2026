@@ -205,14 +205,77 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ## 6. Current State (as of Session 22)
 
-**Status (as of Session 22): 🎉 `rudyman.com` IS LIVE — THE SITE IS ON ITS CUSTOM DOMAIN.**
-Apex serves, `www` 308-redirects, Let's Encrypt cert valid, all routes 200, sitemap/robots emit the
-real domain, Vercel reports `misconfigured: false`. **THE LINK TO SHARE IS `https://rudyman.com`.**
-Also this session: the **/work index was REBUILT** — cinematic particle field + alternating project
-plates (`e809c42`) — and the before/after slider no longer opens the lightbox, with the zoom cursor
-removed site-wide (`beae3ab`). Prod build clean (14 pages), typecheck clean.
-⚠️ ONE THING STILL OPEN ON THE DOMAIN: **Sanity CORS** for the new origin, or `/studio` fails there
-(§7 item 0000). Dev server + headless Chrome stopped at session end.
+**Status (as of Session 22): 🎉 LIVE ON `rudyman.com` AND THE iOS BUGS ARE FIXED.**
+Apex serves, `www` 308s, Let's Encrypt cert valid, `misconfigured: false`.
+**THE LINK TO SHARE IS `https://rudyman.com`.**
+This session also: rebuilt the **/work index** (cinematic particle field + alternating project
+plates, `e809c42`), removed the zoom cursor + excluded the before/after slider from the lightbox
+(`beae3ab`), and then spent a long run fixing **three separate iOS-only defects** that between
+them made the phone experience unusable — see "iOS BUG RUN" below. All confirmed fixed on a real
+iPhone. Prod build clean (14 pages), typecheck clean. Debug probes removed in `b0687af`.
+⚠️ STILL OPEN: **Sanity CORS** for the new origin, or `/studio` fails there (§7 item 0000).
+
+### 🍎 iOS BUG RUN — three defects, ~8 rounds — Session 22
+All three were invisible on desktop AND in emulated mobile Chrome; every one was finally
+identified from an on-device readout, not from local reproduction. **The meta-lesson: when a bug
+is iOS-only, instrument the device early — local emulation actively misled here, repeatedly
+"passing" while the phone failed.**
+
+**1. The intro loader never appeared (`5526ee5`).**
+The overlay carried its EXIT MASK at all times:
+`mask-image: radial-gradient(circle calc(var(--hole)*1vmax) …, transparent 99%, black 100%)`
+with `--hole: 0`. In a CSS mask **transparent means hidden**, so a zero-radius gradient whose only
+reachable stop is transparent makes the overlay **mask itself away**. Chrome resolves the
+degenerate `0px` case as effectively opaque (hence desktop was fine); iOS Safari resolves it the
+other way and the whole intro is invisible. The mask is now attached ONLY when the exit starts.
+⚠️ **A DOM query cannot see a CSS mask** — `opacity`, `visibility`, `z-index` and hit-testing all
+read perfectly healthy while the element was masked to nothing. That cost four wrong diagnoses.
+Check computed `maskImage`/pixels, not element properties.
+Related fixes in the same area: `prefers-reduced-motion` no longer SKIPS the intro (iOS reports
+`reduce` whenever **Low Power Mode** is on — very common, and it was firing `finish()` on the
+first frame); the scroll lock is applied by an **inline script before first paint** (`763a21d`)
+because doing it in `useGSAP` left the hero painting first, unlocked, and mis-measuring its pin;
+and hand-off no longer depends on GSAP timeline callbacks (`502fc82`) since the compositor keeps
+animating the mask even when the JS loop stalls.
+
+**2. The works-journey project cards never appeared (`d961026`).**
+The ticker computed the right values and its writes never reached the rendered nodes. Signature,
+captured twice on device in the SAME tick:
+```
+beat0 drv p=0.77 m=1.00 -> frame op=1.00 skin 0.00   (correct)
+beat1 drv p=0.65 m=0.98 -> frame op=0.00 skin 1.00   (untouched markup defaults)
+```
+Both compute to `frame=1.00`, same code path, one written and one not. Root cause: **the ticker
+held element references that go stale** — `gsap.quickSetter` caches its element, React swaps the
+window between `<Link>` (published) and `<div>` (unpublished), and **`gsap.matchMedia()` re-runs
+its callback whenever the query re-evaluates, which iOS Safari does when the browser toolbar
+collapses during scroll.** *That is also why Android was always fine — its chrome doesn't trigger
+the re-evaluation.*
+Fixes, in order of how much they matter:
+  a. **The window's opacity is now derived from the TIMELINE PLAYHEAD**, not the ticker's proxies,
+     and written to nodes re-queried from the live beat. The playhead cannot go stale. The ticker
+     still owns flight transforms, where a dropped frame is invisible anyway.
+  b. Every write re-resolves its node via `querySelector` on the beat (`f31c954`).
+  c. Hero drops any previously registered works ticker before adding one (`69e9656`), so two
+     generations can never drive the DOM at once.
+  d. Covers are warmed + decoded at module load, `decoding="sync"` + `fetchPriority="high"` on the
+     beat `<img>`, and the Verkos cover recompressed 274 KB → 191 KB. The window lives in a
+     scroll-scrubbed pin, so a late decode can miss the frames its beat is on stage — consistent
+     with the heaviest cover (beat 2) being the last one to fail.
+
+**3. A half-exited beat wrapper hid the card (`374557e`).**
+`[data-beat-inner]` — the wrapper holding the title, window and copy — stranded at **opacity 0.70**
+part-way through the beat's exit, dimming the card toward invisible while the frame's OWN opacity
+read a healthy 1.00. (Found only by walking the ANCESTOR CHAIN; every frame-level check passed.)
+It strands because the exit tweens are `immediateRender:false` and ScrollTrigger's snap — which is
+meant to carry a reader who stops mid-exit through to the clean state — rarely fires on touch,
+where native momentum doesn't produce the scroll-end snap needs. A per-frame guard now forces
+`inner` to a clean state from the playhead alone.
+
+⚠️ **PATTERN TO REMEMBER:** every one of these is the same shape — *a GSAP end-state that a
+`fromTo` with `immediateRender:false` never reached, or an element reference that went stale.*
+On this page, anything whose VISIBILITY matters must be derivable from the playhead and written to
+a freshly-queried node. Don't trust a cached setter or a tween's end-state to have run.
 
 ### ✅ DOMAIN RESOLVED — `rudyman.com` live via Hostinger DNS — Session 22
 **Went live 2026-07-30.** The route there matters, because the first diagnosis was wrong.
@@ -1468,27 +1531,23 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
     (decision cards, diagrams, statements, annotated images) — only desktop was captured. (d) `ogl` is
     an unused dep (from the removed video shader) — safe to drop on the next `npm install`.
 
-0. **⭐ MOBILE RESPONSIVENESS — STARTED Session 17, PARTIALLY DONE.** DONE (shipped `a682c1c`, see
-   §6 "MOBILE HERO + VIDEO REMOVAL" + "LIR MOBILE READABILITY"): phone shaders already run (WebGL2
-   scene on coarse pointer via the mobile quality profile — that predates this session); the **mobile
-   fallback VIDEO is REMOVED** (deleted everywhere, dark canvas replaces it); the hero **scroll journey
-   is shrunk** (~half the scroll on touch) so the empty drag-scrolls are gone; the **iOS no-text bug**
-   (revealOnce + failsafe) and the **white-flash-at-bottom** are fixed; and the two flagged **LIR
-   text-SVGs** (orange gap box + dd3 why/cost cards) are widened on phones. STILL OPEN:
-   a. **REAL iOS-Safari + Android device verification** — everything above was checked in mobile-
-      EMULATED headless Chrome (SwiftShader), NOT real Safari. The iOS text fix is a timing failsafe,
-      not a confirmed root-cause fix on-device; the user must load the live site on an actual iPhone +
-      Android phone and confirm: headline text appears, scroll feels tight/accessible, no white flash,
-      SVGs readable. Perf/lag on the real GPU still unverified on-device.
-   b. **Hero left/right white gutters on mobile** (the curved CASES/PLAYS side masks — user's original
-      ask) — NOT addressed this session; still to check on a real phone.
-   c. **Footer shaders on mobile** — the log says they were already wired (Session pre-17 "real footer
-      shaders on phone"); confirm on-device.
-   d. **Verify the mobile breakpoints of ALL the Session-16 LIR work** (decision cards, media rows,
-      image-cycle boxes, before/after slider, demo video player) — only the two named text-SVGs were
-      touched this session; the rest is unverified on a phone.
-   Touchpoints: `Hero.tsx` (+ `hero3d/*` WebGL2/touch gates), `WorksJourney.tsx`, `FooterGlow.tsx`,
-   `LirCaseStudy.tsx`/`lirBlocks.tsx`. Lenis is disabled on coarse-pointer; GSAP is `matchMedia`-gated.
+0. **MOBILE — the blocking iOS defects are FIXED (Session 22); what's left is polish.**
+   The intro loader, page scrolling and the works-journey cards were all broken on iPhone and are
+   now confirmed working on a real device (full detail + the pattern in §6 "iOS BUG RUN"). Also
+   already done in Session 17: the mobile fallback video is gone, the hero scroll journey is
+   shortened on touch, the iOS no-text bug and the white-flash-at-bottom are fixed, and two LIR
+   text-SVGs are widened on phones. STILL OPEN:
+   a. **Android re-check.** Everything was fixed against iOS Safari this session; Android was
+      always fine but has not been re-tested since. Worth one pass.
+   b. **Hero left/right white gutters on mobile** (the curved CASES/PLAYS side masks) — never
+      addressed, still to check on a real phone.
+   c. **Footer shaders on mobile** — believed wired; confirm on-device.
+   d. **The Session-16 LIR blocks on a phone** (decision cards, media rows, image-cycle boxes,
+      before/after slider, demo video player) — still unverified on a real device.
+   e. **`/work` cards have no description on touch** — the kicker/eyebrow are hover-only, so phone
+      users get image + title only. Add a static line under the title for coarse pointers.
+   ⚠️ **When touching hero/works motion again, read the PATTERN note at the end of §6 "iOS BUG
+   RUN" first** — three separate bugs there had the same root shape.
 
 0b. **⭐ BUILD THE `/play` PAGE — NOW MOSTLY COMPOSITION.** Session 22 built the two pieces it needs
    and both are already generic: **`PageGlow`** (via `PageGlowMount`, the particle field) and
@@ -1549,26 +1608,22 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ## 8. Session History
 
 ### Session 22 — 2026-07-30
-**Rebuilt the `/work` index (cinematic particle field + alternating project plates), excluded the
-before/after slider from the lightbox, removed the zoom cursor site-wide, and — the important
-one — DISPROVED Session 21's domain diagnosis.**
-- **`/work` (`e809c42`)** — was still the original light placeholder grid. Now a dark route with
-  `PageGlow`: the footer's visual DNA but ~3× denser, filling the viewport, flying TOWARD the
-  camera continuously with scroll ACCELERATING (not starting) the flight, 3 parallax strata, a
-  velocity flare and an intro ignition. Cards alternate left/right; plate is clean at rest with
-  the Tanker title below, and hover drops the user's `#000 @ 20%` scrim to reveal the headline +
-  accent eyebrow + year. Full detail + the GLSL traps in §6.
-- **Lightbox/cursor (`beae3ab`)** — the drag slider no longer opens a full-screen view; the
-  magnifier cursor is gone everywhere (lift + ring is the affordance now).
-- **🎉 DOMAIN LIVE — `rudyman.com` serves the site.** Session 21's "just waiting on propagation"
-  was WRONG: `ns1/ns2.vercel-dns.com` were answering **`Query refused`**, i.e. Vercel never
-  provisioned the zone, so resolvers SERVFAIL'd. Force-verify and a full remove + re-add both
-  failed to create it. **Fixed by bypassing Vercel DNS**: nameservers back to Hostinger + an
-  `A @ -> 216.198.79.1` and `CNAME www -> 8a0f233b3a7d8efb.vercel-dns-017.com.`; live within
-  minutes, cert issued, all routes 200. Full account + the cache-bypassing diagnostic in §6.
-  ⚠️ Learned the hard way: `DELETE /v6/domains/<d>` also drops the PROJECT bindings — restored.
-  **Only Sanity CORS for the new origin remains.**
-- Typecheck + prod build clean (14 pages). Dev server + headless Chrome stopped at session end.
+**Went live on `rudyman.com`, rebuilt the /work index, and fixed three iOS-only defects that
+made the phone experience unusable.**
+- **DOMAIN LIVE.** Vercel never provisioned the DNS zone (their nameservers answered
+  `Query refused`), so DNS moved BACK to Hostinger with `A @ -> 216.198.79.1` +
+  `CNAME www -> 8a0f233b3a7d8efb.vercel-dns-017.com.` Live within minutes. Full account in §6.
+- **/work index rebuilt** (`e809c42`) — cinematic particle field flying toward the camera,
+  alternating project plates, hover scrim. Plus the lightbox/zoom-cursor changes (`beae3ab`).
+- **iOS bug run (~8 rounds).** (1) the intro loader was invisible because the overlay carried its
+  exit MASK at rest and iOS resolves the degenerate zero-radius gradient as fully transparent;
+  (2) the works-journey cards never appeared because the ticker's element references go stale when
+  `gsap.matchMedia()` re-runs — which iOS does when the browser toolbar collapses, and Android
+  never does; (3) a half-exited beat wrapper sat at opacity 0.70 over the card. All three fixed
+  and confirmed on a real iPhone. Detail + the pattern behind all three in §6 "iOS BUG RUN".
+- **Debug probes removed** (`b0687af`) once confirmed.
+- Typecheck + prod build clean (14 pages) throughout.
+- **Ended:** shipped and live; dev server left RUNNING at the user's request.
 
 ### Session 21 — 2026-07-29
 **Fixed the iOS "site won't scroll at all" bug, rebuilt both case-study opening covers as
