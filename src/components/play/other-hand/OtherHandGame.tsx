@@ -100,12 +100,21 @@ export function OtherHandGame() {
     measure();
     const ro = new ResizeObserver(measure);
     if (discRef.current) ro.observe(discRef.current);
+    // The STAGE is now the scroll container (it has overflow-y-auto), so its
+    // scroll events do NOT bubble to window. Listening only on window left the
+    // hit zone behind whenever the player scrolled inside the stage. Listen on
+    // both — window still matters when the whole page scrolls.
+    const stage = stageRef.current;
+    stage?.addEventListener("scroll", measure, { passive: true });
     window.addEventListener("scroll", measure, { passive: true });
     window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
     return () => {
       ro.disconnect();
+      stage?.removeEventListener("scroll", measure);
       window.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
     };
   }, [phase]);
 
@@ -129,9 +138,22 @@ export function OtherHandGame() {
   }, []);
 
   return (
+    // `flex-1` + `min-h-0`, NOT `min-h-svh`: the page shell above is already a
+    // min-h-svh flex column with the back link in it, so a second full viewport
+    // here made the card taller than the screen and `justify-center` then
+    // overflowed it at BOTH ends — which is how the intro ended up running under
+    // the Android nav bar with its top clipped.
+    //
+    // `overflow-y-auto` (was `overflow-hidden`): the intro card is legitimately
+    // taller than a phone viewport. Clipping it hid the Begin button; scrolling
+    // is the honest answer. `overscroll-contain` stops the scroll chaining to the
+    // page behind. Horizontal stays hidden.
+    //
+    // `pb-[env(safe-area-inset-bottom)]` keeps the volume bar clear of the
+    // Android/iOS home indicator.
     <div
       ref={stageRef}
-      className="relative flex min-h-svh w-full select-none flex-col items-center justify-center gap-8 overflow-hidden bg-[#050505]"
+      className="relative flex min-h-0 w-full flex-1 select-none flex-col items-center justify-center gap-5 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#050505] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-8"
       onPointerDown={() => gameRef.current?.resumeAudio()}
     >
       {phase === "intro" ? (
@@ -145,7 +167,13 @@ export function OtherHandGame() {
           <div
             ref={discRef}
             style={{ touchAction: "none" }}
-            className="relative flex h-[min(360px,74vw)] w-[min(360px,74vw)] cursor-crosshair items-center justify-center overflow-hidden rounded-full border-4 border-[#1a1a1a] bg-black shadow-[0_0_50px_rgba(20,20,20,0.5)]"
+            // Sized against BOTH axes. `74vw` alone gave a 266px disc on a 360px
+            // phone — small, and with the caption + volume bar stacked under it
+            // the whole thing still felt cramped. `88vw` uses the width that is
+            // actually there, and the `52svh` term stops the disc from crowding
+            // out the controls in landscape or on a short viewport. Capped at
+            // 420px so a desktop does not get a comically large disc.
+            className="relative flex aspect-square h-auto w-[min(420px,88vw,52svh)] shrink-0 cursor-crosshair items-center justify-center overflow-hidden rounded-full border-4 border-[#1a1a1a] bg-black shadow-[0_0_50px_rgba(20,20,20,0.5)]"
           >
             {simState && <Visualizer simState={simState} />}
 
@@ -167,12 +195,18 @@ export function OtherHandGame() {
               )}
           </div>
 
-          <p className="px-6 text-center text-[12px] tracking-[0.18em] text-white/25">
-            DRAG INSIDE THE DISC — MOUSE, FINGER, OR A GAMEPAD STICK
+          {/* Shorter on a phone: the full line wrapped to two cramped rows of
+              wide-tracked caps right under the disc. Same information, sized to
+              the space it has. */}
+          <p className="max-w-[34ch] shrink-0 px-6 text-center text-[11px] tracking-[0.14em] text-white/25 sm:max-w-none sm:text-[12px] sm:tracking-[0.18em]">
+            <span className="sm:hidden">DRAG INSIDE THE DISC</span>
+            <span className="hidden sm:inline">
+              DRAG INSIDE THE DISC — MOUSE, FINGER, OR A GAMEPAD STICK
+            </span>
           </p>
 
           {/* volume + fullscreen */}
-          <div className="z-10 flex items-center gap-3 rounded-full border border-white/10 bg-black/40 px-4 py-2 backdrop-blur-md transition-all duration-300 hover:border-white/20">
+          <div className="z-10 flex shrink-0 items-center gap-2.5 rounded-full border border-white/10 bg-black/40 px-3.5 py-2 backdrop-blur-md transition-all duration-300 hover:border-white/20 sm:gap-3 sm:px-4">
             <button
               type="button"
               aria-label={volume === 0 ? "Unmute" : "Mute"}
@@ -229,23 +263,27 @@ export function OtherHandGame() {
 /** The intro note + start gate. Also the user gesture that unlocks audio. */
 function IntroCard({ onStart }: { onStart: () => void }) {
   return (
-    <div className="mx-auto max-w-[46ch] px-6 text-center">
-      <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-white/35">
+    // `my-auto` centres the card when it fits and, unlike the parent's
+    // justify-center alone, does NOT clip the top when the card is taller than
+    // the stage — auto margins collapse to 0 rather than going negative, so the
+    // card scrolls from its true top instead of having it cut off.
+    <div className="mx-auto my-auto w-full max-w-[46ch] px-6 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-[0.26em] text-white/35 sm:text-[11px] sm:tracking-[0.32em]">
         A digital meditation
       </p>
       <h1
-        className="mt-5 text-[clamp(2.25rem,8vw,4rem)] uppercase leading-[0.95] tracking-[0.01em] text-white"
+        className="mt-4 text-[clamp(2rem,8vw,4rem)] uppercase leading-[0.95] tracking-[0.01em] text-white sm:mt-5"
         style={{ fontFamily: "var(--font-display-tanker)" }}
       >
         The Other Hand
       </h1>
 
-      <p className="mt-6 text-[15px] leading-relaxed text-white/60">
+      <p className="mt-5 text-[14px] leading-relaxed text-white/60 sm:mt-6 sm:text-[15px]">
         Consciousness reaching for meaning, and for a direction to create in.
         Something moves alongside you here — the invisible guiding hand. You
         cannot see it, only feel it answer.
       </p>
-      <p className="mt-4 text-[15px] leading-relaxed text-white/60">
+      <p className="mt-3.5 text-[14px] leading-relaxed text-white/60 sm:mt-4 sm:text-[15px]">
         Entropy always pulls toward dissolution. Nothing is made unless
         something pushes. Hold the sync long enough and the shape and the sound
         begin to evolve — scattered particles drawing together into something
@@ -255,19 +293,19 @@ function IntroCard({ onStart }: { onStart: () => void }) {
       {/* How to play — plain and short. The piece has no score and no fail
           state, so the only thing a newcomer actually needs is "here is how you
           touch it, and here is what to expect back". */}
-      <div className="mx-auto mt-10 max-w-[36ch] text-left">
-        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/30">
+      <div className="mx-auto mt-8 max-w-[36ch] text-left sm:mt-10">
+        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/30 sm:tracking-[0.3em]">
           How to play
         </p>
-        <ul className="mt-4 space-y-2.5">
+        <ul className="mt-3.5 space-y-2.5 sm:mt-4">
           {[
             ["Move", "Press and drag inside the disc — with a finger on touch, or the mouse. A gamepad stick works too; that is what it was built for."],
             ["Hold", "Stay in sync to hold a shape. Break it and entropy takes it back."],
             ["Listen", "Sound is half the piece. Use the volume slider below the disc."],
             ["Evolve", "The longer you sustain it, the further the shape and the sound go. There is somewhere to reach."],
           ].map(([k, v]) => (
-            <li key={k} className="flex gap-3 text-[13px] leading-relaxed">
-              <span className="w-[52px] shrink-0 pt-px text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">
+            <li key={k} className="flex gap-2.5 text-[12.5px] leading-relaxed sm:gap-3 sm:text-[13px]">
+              <span className="w-[46px] shrink-0 pt-px text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/45 sm:w-[52px] sm:text-[10px] sm:tracking-[0.18em]">
                 {k}
               </span>
               <span className="text-white/55">{v}</span>
@@ -279,7 +317,7 @@ function IntroCard({ onStart }: { onStart: () => void }) {
       <button
         type="button"
         onClick={onStart}
-        className="group mt-10 inline-flex items-center gap-3 rounded-full border border-white/25 px-8 py-3.5 text-[13px] font-medium uppercase tracking-[0.22em] text-white/85 transition-all duration-300 hover:border-white/60 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+        className="group mt-8 inline-flex items-center gap-3 rounded-full border border-white/25 px-8 py-3.5 text-[13px] font-medium uppercase tracking-[0.22em] text-white/85 transition-all duration-300 hover:border-white/60 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:mt-10"
       >
         Begin
         <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">

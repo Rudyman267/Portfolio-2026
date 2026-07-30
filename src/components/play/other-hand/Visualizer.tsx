@@ -42,12 +42,25 @@ class Particle {
   }
 
   update(
-    dt: number, 
-    flow: Vector2, 
-    simState: SimulationState, 
-    time: number, 
-    w: number, 
-    h: number
+    dt: number,
+    flow: Vector2,
+    simState: SimulationState,
+    time: number,
+    w: number,
+    h: number,
+    /**
+     * Uniform scale for every hard-coded shape radius below.
+     *
+     * The engine was authored against a fixed ~360px disc, so the target
+     * geometry is in RAW PIXELS (spiral arm 140, main-sequence star 100, red
+     * giant 140, pulsar jet 250...). The disc is responsive here, so on a phone
+     * (~266px) those radii overflow the canvas and only the middle of each shape
+     * lands inside the circle — which is exactly the "circle is small and the
+     * particle shapes are not visible inside it" report. Scaling the targets
+     * keeps every stage framed identically at any disc size, WITHOUT editing the
+     * stage maths (so a re-sync from the standalone app stays a file copy).
+     */
+    s: number = 1
   ) {
     const { harmony, playerIntent, evolutionStage, gameActive, isFailed, isAscended } = simState;
     const intensity = playerIntent.force;
@@ -70,7 +83,7 @@ class Particle {
     }
 
     // --- WRAPPING LOGIC ---
-    const margin = 50;
+    const margin = 50 * s;
     if (this.x > w + margin) this.x = -margin;
     if (this.x < -margin) this.x = w + margin;
     if (this.y > h + margin) this.y = -margin;
@@ -252,12 +265,24 @@ class Particle {
             pX = x2; pY = y2;
         }
 
-        const focalLength = 400;
+        // ── APPLY THE RESPONSIVE SCALE ──
+        // Every stage above computes pX/pY/pZ in the engine's original
+        // ~360px-disc pixel space. Scaling here (rather than inside each of the
+        // eight stages) means the shape maths stays byte-identical to the
+        // standalone app and there is exactly one place this can go wrong.
+        pX *= s;
+        pY *= s;
+        pZ *= s;
+
+        // focalLength scales too, or the perspective divisor would compress the
+        // depth differently at different disc sizes and the shapes would read as
+        // flatter on a phone than on a desktop.
+        const focalLength = 400 * s;
         const depth = 1.0 + (pZ / focalLength);
-        
+
         targetX = centerX + pX / depth;
         targetY = centerY + pY / depth;
-        this.z = pZ; 
+        this.z = pZ;
 
         const attraction = 0.05 + (evolutionStage * 0.01);
         const ax = (targetX - this.x) * attraction; 
@@ -298,7 +323,7 @@ class Particle {
     this.y += this.vy * dt;
   }
 
-  draw(ctx: CanvasRenderingContext2D, simState: SimulationState, failureFade: number, helloFade: number, ascensionFade: number) {
+  draw(ctx: CanvasRenderingContext2D, simState: SimulationState, failureFade: number, helloFade: number, ascensionFade: number, s: number = 1) {
     const { harmony, playerIntent, evolutionStage, gameActive, isFailed, isAscended } = simState;
     const chaos = 1 - harmony;
     
@@ -341,10 +366,15 @@ class Particle {
     const b = this.color.b + (DESYNC_RED.b - this.color.b) * colorMix;
 
     let alpha = 0.6;
-    let radius = this.radiusBase;
+    // Dot size scales with the disc too, but only PARTLY (sqrt): at full linear
+    // scale the dots on a phone get so small they stop reading as lit points,
+    // and the shape loses its glow. sqrt keeps them proportionally chunkier on a
+    // small disc, which is what makes the form legible at 266px.
+    let radius = this.radiusBase * Math.sqrt(s);
 
-    // Depth
-    const depthScale = 1.0 + (this.z / 200); 
+    // Depth — the /200 divisor is in the same original pixel space as the shape
+    // radii, so it scales with them or near particles would balloon on a phone.
+    const depthScale = 1.0 + (this.z / (200 * s));
     radius *= depthScale;
 
     if (gameActive && evolutionStage === 7 && harmony > 0.5) {
@@ -383,19 +413,57 @@ export const Visualizer: React.FC<VisualizerProps> = ({ simState }) => {
   const helloFadeRef = useRef<number>(1.0);
   const ascensionFadeRef = useRef<number>(1.0);
 
+  /**
+   * The disc size the engine's hard-coded shape radii were authored against.
+   * `s` below is the current disc size over this, and every raw-pixel geometry
+   * value gets multiplied by it.
+   */
+  const DESIGN_SIZE = 360;
+  const scaleRef = useRef<number>(1);
+
   useEffect(() => {
     const cvs = canvasRef.current;
     if (!cvs) return;
-    
-    const size = cvs.parentElement?.getBoundingClientRect().width || 640;
-    cvs.width = size;
-    cvs.height = size;
+    const parent = cvs.parentElement;
+
+    /**
+     * Size the BACKING STORE to the disc, in device pixels.
+     *
+     * Two bugs this fixes, both visible on the reported Android phone:
+     *  • It only ran ONCE on mount, so after an orientation change or the
+     *    address bar collapsing, the canvas kept its old size and the drawing
+     *    was stretched by CSS.
+     *  • It ignored devicePixelRatio. A 266px CSS disc on a DPR-3 phone was
+     *    being drawn at 266x266 and upscaled, which is why the dots looked like
+     *    soft blobs rather than lit points.
+     */
+    const resize = () => {
+      const cssSize = parent?.getBoundingClientRect().width || 640;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      cvs.width = Math.round(cssSize * dpr);
+      cvs.height = Math.round(cssSize * dpr);
+      // The shape scale is driven by the CSS size (the visual disc), then the
+      // whole thing is multiplied up by dpr because the particle coordinates
+      // live in backing-store space.
+      scaleRef.current = (cssSize / DESIGN_SIZE) * dpr;
+    };
+    resize();
 
     if (particlesRef.current.length === 0) {
-        for (let i = 0; i < VISUALS.PARTICLE_COUNT; i++) {
-            particlesRef.current.push(new Particle(size, size));
-        }
+      for (let i = 0; i < VISUALS.PARTICLE_COUNT; i++) {
+        particlesRef.current.push(new Particle(cvs.width, cvs.height));
+      }
     }
+
+    const ro = new ResizeObserver(resize);
+    if (parent) ro.observe(parent);
+    window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", resize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
+    };
   }, []);
 
   useEffect(() => {
@@ -429,6 +497,8 @@ export const Visualizer: React.FC<VisualizerProps> = ({ simState }) => {
         ascensionFadeRef.current = 1.0;
     }
 
+    const s = scaleRef.current;
+
     let timeSpeed = 0.01;
     if (simState.gameActive) {
         timeSpeed += (simState.playerIntent.force * 0.02) + (simState.evolutionStage * 0.005);
@@ -451,7 +521,7 @@ export const Visualizer: React.FC<VisualizerProps> = ({ simState }) => {
         // Special Background for Black Hole
         if (simState.evolutionStage === 7) {
             // Dark Void Center
-             const grad = ctx.createRadialGradient(cvs.width/2, cvs.height/2, 20, cvs.width/2, cvs.height/2, 180);
+             const grad = ctx.createRadialGradient(cvs.width/2, cvs.height/2, 20 * s, cvs.width/2, cvs.height/2, 180 * s);
              grad.addColorStop(0, 'rgba(0,0,0,1)'); // Pitch black core
              grad.addColorStop(0.3, 'rgba(0,0,0,0.8)');
              grad.addColorStop(0.4, 'rgba(100,150,255,0.2)'); // Event horizon glow
@@ -466,7 +536,7 @@ export const Visualizer: React.FC<VisualizerProps> = ({ simState }) => {
             // Standard Harmony Glow
             const opacity = (simState.harmony - 0.6) / 0.4; 
             const stageGlow = simState.evolutionStage / 7;
-            const grad = ctx.createRadialGradient(cvs.width/2, cvs.height/2, 10, cvs.width/2, cvs.height/2, 150 + (stageGlow * 50));
+            const grad = ctx.createRadialGradient(cvs.width/2, cvs.height/2, 10 * s, cvs.width/2, cvs.height/2, (150 + (stageGlow * 50)) * s);
             
             const r = 200 + (55 * stageGlow);
             const g = 220 + (35 * stageGlow);
@@ -490,14 +560,15 @@ export const Visualizer: React.FC<VisualizerProps> = ({ simState }) => {
 
     particlesRef.current.forEach(p => {
         p.update(
-            1.0, 
-            flow, 
+            1.0,
+            flow,
             simState,
             timeRef.current,
             cvs.width,
-            cvs.height
+            cvs.height,
+            s
         );
-        p.draw(ctx, simState, failFadeRef.current, helloFadeRef.current, ascensionFadeRef.current);
+        p.draw(ctx, simState, failFadeRef.current, helloFadeRef.current, ascensionFadeRef.current, s);
     });
     
     ctx.globalCompositeOperation = 'source-over';
