@@ -9,6 +9,7 @@ import { Nav, DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
 import { gsap, useGSAP, ease } from "@/lib/gsap";
 import { cn } from "@/lib/utils";
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
+import { NowPlaying } from "@/components/audio/NowPlaying";
 
 export function Header({
   brand = "Rudyman",
@@ -159,15 +160,27 @@ export function Header({
           />
         )}
 
-        <button
-          type="button"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className="sm:hidden inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] hover:bg-white/10"
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        {/* ── MUSIC TOGGLE (mobile) ──
+            Sits NEXT TO the hamburger, not inside the menu. It has to be
+            reachable mid-scroll without opening a panel, and on a phone the
+            case studies have no sticky rail to host it — the header is the only
+            element that is always on screen. `compact` drops the title/artist
+            (no room), leaving just the waveform, which is already the on/off
+            indicator; the aria-label still names the track.
+            Mobile only: at `sm:` and up the fuller widget appears in the
+            case-study rail and the footer. */}
+        <div className="flex items-center gap-1 sm:hidden">
+          <NowPlaying compact />
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] hover:bg-white/10"
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </Container>
 
       {/* Mobile menu panel — rendered as a FIXED top-layer overlay, NOT a child

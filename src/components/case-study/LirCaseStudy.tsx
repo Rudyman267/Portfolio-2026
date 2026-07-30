@@ -27,6 +27,7 @@ import {
 import { DecisionText, VerkosDiagram } from "@/components/case-study/verkosBlocks";
 import { VerkosPrototype } from "@/components/case-study/VerkosPrototype";
 import { ImageLightbox } from "@/components/case-study/ImageLightbox";
+import { NowPlaying } from "@/components/audio/NowPlaying";
 
 /** Chapters wired to the full-viewport flash transition — every numbered
  *  section now opens on its Tanker title flash, then spawns its content. */
@@ -450,6 +451,17 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                 ))}
               </ul>
             </nav>
+
+            {/* ── MUSIC TOGGLE ──
+                Under the Contents block, inside the rail — so it inherits the
+                rail's `lg:sticky` and stays reachable through the whole read
+                (per the user's reference screenshot).
+                `lg:block` to match the Contents nav above it: below lg the rail
+                is not sticky, so a control here would scroll away — on phones
+                the header carries the compact waveform instead. */}
+            <div className="mt-5 hidden lg:block">
+              <NowPlaying />
+            </div>
           </aside>
 
           {/* ── RIGHT COLUMN — hero + the whole reading spine. Vertical rhythm

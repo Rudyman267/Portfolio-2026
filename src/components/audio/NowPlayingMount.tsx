@@ -19,6 +19,32 @@ import { NowPlaying } from "./NowPlaying";
  */
 export function NowPlayingMount() {
   const [shown, setShown] = useState(false);
+  /**
+   * True once the closing footer scene is on screen.
+   *
+   * The footer now carries its own "Now playing" control, so the floating one
+   * must get out of the way — two identical toggles on screen at once is
+   * confusing, and this one is pinned bottom-right where it would sit on top of
+   * the footer's back-to-top button and the giant RUDYMAN wordmark.
+   * Same pattern the Header already uses to collapse its nav over the footer.
+   */
+  const [atFooter, setAtFooter] = useState(false);
+
+  useEffect(() => {
+    const footer = document.getElementById("contact");
+    if (!footer) return;
+    const update = () => {
+      const r = footer.getBoundingClientRect();
+      setAtFooter(r.top < window.innerHeight * 0.9 && r.bottom > 0);
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   useEffect(() => {
     // If the loader already finished before this mounted (fast nav, or a
@@ -40,11 +66,28 @@ export function NowPlayingMount() {
     };
   }, []);
 
+  // Gates BOTH opacity and hit-testing. Fading alone would leave an invisible
+  // but still-clickable target sitting over the footer's back-to-top button.
+  // `visibility` is transitioned alongside opacity (not switched instantly) so
+  // the fade still plays: the browser applies `visible` immediately on the way in
+  // and defers `hidden` to the end of the transition on the way out.
+  const visible = shown && !atFooter;
+
   return (
     <div
-      className={`pointer-events-none fixed bottom-[clamp(14px,2.5vh,28px)] right-[clamp(14px,2.5vw,36px)] z-[60] transition-opacity duration-700 ease-out ${
-        shown ? "opacity-100" : "opacity-0"
+      aria-hidden={!visible}
+      // `hidden sm:block` — DESKTOP ONLY. On a phone the compact waveform lives
+      // in the header (always on screen, next to the hamburger), so showing this
+      // one too would put two identical controls on a small viewport.
+      className={`pointer-events-none fixed bottom-[clamp(14px,2.5vh,28px)] right-[clamp(14px,2.5vw,36px)] z-[60] hidden sm:block ${
+        visible ? "opacity-100" : "opacity-0"
       }`}
+      style={{
+        visibility: visible ? "visible" : "hidden",
+        transition:
+          "opacity 500ms ease-out, visibility 0ms linear " +
+          (visible ? "0ms" : "500ms"),
+      }}
     >
       <NowPlaying />
     </div>

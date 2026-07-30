@@ -12,6 +12,7 @@ import { scrollToTop } from "@/components/motion/lenisBridge";
 import { DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
 import { scrollToWorks } from "@/components/sections/worksAnchor";
+import { NowPlaying } from "@/components/audio/NowPlaying";
 
 // Ambient particle/energy-blob glow behind the footer — a whisper of the hero
 // ecosystem (same palette/shapes/motion). Client-only; skips itself on
@@ -254,6 +255,28 @@ export function Footer({
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* ── MUSIC TOGGLE ──
+              In the footer so the track can always be turned off from the bottom
+              of ANY page, not just the home hero. Spans both columns and sits
+              beneath them behind a hairline, so it reads as a utility rather than
+              a third list of links.
+              Shown at every width here (unlike the case-study rail, which is
+              lg-only): the footer is the end of the page on a phone too, so there
+              is room for the title and artist. */}
+          <div
+            data-footer-item
+            className="col-span-2 mt-10 border-t border-fg/10 pt-6"
+          >
+            <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-fg/40">
+              Now playing
+            </p>
+            {/* -ml-1.5 cancels the button's own left padding so the waveform
+                optically aligns with the column labels above it */}
+            <div className="-ml-1.5">
+              <NowPlaying />
+            </div>
           </div>
         </div>
       </div>

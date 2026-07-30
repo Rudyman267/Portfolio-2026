@@ -32,7 +32,20 @@ const BARS = [
   { h: 0.5, delay: "90ms", dur: "660ms" },
 ];
 
-export function NowPlaying() {
+export function NowPlaying({
+  /**
+   * `compact` drops the title/artist and renders the waveform alone.
+   *
+   * Used in the site header, where it has to live next to the hamburger on a
+   * phone: the track text would not fit, and the control cannot go INSIDE the
+   * menu (a reader mid-scroll needs to reach it without opening a panel). The
+   * waveform on its own still communicates on/off, which is the whole job here —
+   * see the note above about it being the state indicator.
+   */
+  compact = false,
+}: {
+  compact?: boolean;
+} = {}) {
   const { playing, toggle, track } = useSiteAudio();
 
   return (
@@ -46,7 +59,9 @@ export function NowPlaying() {
           : `Play background music — ${track.title} by ${track.artist}`
       }
       style={{ touchAction: "manipulation" }}
-      className="group/np pointer-events-auto flex items-center gap-3 rounded-full py-1.5 pl-1.5 pr-3 text-left transition-colors duration-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+      className={`group/np pointer-events-auto flex items-center rounded-full text-left transition-colors duration-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+        compact ? "justify-center p-1.5" : "gap-3 py-1.5 pl-1.5 pr-3"
+      }`}
     >
       {/* ── THE WAVEFORM ──
           Motion = audio on. When off the bars sit at a flat baseline and a
@@ -59,14 +74,18 @@ export function NowPlaying() {
         {BARS.map((b, i) => (
           <span
             key={i}
-            className={`w-[2px] rounded-full bg-white/80 transition-[height,opacity] duration-500 ease-out ${
+            // `bg-current`, not `bg-white`: this now also mounts in the site
+            // header, which is a WHITE bar with black text on light routes. A
+            // hardcoded white bar was invisible there. Inheriting `color` means
+            // the waveform is legible on every surface it lands on.
+            className={`w-[2px] rounded-full bg-current opacity-80 transition-[height,opacity] duration-500 ease-out ${
               playing ? "np-bar" : ""
             }`}
             style={{
               // Off: every bar collapses to the same 2px baseline dash, which
               // is what makes the slash read as cancelling a flat signal.
               height: playing ? `${Math.round(b.h * 18)}px` : "2px",
-              opacity: playing ? 1 : 0.4,
+              opacity: playing ? 0.85 : 0.4,
               animationDelay: b.delay,
               animationDuration: b.dur,
             }}
@@ -79,28 +98,34 @@ export function NowPlaying() {
             outright and the class silently does nothing, so the slash would
             never hide. */}
         <span
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[1.5px] w-[26px] origin-center rounded-full bg-white/70 transition-all duration-300"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[1.5px] w-[26px] origin-center rounded-full bg-current transition-all duration-300"
           style={{
             transform: `translate(-50%,-50%) rotate(-45deg) scaleX(${playing ? 0 : 1})`,
-            opacity: playing ? 0 : 1,
+            opacity: playing ? 0 : 0.75,
           }}
         />
       </span>
 
       {/* ── TRACK ── title over artist, tight leading so the pair reads as one
-          block against the 24px waveform. */}
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span
-          className={`truncate text-[13px] font-medium transition-colors duration-300 ${
-            playing ? "text-white" : "text-white/55"
-          } group-hover/np:text-white`}
-        >
-          {track.title}
+          block against the 24px waveform.
+          Suppressed in `compact` (the header on a phone), where only the
+          waveform fits. The button's aria-label still names the track, so
+          nothing is lost for assistive tech. Colours are opacity-on-currentColor
+          rather than white so this reads on the light header too. */}
+      {!compact && (
+        <span className="flex min-w-0 flex-col leading-tight">
+          <span
+            className={`truncate text-[13px] font-medium transition-opacity duration-300 ${
+              playing ? "opacity-100" : "opacity-60"
+            } group-hover/np:opacity-100`}
+          >
+            {track.title}
+          </span>
+          <span className="truncate text-[12px] opacity-45 transition-opacity duration-300 group-hover/np:opacity-70">
+            {track.artist}
+          </span>
         </span>
-        <span className="truncate text-[12px] text-white/40 transition-colors duration-300 group-hover/np:text-white/60">
-          {track.artist}
-        </span>
-      </span>
+      )}
     </button>
   );
 }
