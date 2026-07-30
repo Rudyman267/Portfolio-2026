@@ -186,6 +186,25 @@ scroll is additionally disabled on touch (coarse pointer). globals.css has Lenis
 `.is-loading` scroll-lock + a `[data-split]` rule (opts SplitReveal headings out of `text-wrap:balance`,
 which fights SplitText line-splitting).
 
+### ⚠️ GSAP rules this codebase has been bitten by (read before touching an animation)
+1. **Never call `ScrollTrigger.getAll().forEach(t => t.kill())` in a component's cleanup.**
+   `.getAll()` is PAGE-WIDE — it kills sibling components' triggers too. `useGSAP` already
+   auto-reverts everything created inside its scope, so the manual kill is redundant *and*
+   destructive. This froze the /work heading mid-scrub for two sessions (`3767462`).
+2. **`yPercent` resolves against EACH element's own height.** Tweening `[bigThing, smallThing]`
+   with one `yPercent` moves them different pixel distances and they visually come apart. To move
+   several elements as one unit, wrap them and animate **the wrapper** (`4f8584e`).
+3. **Prefer `fromTo` + `immediateRender: false` for scrubs.** A bare `.to()` captures "whatever
+   the value is right now" as its start — nondeterministic if an entrance is still mid-flight,
+   and it makes the scrub non-reversible.
+4. **`autoAlpha` writes `visibility`, not just `opacity`.** A child left at `visibility:hidden` by
+   an interrupted entrance can NEVER be recovered by fading an ancestor. If a parent owns the
+   fade, `clearProps` the child's `opacity,visibility` when its entrance lands.
+5. **`gsap.matchMedia()` callbacks re-run whenever the query re-evaluates** — which iOS Safari
+   does when the browser toolbar collapses mid-scroll (Android does not, which is why iOS-only
+   bugs here are usually this). So: never cache element references across a re-run
+   (`gsap.quickSetter` does), and never put page-wide side effects in a matchMedia cleanup.
+
 ### Sanity schema (the flexible case-study system)
 - **Documents:** `siteSettings` (singleton), `profile` (singleton), `project` (orderable).
 - **`richContent`** = the Portable Text canvas. Block members: text block, `imageWithAlt`,
@@ -203,17 +222,22 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 22)
+## 6. Current State (as of Session 23)
 
-**Status (as of Session 22): 🎉 LIVE ON `rudyman.com` AND THE iOS BUGS ARE FIXED.**
+**Status (as of Session 23): 🎉 LIVE ON `rudyman.com`, iOS FIXED, AND `/play` IS SHIPPED.**
 Apex serves, `www` 308s, Let's Encrypt cert valid, `misconfigured: false`.
 **THE LINK TO SHARE IS `https://rudyman.com`.**
-This session also: rebuilt the **/work index** (cinematic particle field + alternating project
-plates, `e809c42`), removed the zoom cursor + excluded the before/after slider from the lightbox
-(`beae3ab`), and then spent a long run fixing **three separate iOS-only defects** that between
-them made the phone experience unusable — see "iOS BUG RUN" below. All confirmed fixed on a real
-iPhone. Prod build clean (14 pages), typecheck clean. Debug probes removed in `b0687af`.
-⚠️ STILL OPEN: **Sanity CORS** for the new origin, or `/studio` fails there (§7 item 0000).
+Session 23 added the **/play page** — a wall of AI explorations with **The Other Hand playable
+in-browser** at `/play/the-other-hand` (touch drag supported) — wired **/work + /play into the
+nav and the hero curves**, and fixed the **heading scroll bug** on both pages: `WorkShowcase` was
+killing every ScrollTrigger on the page (`3767462`), and `PageHeading` was tweening the word and
+subtitle as two independent targets so they drifted apart (`4f8584e`). Both verified
+old-fails/new-passes via CDP. Prod build clean (**16 routes**), typecheck clean.
+Session 22 before it: went live on the domain, rebuilt the **/work index** (`e809c42`), removed
+the zoom cursor + excluded the before/after slider from the lightbox (`beae3ab`), and fixed
+**three iOS-only defects** — see "iOS BUG RUN" below. All confirmed on a real iPhone.
+⚠️ STILL OPEN: **Sanity CORS** for the new origin, or `/studio` fails there (§7 item 0000) —
+deprioritized, the user doesn't use `/studio`. **The Other Hand is untested on a real iPhone.**
 
 ### 🍎 iOS BUG RUN — three defects, ~8 rounds — Session 22
 All three were invisible on desktop AND in emulated mobile Chrome; every one was finally
@@ -1493,9 +1517,20 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
     d. Optional follow-ups now that the domain is real: submit the sitemap to Google Search
        Console, and consider per-case-study OG images (§7 item 5).
 
+000a. **🎮 THE OTHER HAND — verify on a real iPhone (new in Session 23).**
+    The game ships at `/play/the-other-hand` and touch drag works, but **only in emulation**.
+    Given this project's track record (§6 "iOS BUG RUN" — three defects that every local and
+    emulated check passed while the phone failed), treat emulated touch as unverified. Things
+    most likely to bite: the drag bounds from `setBounds()` after an orientation change, Web
+    Audio needing a user gesture to unlock on iOS, and the canvas sizing under the collapsing
+    Safari toolbar. Also give the whole game a pass on a real GPU for feel.
+    ⚠️ `the-other-hand project/` at the repo root is the ORIGINAL Vite app and **must stay
+    gitignored** — the engine lives copied-and-flattened in `src/components/play/other-hand/`.
+    Edits to the original do NOT reach the site.
+
 000b. **🔐 REVOKE THE VERCEL TOKEN pasted in Session 21** (`vcp_1fr3...`, in that session's
     transcript) now that the domain work is done — plus the older Session-8 tokens still listed
-    in item 2 below. Not yet done.
+    in item 2 below. **Still not done — flagged across three sessions now.**
 
 000. **⭐ VERKOS APP EXHIBIT — mostly RESOLVED in Session 20** (rebuilt from the latest source; the
     old-copy caveat, the demo-mode button and the unverified wizard are all done). What REMAINS:
@@ -1606,6 +1641,51 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 23 — 2026-07-30
+**Built the /play page (The Other Hand playable in-browser), wired /work + /play into the nav and
+the hero curves, and fixed the two-part scroll bug on both page headings.**
+- **/play SHIPPED.** A wall of AI explorations, built as a LIST (`EXPERIMENTS` in
+  `PlayWall.tsx`) so the next experiment is a one-entry change. Today: The Other Hand + a
+  deliberate "More in the works" tile so a single card doesn't read as an unfinished page.
+- **The Other Hand is playable inside the site** at `/play/the-other-hand`. Seven engine files
+  copied VERBATIM from the gitignored `the-other-hand project/` into
+  `src/components/play/other-hand/` with imports flattened, plus a shell (intro note, framing
+  copy, instructions, start button; the volume controls already existed in the source) and
+  `OtherHandGameMount.tsx` as the client boundary — `ssr:false` dynamic imports are illegal in a
+  Server Component. **Touch support added** to `BallController.ts`: `isTouch()`, drag-only
+  tracking, `pointercancel`, and `setBounds()` fed by a ResizeObserver (the user asked for
+  click-and-drag on phone). ⚠️ `the-other-hand project/` MUST stay gitignored — separate Vite app.
+- **Navigation wired:** `DEFAULT_NAV` now points at `/work` + `/play` (was `/#work`, `/#play`);
+  the hero's right-hand PLAYS curve goes to `/play` (was `/work`); the About section's play
+  button reaches the game.
+- **THE HEADING SCROLL BUG — two defects, both fixed and both verified old-fails/new-passes.**
+  Symptom the user reported twice: the /work + /play title shows on load, then vanishes on scroll
+  and never returns — and once it did return, the word and subtitle moved as two separate things.
+  1. **`WorkShowcase.tsx` was killing every ScrollTrigger on the page** (`3767462`). Its
+     `useGSAP` cleanup ran `ScrollTrigger.getAll().forEach(t => t.kill())`. `useGSAP` already
+     auto-reverts its OWN triggers, so the line was redundant — and `.getAll()` reaches outside
+     the component, so each `gsap.matchMedia()` re-run killed *PageHeading's* scrub mid-flight,
+     freezing the heading at whatever opacity it was passing through.
+  2. **`PageHeading.tsx` tweened `[word, sub]` as an array** (`4f8584e`). `yPercent` resolves
+     against **each element's own height**, and the word is `14vw` while the subtitle is ~1rem —
+     so `-38%` moved them different pixel distances and the lockup came apart. Fixed by wrapping
+     both in `[data-lockup]` and animating that ONE element. The `<h1>`'s `overflow-hidden`
+     entrance mask stays INSIDE the wrapper, or the departure lift would be clipped by it.
+     Also `clearProps: "opacity,visibility,transform"` on the subtitle's entrance: `autoAlpha`
+     writes `visibility`, so the child was a second independent opacity layer under the wrapper
+     fade, and an interrupted entrance could strand it at `visibility:hidden` where no parent
+     fade recovers it. Measured on the old code at rest: `wOp 1 / sOp 0` — invisible until the
+     first scroll. Sonnet's earlier `fromTo` + `immediateRender:false` change was correct and
+     was KEPT; the array target was the remaining half.
+  **Verification method worth reusing:** a CDP probe that samples the *gap between the two lines*
+  at four scroll depths plus effective opacity walked up the ancestor chain. Old: gap drifted
+  26→53px, restore-on-scroll-up `false`. New: 0px drift, restore `true`, identical on both routes.
+- Typecheck clean, prod build clean (**16 routes** now, up from 14 — `/play` + `/play/the-other-hand`).
+- **Ended:** pushed to `main` (`4f8584e`), dev server stopped.
+- ⚠️ **Still open, carried forward:** Sanity CORS for `rudyman.com` (§7 item 0000a) — deprioritized
+  since the user doesn't use `/studio`; token revocation (§7 item 000b); and The Other Hand has
+  **not been driven on a real iPhone** (touch drag verified only in emulation).
 
 ### Session 22 — 2026-07-30
 **Went live on `rudyman.com`, rebuilt the /work index, and fixed three iOS-only defects that
