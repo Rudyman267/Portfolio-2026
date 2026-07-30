@@ -283,10 +283,25 @@ tags. **Default volume 0.5**, looping.
   when a browser refuses anyway, so the UI never lies about a playing track.
 - **Preference is `sessionStorage`, NOT localStorage** — music resuming on a page opened days later
   is startling. Deliberate; don't "upgrade" it. Auto-pauses on tab hide.
-- **`NowPlaying`** (home page only, bottom-right): animated waveform + title/artist, whole lockup
-  is the button. **The waveform IS the state indicator** — bars moving = on, bars collapsed to a
-  flat line with a slash = off. Bars are **CSS-animated, not GSAP**: a decorative idle loop belongs
-  on the compositor where a stalled main thread can't freeze it (the iOS lesson from §6).
+- **`NowPlaying`**: animated waveform + title/artist, whole lockup is the button.
+  **The waveform IS the state indicator** — bars moving = on, bars collapsed to a flat line with a
+  slash = off. Bars are **CSS-animated, not GSAP**: a decorative idle loop belongs on the compositor
+  where a stalled main thread can't freeze it (the iOS lesson from §6).
+  **It is mounted in FOUR places (`46f7cde`)** — the track has to be turn-off-able from anywhere,
+  and each spot is chosen for where it is actually *reachable*:
+  | Where | Breakpoint | Notes |
+  |---|---|---|
+  | Case-study rail, under Contents | `lg:` only | Inherits the rail's `lg:sticky`, so it follows the whole read (verified on screen at scrollY 4200). Below `lg` the rail isn't sticky, so a control there would just scroll away. |
+  | Footer, spanning both link columns | all widths | Labelled "Now playing". The footer is the end of the page on a phone too, so the title/artist fit. |
+  | Header, next to the hamburger | **mobile only** | `compact` prop → waveform ONLY. On a phone the case studies have no sticky rail, and the user explicitly ruled out putting it inside the hamburger — the header is the only element always on screen. `aria-label` still names the track. |
+  | Floating bottom-right (`NowPlayingMount`) | `sm:` and up, home only | Hides once the footer scene is on screen. |
+  ⚠️ **Bars + slash use `bg-current`, NOT `bg-white`.** The header is a WHITE bar with black text on
+  light routes, where a hardcoded white waveform was invisible. Track text is
+  opacity-on-currentColor for the same reason. **Don't reintroduce fixed colours here.**
+  ⚠️ **The floating widget is `hidden sm:block` AND yields to the footer.** Two identical toggles on
+  one screen is confusing, and pinned bottom-right it would sit on the back-to-top button and the
+  RUDYMAN wordmark. Its hide gates `visibility` as well as opacity — fading alone left an
+  invisible-but-clickable target over the footer's own controls.
 - **The loader's ready state is now a sound gate.** "click to enter" and its **EB Garamond italic
   are GONE** from the ready state (the italic still renders "cooking" while loading). The pill and
   the quiet "Enter without sound" link are Plus Jakarta Sans.
@@ -1660,6 +1675,9 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
     c. **The Other Hand's mobile layout on a real phone** (`dabc817`) — the Android report is what
        started it, so re-check there first, then iOS.
     d. **The /work hover transition on a trackpad/real GPU**, and that the touch cards look right.
+    e. **The header music waveform's TAP TARGET on a phone** (`46f7cde`). It sits immediately left of
+       the hamburger — 36×36 with a 1-unit gap, so it is the one spot in this session where a
+       mis-tap could plausibly open the menu instead of muting (or vice versa). Worth a real thumb.
 
 000a. **🎮 THE OTHER HAND — verify on a real iPhone (from Session 23).**
     The game ships at `/play/the-other-hand` and touch drag works, but **only in emulation**.
@@ -1808,6 +1826,17 @@ intro loader, and fixed The Other Hand's mobile layout. Three commits to `main`.
   `AudioProvider`, 50% default volume. The loader's ready state became a sound gate ("Enter with
   sound" pill / "Enter without sound"), "cooking" moved to Plus Jakarta Sans with a per-letter
   bounce, and a `NowPlaying` waveform widget landed on the home page.
+- **`46f7cde` — the music toggle reaches every page and breakpoint.** Shipped after the above,
+  because a control that only exists on the home hero can't be turned off from anywhere else — the
+  case studies are long reads and were the worst case. Added to the **case-study rail under
+  Contents** (sticky, `lg:` only), the **footer** (all widths), and the **header next to the
+  hamburger on mobile** via a new `compact` prop that renders the waveform alone. The user ruled out
+  putting it inside the hamburger — on a phone the case studies have no sticky rail, so the header is
+  the only element always on screen. Full placement table in §6.
+  Two things this forced that weren't in the ask: the bars were hardcoded `bg-white` and therefore
+  **invisible on the light header bar** (now `bg-current`), and the home page's floating widget
+  **collided with the footer's own copy** (now hides there, and is `sm:` and up only so a phone never
+  shows two identical toggles).
 
 **Four things in this session were the same shape of bug and are worth remembering:**
 1. **An animation that was correct but never ran.** The "cooking" letter wave was anchored to the
