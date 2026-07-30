@@ -69,7 +69,11 @@ function ProjectPlate({
         href={`/work/${project.slug}` as Route}
         data-card
         aria-label={`${project.title} — open case study`}
-        className="group block w-full max-w-[580px] focus-visible:outline-none"
+        // Scales with the viewport instead of a hard 580px cap. On a wide
+        // monitor (2300px+) a fixed-width plate left the page reading as an
+        // almost-empty dark field with a small card adrift in it — which is
+        // what "the content disappears as I scroll" actually looked like.
+        className="group block w-full max-w-[min(46vw,760px)] focus-visible:outline-none"
       >
         {/* THE PLATE. At rest it's a CLEAN image — no type over it. Putting the
             title on the art at rest made it illegible over bright photography
@@ -191,7 +195,9 @@ export function WorkShowcase({ projects }: { projects: GalleryProject[] }) {
   );
 
   return (
-    <div ref={root} className="flex flex-col gap-[14vh] sm:gap-[18vh]">
+    <div ref={root} // Gaps are capped in px as well as vh: on a tall/wide monitor a bare
+      // 18vh became ~200px of dead space between plates.
+      className="flex flex-col gap-[clamp(3rem,10vh,7rem)]">
       {projects.map((p, i) => (
         <ProjectPlate key={p.slug} project={p} index={i} />
       ))}

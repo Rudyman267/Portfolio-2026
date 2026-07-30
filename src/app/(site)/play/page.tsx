@@ -35,7 +35,7 @@ export default async function PlayPage() {
         <PageHeading title="PLAY" subtitle="Spellcrafting with AI" />
 
         <section className="px-[var(--gutter)] pb-[18vh]">
-          <div className="mx-auto w-full max-w-[1180px]">
+          <div className="mx-auto w-full max-w-[min(92vw,1600px)]">
             <PlayWall />
           </div>
         </section>
