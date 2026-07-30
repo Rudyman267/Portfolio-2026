@@ -848,14 +848,18 @@ export function AboutIntro() {
 
       {/* scene 3b — the game-thumbnail card: grows from its dock beside BUILD
           to a centered 16:9 link. Live particles = The Other Hand's default
-          state. Links to the project page on /play (built later). */}
+          state. Links STRAIGHT INTO the playable game (/play/the-other-hand),
+          not the /play index — the card is already showing this specific
+          experiment, so landing on a wall the reader must then click through
+          would be a step backwards. /play is one hop up via the game's own
+          "Back to play" link. */}
       <div
         data-scene3-frame
         className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
         style={{ opacity: 0, visibility: "hidden" }}
       >
         <Link
-          href={"/play" as Route}
+          href={"/play/the-other-hand" as Route}
           data-frame3
           aria-label="Play The Other Hand — an AI experiment"
           // NOT 16:9 — height is set so the card's TOP edge slices through
