@@ -15,7 +15,6 @@ import {
   createWorksTicker,
 } from "@/components/sections/WorksJourney";
 import { worksAnchor, scrollToWorks } from "@/components/sections/worksAnchor";
-import { HeroDebug } from "@/components/sections/HeroDebug";
 
 // Hero scene tweak panel (🎛 FAB, incl. the Footer Glow group). PERMANENTLY
 // mounted but dev-gated: in `next dev` NODE_ENV==="development" so the panel
@@ -622,8 +621,6 @@ export function Hero() {
       data-header-dark
       className="hero-dark relative flex min-h-dvh flex-col overflow-hidden"
     >
-      {/* TEMP on-device diagnostics — only renders with ?herodebug in the URL */}
-      <HeroDebug />
 
       {/* living 3D ecosystem (video/poster fallback inside) */}
       <HeroCanvas />
