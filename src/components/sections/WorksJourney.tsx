@@ -98,6 +98,24 @@ const THUMB_SRC: Record<string, string> = {
   "verkos-reports": "/case-study/verkos-cover.webp",
 };
 
+/**
+ * Warm the beat covers as soon as the module loads, so they are decoded long
+ * before their beat scrubs into view. The windows live inside a pinned,
+ * scroll-scrubbed timeline: an image that only starts decoding when its beat
+ * appears can miss the handful of frames it is actually on stage, which reads
+ * as "that project has no thumbnail". This bit beat 2 specifically — its cover
+ * is the heaviest in the set — while the lighter beat 1 always made it.
+ * Fire-and-forget; failures are irrelevant since the <img> still requests it.
+ */
+if (typeof window !== "undefined") {
+  for (const src of Object.values(THUMB_SRC)) {
+    const im = new Image();
+    im.decoding = "async";
+    im.src = src;
+    void im.decode?.().catch(() => {});
+  }
+}
+
 /* ------------------------------------------------------------- markup ---- */
 
 /** The orange energy skin — the node's surface, which burns off across the
@@ -212,10 +230,19 @@ function ProjectBeat({
                   pointerEvents: "none",
                 }}
               >
-                {/* window content — revealed as the energy skin burns off */}
+                {/* window content — revealed as the energy skin burns off.
+                    fetchPriority=high + decoding=sync: the window is inside a
+                    scroll-scrubbed pin, so an image that decodes lazily can
+                    miss the frames where its beat is actually on stage and
+                    read as "no thumbnail". Beat 2's cover is the heaviest of
+                    the set, which is why it was the one that failed on device
+                    while beat 1 was fine. Small, above-the-journey images —
+                    correctness matters more than the decode cost here. */}
                 <img
                   src={thumb}
                   alt=""
+                  decoding="sync"
+                  fetchPriority="high"
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                 />
                 <span className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
@@ -605,6 +632,37 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         const bcs = getComputedStyle(beat);
         if (bcs.visibility !== "hidden" || parseFloat(bcs.opacity) > 0.01) {
           gsap.set(beat, { autoAlpha: 0 });
+        }
+      }
+
+      // ⚠️ THE WINDOW'S VISIBILITY IS DECIDED FROM THE PLAYHEAD, NOT THE TICKER.
+      // The ticker computes frame/skin opacity from its own driver proxies, and
+      // on iOS those writes have repeatedly failed to reach the rendered node
+      // (stale references after a matchMedia re-run, replaced elements, etc).
+      // The symptom is always the same and was captured twice on device: one
+      // beat correct and its neighbour showing the exact INVERSE of what the
+      // ticker computed — frame 0 / skin 1, i.e. untouched markup defaults —
+      // in the SAME tick, with p/m values that both resolve to frame=1.
+      //
+      // The playhead is the one source of truth that cannot go stale, so drive
+      // the window from it directly. Once the morph is underway the window is
+      // up and the energy skin is gone; before that, the reverse. This makes
+      // the card's appearance independent of whether the ticker's element
+      // references are still valid.
+      const liveFrame = beat.querySelector<HTMLElement>("[data-frame]");
+      const liveSkin = beat.querySelector<HTMLElement>("[data-skin]");
+      if (liveFrame && liveSkin) {
+        const onStage = t >= M && t <= E + EXIT;
+        if (onStage) {
+          // morph progress straight off the playhead
+          const mm2 = Math.min(1, Math.max(0, (t - M) / morphDur));
+          const want = Math.min(1, mm2 / 0.35);
+          if (Math.abs(parseFloat(liveFrame.style.opacity || "0") - want) > 0.01) {
+            liveFrame.style.opacity = String(want);
+          }
+          if (parseFloat(liveSkin.style.opacity || "1") > 0.01) {
+            liveSkin.style.opacity = "0";
+          }
         }
       }
     });
