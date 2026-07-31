@@ -1207,11 +1207,16 @@ export function Loader() {
             // entrance, and the letter wave targets its children).
             // `mt-*` (margin), NOT a transform — GSAP owns this element's
             // transform (the entrance `y: 8` and the per-letter wave), so a
-            // translate here would be overwritten. Sits further below the pan
-            // than it used to, so the loading state breathes the same way the
-            // ready state does; it stays well above the buttons' own gap since
-            // "cooking" is a single line where the choice block is a stack.
-            className="pan__label mt-[clamp(2.25rem,6vh,4rem)] flex text-[clamp(24px,2.6vw,40px)] font-medium leading-none tracking-[-0.01em] text-white"
+            // translate here would be overwritten.
+            //
+            // ⚠️ CENTRED ON THE PILL'S CENTRE LINE. "cooking" takes the SAME
+            // top margin as the choice block (so its box top == the pill's top)
+            // and sits in a box the pill's height (h-[47px] = py-4·2 + 15px
+            // text), items-center. Its centre therefore lands exactly on the
+            // "Enter with sound" pill's centre line at every viewport size —
+            // the two states swap in place. Both numbers are fixed px/rem, so
+            // the alignment holds across the responsive range.
+            className="pan__label mt-[clamp(5.5rem,16vh,11rem)] flex h-[47px] items-center text-[clamp(24px,2.6vw,40px)] font-medium leading-none tracking-[-0.01em] text-white"
             aria-label="cooking"
             role="text"
           >

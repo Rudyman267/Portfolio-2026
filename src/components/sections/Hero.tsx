@@ -531,6 +531,10 @@ export function Hero() {
         // Every segment is an explicit fromTo (immediateRender off) so the
         // timeline is fully deterministic at any scroll position.
         scrub
+          // p1hold — phrase 1 fully shown at t=0. An escalator rest point (see
+          // the pin's directional snap): the reader can never settle in a blank
+          // mid-crossfade; a drag rides to the next/previous full reveal.
+          .addLabel("p1hold")
           // phrase 1 → 2, and the curves spawn organically from the edges here.
           // Each line slides on yPercent AND crossfades opacity so the outgoing
           // and incoming phrases never sit legibly on top of each other over the
@@ -569,6 +573,7 @@ export function Hero() {
             },
             "p2in-=0.55", // together with phrase 2 rising in (same start as slide)
           )
+          .addLabel("p2hold") // phrase 2 fully risen — escalator rest point
           .to({}, { duration: 0.5 }) // hold — curves stay out through phrase 3
           // phrase 2 → 3 — same yPercent + opacity crossfade as p1→2
           .fromTo(
@@ -592,6 +597,7 @@ export function Hero() {
             { opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false },
             "<0.35",
           )
+          .addLabel("p3hold") // phrase 3 fully risen — escalator rest point
           .to({}, { duration: 0.35 }) // brief hold on phrase 3
           .addLabel("outro")
           // phrase 3 recedes into the tunnel — the dark scene STAYS (no white
@@ -652,6 +658,46 @@ export function Hero() {
         const endVh = isCoarse ? 2.12 : OLD_END_VH;
         const unitPx = () => (window.innerHeight * endVh) / OLD_UNITS;
 
+        // ── Escalator snap: every "full reveal" the pinned timeline holds on —
+        // each phrase fully risen (p1/p2/p3hold labels) plus every works-beat
+        // rest (formed window / clean tunnel, from addWorksBeats' snapSpans),
+        // as sorted, de-duped progress (0..1) values. The pin's directional
+        // snap below rides these like an escalator: settle in a blank
+        // mid-transition and it glides to the next rest in the direction you
+        // were dragging — both ways. Because the tunnel AND the phrases read
+        // from this same scroll position, they move together, as if the reader
+        // dragged the scrollbar by hand.
+        const dur = scrub.duration();
+        const L = scrub.labels as Record<string, number>;
+        const rests = Array.from(
+          new Set(
+            [L.p1hold ?? 0, L.p2hold, L.p3hold, ...snapSpans.map((s) => s.rest)]
+              .filter((t): t is number => typeof t === "number")
+              .map((t) => t / dur),
+          ),
+        ).sort((a, b) => a - b);
+        // "close enough to a rest to count as resting on it" — keeps an idle
+        // jiggle or hover from re-triggering a glide.
+        const SNAP_EPS = 0.0015;
+        // Threshold model — position-based, NOT instantaneous scroll direction.
+        // Direction at settle is unreliable under smooth scrolling (a half-drag
+        // down can report "up" as momentum eases), which snapped partial drags
+        // the wrong way. Instead we remember the reveal the reader is parked on
+        // (`lastRest`) and commit to a neighbour as soon as travel from it
+        // crosses a SMALL fraction toward that neighbour — in EITHER direction.
+        // This is the escalator feel: the moment the current text STARTS to
+        // leave (sliding up OR down), we ride to the next/previous reveal in that
+        // same direction. The threshold is deliberately low so a gentle nudge
+        // commits — a half-drag no longer gets yanked back the way it came, which
+        // was the "I scroll up but it still drags me down" bug (thresholds were
+        // 0.5, so anything short of halfway snapped back to where you started).
+        // Below the threshold a stray micro-scroll still eases back to the reveal
+        // you came from. The two thresholds are separate knobs: raise SNAP_REV to
+        // make going back a more deliberate pull than going forward.
+        const SNAP_FWD = 0.15; // fraction toward the NEXT reveal that commits (down)
+        const SNAP_REV = 0.15; // fraction back toward the PREVIOUS that commits (up)
+        let lastRest = rests[0] ?? 0;
+
         ScrollTrigger.create({
           animation: scrub,
           trigger: root,
@@ -668,28 +714,62 @@ export function Hero() {
           anticipatePin: isCoarse ? 0 : 1,
           scrub: 0.8,
           invalidateOnRefresh: true,
-          // HANDHOLD — when the scroll settles inside a works-beat span, glide
-          // to that beat's resting state (window fully formed, or the exit
-          // carried through) so the reader never sits on a half-morphed frame.
-          // A key mobile affordance: thumb-flick scrolling always lands short
-          // or long, and every beat stage is scrubbed. Outside the spans the
-          // value is returned untouched, so the phrases/tunnel scroll freely.
+          // ESCALATOR — the reader can never settle in a blank mid-transition.
+          // Wherever a drag stops, glide to a full reveal (phrase risen, or a
+          // works beat formed / clean tunnel — every rest in `rests`). Direction
+          // is set by which way you nudged off the reveal you were parked on:
+          // nudge up → ride up to the previous reveal, nudge down → ride down to
+          // the next, both governed by the low SNAP_FWD/SNAP_REV fraction below.
+          // Short of that fraction → ease back to where you were.
           snap: {
             snapTo: (value: number) => {
-              const t = value * scrub.duration();
-              for (const s of snapSpans) {
-                if (t >= s.from && t < s.to) return s.rest / scrub.duration();
+              // Already parked on a reveal → stay (ignore idle jiggle/hover).
+              for (const r of rests) {
+                if (Math.abs(r - value) < SNAP_EPS) {
+                  lastRest = r;
+                  return r;
+                }
               }
-              return value;
+              // Bracket the stop between the reveal below it and the one above.
+              let bi = 0;
+              for (let i = 0; i < rests.length; i++) {
+                if (rests[i] <= value) bi = i;
+                else break;
+              }
+              const below = rests[bi];
+              const above = rests[bi + 1];
+              // Past the last reveal → don't snap; let the reader scroll out of
+              // the pin into the footer. (Above the first is impossible: rest 0
+              // sits at progress 0.)
+              if (above === undefined) return value;
+              const f = (value - below) / (above - below); // 0 at below … 1 at above
+              let target: number;
+              if (below === lastRest) {
+                // moved DOWN out of the parked reveal → commit forward at halfway
+                target = f >= SNAP_FWD ? above : below;
+              } else if (above === lastRest) {
+                // moved UP toward the previous reveal → commit back past halfway
+                target = 1 - f >= SNAP_REV ? below : above;
+              } else {
+                // flicked clear past the adjacent segment → take the nearer reveal
+                target = f >= 0.5 ? above : below;
+              }
+              lastRest = target;
+              return target;
             },
-            // inertia:false = snapTo receives the CURRENT progress, not a
-            // velocity-projected landing. With projection, a fast flick (or a
-            // programmatic jump) reports a position far past the real one and
-            // the "no snap here" return value still tweens the page there —
-            // teleporting the reader. Positional-only is the safe behavior.
+            // inertia:false = snapTo receives the CURRENT progress (where the
+            // scroll actually STOPPED), not a velocity-projected landing — the
+            // threshold logic above is purely positional.
             inertia: false,
-            duration: { min: 0.35, max: 1.1 },
-            delay: 0.12,
+            // The ~200ms WAIT belongs HERE, on the delay: after the drag stops
+            // we hold briefly before the escalator takes over. This is the pause
+            // between "reader let go" and "we commit to a direction" — it is NOT
+            // the glide speed. (Earlier this was 0.04 and the 200ms had leaked
+            // onto the glide instead, making the ride feel instant.)
+            delay: 0.2,
+            // The GLIDE itself is slow + organic — an escalator easing the reader
+            // in and out to the next reveal, not the previous near-instant snap.
+            duration: { min: 0.45, max: 0.8 },
             ease: "power2.inOut",
           },
           // hero is first on the page → refresh before any later pins so

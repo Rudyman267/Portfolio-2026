@@ -17,9 +17,10 @@ export default function WorkPage() {
   // (the footer already carries the contact affordance), so the page is fully
   // static — nothing to await.
 
-  // Only the studies that actually exist get a card. The placeholder slugs
-  // (nightshift/atlas/ember) 404, so they're filtered out rather than shown as
-  // dead links on the page whose whole job is to send people INTO the work.
+  // Only the case studies that actually exist get a card here. ORO Edit is a
+  // live external site (externalUrl), not a written study, so it lives in the
+  // home works journey rather than on this index; any remaining placeholder
+  // slug would 404 and is filtered out rather than shipped as a dead link.
   // ⚠️ This list must stay in step with the STUDIES registry in
   // work/[slug]/page.tsx — a slug here without a study there ships a card that
   // 404s, which is the exact failure this filter exists to prevent.

@@ -222,12 +222,64 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 24)
+## 6. Current State (as of Session 25)
 
-**Status (as of Session 24): LIVE ON `rudyman.com`. The /work cards got their Figma hover
-transition, the site got BACKGROUND MUSIC with a sound gate on the intro, and The Other Hand's
-mobile layout is fixed.** Prod build clean (**16 routes**), typecheck clean.
+**Status (as of Session 25): LIVE ON `rudyman.com`. The ORO Connect case study got a full pass —
+hero now uses the same SVG title/company-role lockup as LIR/Verkos, several feature screenshots
+were swapped for cleaner source assets, the search decision (DD2) was cut and the cart decision
+renumbered to DD2 with its own supporting image, the interactive product-card micro-interaction
+and a whiteboard sketch were removed, and the stakeholder matrix's R-labels moved from green to
+the study's gold accent.** Shipped in one commit (`7912b98`), pushed to `main`.
 **THE LINK TO SHARE IS `https://rudyman.com`.**
+
+### 🥇 ORO CONNECT CASE STUDY POLISH — Session 25 (`7912b98`)
+A single working session of iterative asset swaps and section edits on `/work/oro-connect`,
+driven entirely from screenshots the user annotated live plus files dropped into
+`case-study-assets/oro-project/`. No new block types were needed except one:
+- **New `imageRow` block type** (`lirDesign.ts` + `LirCaseStudy.tsx`) — renders `imgs: {src,alt}[]`
+  side by side, capped at an optional `scale` fraction of the content measure. Added because the
+  existing `media` block only stacks vertically; used once so far, for the two mobile-app
+  screenshots in the Impact section (`scale: 0.55`, full phone screens visible, no cropping).
+- **Hero now matches LIR/Verkos exactly.** `intro.title` + `intro.role` SVGs added
+  (`oro-title.svg` = "Project tag.svg", `oro-company-role.svg` = "Company and tag.svg", both
+  copied verbatim from the assets folder) alongside the existing `intro.bg`
+  (`oro-cover-bg.webp`, from "Background thumbnail.png"). The old comment claiming ORO had no
+  bespoke lockup is now wrong and was removed — it DOES have one, the user just hadn't supplied
+  it yet.
+- **Stakeholder matrix R-labels: green → gold.** The R1–R4 quadrant labels are injected by
+  `scripts/oro-assets.mjs` (`withRLabels`) as raw SVG `<text>`, not baked into the source file —
+  one `fill="#12D398"` → `fill="#D9A441"` (the study's gold accent) and a full `node
+  scripts/oro-assets.mjs` re-run regenerated `power-interest.webp`. Any future change to this
+  study's accent must also touch this hardcoded hex, it does not read from a shared token.
+- **Feature-image swaps** (asset pipeline additions, all one-off `sharp-cli` conversions since
+  they aren't in the `VECTORS`/screen-crop tables): `product-cards.webp` (Products feature),
+  `search-box.webp` (Search feature), `two-id-system.webp` (DD1), `orders-dd.webp` (now under
+  DD2/cart). `card-bangle.webp` was also replaced — the prior source PNG was tiled and broke the
+  product-card hover's rotation math; the user supplied a clean single cutout.
+- **DD2 (search) removed outright, DD3 (cart) renumbered to DD2.** The search decision's
+  `decisionText` block is gone from `oroDesign.ts`; the cart block's `n` changed `"03"→"02"` and
+  it now carries `img`/`imgAlt` pointing at `orders-dd.webp`. If a fourth decision is ever added,
+  it becomes DD3 fresh — there's no gap to fill.
+- **Interactive product card removed.** The `microInteraction` block (rendered `OroProductCard`,
+  the hover-to-zoom bangle demo) is gone from the data file; the renderer's `case
+  "microInteraction"` in `LirCaseStudy.tsx` and the `OroProductCard.tsx` component itself were
+  left in place (dead code, not deleted) since the user said they'd replace it with a GIF later —
+  re-adding the block is a one-line data change, not a rebuild.
+- **Whiteboard process sketch removed** — the `media` block pointing at
+  `process-whiteboard.webp` (the "wireframing the reorder flow" image under the design-system
+  paragraph) is gone.
+- **Friction map (`OroFrictionMap.tsx`) is one-shot per viewport entry, not a loop.** Removed
+  `repeat: -1`/`repeatDelay` and the old Beat 8 dissolve-for-loop-restart; visibility gating is
+  now `if (visible) tl.restart(); else tl.pause(0)` — replays from hidden every time the reader
+  scrolls back, never idles mid-loop off-screen.
+- **Product card hover (`OroProductCard.tsx`) rewritten with Figma-faithful geometry**, after
+  several rounds of the rotation being swapped/wrong. The `IMG` constant now encodes actual
+  window + photo dimension/position/rotation percentages lifted from the Figma prototype's
+  Default↔Variant2 motion code (rest: `rotate(-15deg)`; macro: `rotate(45deg)`), not a CSS
+  `scale()` approximation — the earlier version's core bug was treating a dimension+position
+  change as a uniform zoom.
+- **⚠️ Route is `/work/oro-connect`, not `/case-study/oro-connect`** — cost one dead navigation
+  mid-session verifying the fix. All three case studies live under `/work/<slug>`.
 
 Session 24 shipped three commits to `main`:
 - **`f131f88` — /work cards: GSAP hover reveal** (Figma section `322:130`, frames 1→2→3).
@@ -1644,6 +1696,19 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
+00000. **🥇 ORO CONNECT — verify the Session 25 pass on a real device + swap the GIF in.**
+    Everything in Session 25 was verified via the Browser pane / CDP on desktop only.
+    a. **Real-device pass** on `/work/oro-connect` — the product-card hover geometry rewrite in
+       particular (`OroProductCard.tsx`) has been through several wrong iterations already; confirm
+       it reads correctly on a trackpad/touch, not just via computed style checks.
+    b. **The interactive product-card micro-interaction is removed, not deleted.** User said they'd
+       replace it with a GIF — `OroProductCard.tsx` and the `case "microInteraction"` renderer in
+       `LirCaseStudy.tsx` are still in the codebase, unreferenced. Re-adding the data block or
+       swapping in a `video`/`media` block for the GIF is a one-line change in `oroDesign.ts`.
+    c. Consider whether the gold-accent hex in `scripts/oro-assets.mjs`'s `withRLabels()`
+       (`#D9A441`) should be pulled from a shared token instead of hardcoded, if the accent ever
+       changes again.
+
 0000. **✅ `rudyman.com` IS LIVE (Session 22) — ONE ITEM LEFT.**
     Full account of the Vercel zone bug + the Hostinger workaround that fixed it is in §6
     "DOMAIN RESOLVED". Nothing about the domain needs re-doing; do NOT re-run remove/re-add.
@@ -1805,6 +1870,49 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 25 — 2026-07-31
+**ORO Connect case study polish pass — hero lockup, asset swaps, section edits. One commit,
+pushed to `main`.**
+
+Driven live off the user's own annotated screenshots and files dropped into
+`case-study-assets/oro-project/` mid-session, in this order:
+- Removed background + reduced size (scale 0.7) on the stakeholder power-interest matrix.
+- Swapped feature screenshots for cleaner source assets: Products feature → `product-cards.webp`,
+  Search feature → `search-box.webp`, DD1 (two-ID system) → `two-id-system.webp`.
+- `OroFrictionMap` changed from an infinite loop to one-shot-per-viewport-entry (Verkos-style).
+- `OroProductCard`'s hover rotation went through several correction rounds (rest/macro swapped,
+  wrong angle from a stale Figma read, "glitching") before the user supplied the full Figma motion
+  code; rewritten with actual Figma-faithful window/photo dimension + position + rotation
+  percentages instead of a CSS `scale()` approximation. Also replaced the bangle source image — the
+  old one was a tiled texture, not a single cutout, which was silently breaking the geometry math.
+- Removed the "Every persona traced to something that shipped" heading + the whole
+  solutions-summary section.
+- Replaced the static IA-map image with a live FigJam iframe embed (new `figjamEmbed` block type).
+- **User: "stop listening to the figma mcp server my session usage is spiking"** — Figma MCP tools
+  were not used again this session; all remaining asset needs were served from files the user
+  placed in `case-study-assets/oro-project/`.
+- Removed DD2 (the search decision) entirely; renumbered DD3 (cart) to DD2 and added
+  `orders-dd.webp` under it. Removed the interactive product-card micro-interaction block and its
+  "Hover to zoom" hint text (component left in place, unreferenced — user plans to swap in a GIF).
+- Removed a leftover whiteboard-wireframe process image the user flagged as out of place.
+- Added a new `imageRow` block type (side-by-side images, optional `scale`) and used it once for
+  two mobile-app screenshots in the Impact section, at `scale: 0.55` so full phone screens show
+  without cropping.
+- **Hero rebuilt to match LIR/Verkos exactly**: added `intro.title`/`intro.role` SVG lockups
+  (copied verbatim from "Project tag.svg" / "Company and tag.svg") alongside the existing
+  `intro.bg`. Previously ORO fell back to rendering title/company as plain text because no bespoke
+  lockup existed — it turned out the user just hadn't handed it over yet.
+- Stakeholder matrix R1–R4 labels recolored from green (`#12D398`) to the study's gold accent
+  (`#D9A441`) — this is a hardcoded hex inside `scripts/oro-assets.mjs`'s `withRLabels()`, injected
+  as raw SVG text at build time, not sourced from a shared token. Full asset pipeline re-run to
+  regenerate `power-interest.webp`.
+
+**Process note:** navigated to `/case-study/oro-connect` while verifying and got a 404 — the real
+route for every case study is `/work/<slug>`. Caught via `preview_logs`, not worth repeating.
+
+Committed as `7912b98` ("ORO Connect case study: hero lockup, asset swaps, section edits"),
+pushed to `main` on the user's explicit "yes" after asking whether it shipped to Vercel.
 
 ### Session 24 — 2026-07-30
 **Shipped the /work card hover transition from Figma, background music with a sound gate on the

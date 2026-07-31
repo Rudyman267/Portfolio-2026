@@ -170,6 +170,24 @@ export function AboutIntro() {
           return dir * Math.min(ideal, Math.max(max, el.offsetWidth * 0.2));
         };
 
+        // ── ESCALATOR AUTO-SCROLL — same model as the home hero (Hero.tsx) ───
+        // This pin has no labels; scenes are placed by absolute TIMELINE UNITS.
+        // REST_UNITS are each scene's composed/held beat (the convergence, the
+        // name, "22 years", the scattered words, the PLAY card, NVM, the stacked
+        // headline, the paragraph, the process row, and the two quotes) — the
+        // moments the reader should settle on. They're converted to progress at
+        // runtime via tl.duration() (the timeline isn't built yet here). A drag
+        // that stops mid-transition glides to the neighbouring scene in the
+        // direction nudged; short of a small threshold it eases back. Thresholds
+        // and glide timing are IDENTICAL to the hero so both pins feel the same.
+        const REST_UNITS = [
+          0, 2.65, 5.35, 7.3, 11.75, 13.6, 15.5, 20.8, 26.0, 28.95, 31.0,
+        ];
+        const SNAP_EPS = 0.0015;
+        const SNAP_FWD = 0.15; // fraction toward the NEXT scene that commits
+        const SNAP_REV = 0.15; // fraction back toward the PREVIOUS that commits
+        let lastRest = 0;
+
         const tl = gsap.timeline({
           defaults: { ease: "none" },
           scrollTrigger: {
@@ -183,6 +201,47 @@ export function AboutIntro() {
             scrub: 0.5,
             anticipatePin: 1,
             invalidateOnRefresh: true,
+            // Glide to the nearest composed scene wherever a drag stops.
+            snap: {
+              snapTo: (value: number) => {
+                const dur = tl.duration() || 1;
+                const rests = REST_UNITS.map((u) => u / dur).sort(
+                  (a, b) => a - b,
+                );
+                // Already parked on a scene → stay (ignore idle jiggle).
+                for (const r of rests) {
+                  if (Math.abs(r - value) < SNAP_EPS) {
+                    lastRest = r;
+                    return r;
+                  }
+                }
+                // Bracket the stop between the scene below it and the one above.
+                let bi = 0;
+                for (let i = 0; i < rests.length; i++) {
+                  if (rests[i] <= value) bi = i;
+                  else break;
+                }
+                const below = rests[bi];
+                const above = rests[bi + 1];
+                // Past the last scene → let the reader scroll out into the footer.
+                if (above === undefined) return value;
+                const f = (value - below) / (above - below);
+                let target: number;
+                if (below === lastRest) {
+                  target = f >= SNAP_FWD ? above : below;
+                } else if (above === lastRest) {
+                  target = 1 - f >= SNAP_REV ? below : above;
+                } else {
+                  target = f >= 0.5 ? above : below;
+                }
+                lastRest = target;
+                return target;
+              },
+              inertia: false,
+              delay: 0.2,
+              duration: { min: 0.45, max: 0.8 },
+              ease: "power2.inOut",
+            },
           },
         });
 

@@ -15,6 +15,11 @@ export type GalleryProject = {
   tags: string[];
   /** relative thumbnail scale in the filmstrip */
   size: "lg" | "md" | "sm";
+  /** When set, this project is NOT a case-study page — its card links straight
+   *  out to a live external site (opened in a new tab) instead of `/work/slug`.
+   *  Used for the ORO Edit luxury web experience, which lives as a real site to
+   *  click into rather than a written study. */
+  externalUrl?: string;
 };
 
 export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
@@ -55,20 +60,19 @@ export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
     tags: ["Product", "B2B", "ORO"],
     size: "md",
   },
+  // FOURTH PROJECT — NOT a case study. It's a live luxury-brand web experience
+  // (the ORO Edit landing site) that speaks for itself, so the card links
+  // straight out to the real thing in a new tab rather than to a written study.
+  // Thumbnail asset lands separately; until then the beat shows a "view live
+  // site" placeholder (see WorksJourney's ProjectBeat).
   {
-    title: "Atlas",
-    slug: "atlas",
-    summary: "Reimagining onboarding for a data platform — from 12 screens down to three.",
-    year: "2024",
-    tags: ["Product", "Growth"],
+    title: "ORO Edit",
+    slug: "oro-edit",
+    summary:
+      "A live luxury-brand jewellery web experience — click through to the real site.",
+    year: "2025",
+    tags: ["Web", "Luxury", "Live"],
     size: "lg",
-  },
-  {
-    title: "Ember",
-    slug: "ember",
-    summary: "An experimental spatial interface for browsing large model latent spaces.",
-    year: "2024",
-    tags: ["R&D", "3D", "Play"],
-    size: "sm",
+    externalUrl: "https://oroedit.com/landing",
   },
 ];

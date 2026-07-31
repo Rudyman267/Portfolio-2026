@@ -81,12 +81,18 @@ const COVER: Record<string, string> = {
  * red bbox + "Pickup truck (98%)" label — NOT a UI screenshot: the user picked
  * the detection deliberately, it's the more legible image at this size and it
  * says what the product does in one glance.
+ *
+ * ORO's reveal is the branded landing UI (headline + logo + collections
+ * panel), cropped 16:9 from `case-study-assets/oro-project/UI hero.png` — a
+ * deliberate later swap away from the earlier products-grid screenshot. It
+ * shares its source photo with the plate below (`oro-plate.webp`, the bare
+ * storefront background), but the two read differently: the plate is dim,
+ * uncropped set-dressing, the reveal is the bright, composited UI shot with
+ * copy — so the hover still shows something new, not a repeat of the plate.
  */
 const INNER: Record<string, string> = {
   "live-incident-response": "/case-study/cover/lir-ui.webp",
   "verkos-reports": "/case-study/verkos-cover.webp",
-  // ⚠️ MUST differ from the plate above (see the header note) — the plate is the
-  // landing page, this is the products grid.
   "oro-connect": "/case-study/cover/oro-ui.webp",
 };
 

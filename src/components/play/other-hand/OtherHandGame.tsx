@@ -181,7 +181,14 @@ export function OtherHandGame() {
     // Android/iOS home indicator.
     <div
       ref={stageRef}
-      className="relative flex min-h-0 w-full flex-1 select-none flex-col items-center justify-center gap-5 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#050505] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:gap-8"
+      // `justify-start sm:justify-center`: on a phone the intro card is taller
+      // than the stage, and flex `justify-center` on a scroll container shoves
+      // the card's TOP (eyebrow + title) above the scroll origin where it can't
+      // be scrolled to — that is why the game title was cropped and unreachable.
+      // Top-aligning on mobile makes the card scroll from its true top (the
+      // card's own `my-auto` still centres it whenever it does fit); desktop
+      // keeps the centred layout.
+      className="relative flex min-h-0 w-full flex-1 select-none flex-col items-center justify-start gap-5 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#050505] py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:justify-center sm:gap-8"
       onPointerDown={() => gameRef.current?.resumeAudio()}
     >
       {phase === "intro" ? (
@@ -341,7 +348,7 @@ function IntroCard({ onStart }: { onStart: () => void }) {
         A digital meditation
       </p>
       <h1
-        className="mt-4 text-[clamp(2rem,8vw,4rem)] uppercase leading-[0.95] tracking-[0.01em] text-white sm:mt-5"
+        className="mt-4 text-[clamp(1.6rem,6.4vw,4rem)] uppercase leading-[0.95] tracking-[0.01em] text-white sm:mt-5"
         style={{ fontFamily: "var(--font-display-tanker)" }}
       >
         The Other Hand

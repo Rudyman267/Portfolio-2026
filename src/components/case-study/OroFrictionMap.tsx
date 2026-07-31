@@ -82,6 +82,18 @@ export function OroFrictionMap({ caption }: { caption?: string }) {
     const o = oro.getBoundingClientRect();
     const horizontal = base.width >= 640;
 
+    // Mobile (stacked single column): the per-segment converging curves run
+    // straight down THROUGH the stacked labels and tangle the whole block (the
+    // "layout is getting screwed" report). They only read cleanly in the desktop
+    // side-by-side layout, where each line travels sideways into ORO. So below
+    // 640px we scale the diagram down to pure typography — no connectors — and
+    // let the vertical stack itself imply the convergence into ORO.
+    if (!horizontal) {
+      setBox({ w: base.width, h: base.height });
+      setPaths([]);
+      return;
+    }
+
     const next: Path[] = [];
     for (const seg of segRefs.current) {
       if (!seg) continue;
@@ -137,7 +149,10 @@ export function OroFrictionMap({ caption }: { caption?: string }) {
 
   useGSAP(
     () => {
-      if (reduced || paths.length === 0) return;
+      // Gate on measurement, NOT on having paths: mobile intentionally has zero
+      // connectors (see measure()), but the title/segments/ORO/outcomes must
+      // still animate. box.w>0 means measure() has run at least once.
+      if (reduced || box.w === 0) return;
 
       const q = gsap.utils.selector(root);
       const title = q("[data-fm-title]");
@@ -175,19 +190,24 @@ export function OroFrictionMap({ caption }: { caption?: string }) {
       segEls.forEach((s, i) => {
         const at = 0.9 + i * 1.05;
         tl.to(s.label, { opacity: 1, y: 0, duration: 0.55 }, at)
-          .to(s.sub, { opacity: 1, y: 0, duration: 0.5 }, at + 0.18)
-          .to(
+          .to(s.sub, { opacity: 1, y: 0, duration: 0.5 }, at + 0.18);
+        // No connector on mobile (lines is empty there) — skip the draw beat.
+        if (lines[i]) {
+          tl.to(
             lines[i],
             { strokeDashoffset: 0, opacity: 0.18, duration: 0.8, ease: "power2.inOut" },
             at + 0.28,
           );
+        }
       });
 
       const converge = 0.9 + SEGMENTS.length * 1.05 + 0.15;
 
-      // Beat 6 — lines converge (settle to full opacity) + ORO scales in
-      tl.to(lines, { opacity: 0.34, duration: 0.6 }, converge)
-        .to(oroWord, { opacity: 1, y: 0, scale: 1, duration: 0.7 }, converge);
+      // Beat 6 — lines converge (settle to full opacity) + ORO scales in.
+      // `lines` is empty on mobile (no connectors), so guard the line tween to
+      // avoid a stray GSAP "target not found" warning.
+      if (lines.length) tl.to(lines, { opacity: 0.34, duration: 0.6 }, converge);
+      tl.to(oroWord, { opacity: 1, y: 0, scale: 1, duration: 0.7 }, converge);
 
       // Beat 7 — outcomes fade upward, staggered
       tl.to(

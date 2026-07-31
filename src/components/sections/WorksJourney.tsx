@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowUpRight } from "lucide-react";
@@ -91,20 +92,30 @@ const MORPH_LEAD = 0.35; // how far before dock the morph begins
 const HOLD = 0.6;
 const EXIT = 0.6;
 
-// Real window thumbnails, per slug (the rest stay clean white for now).
+// Per-slug window art. Each formed beat is now a TWO-LAYER card that mirrors the
+// /work index card (WorkShowcase.tsx): a resting COVER plate with the interface
+// screenshot (INNER) that rises into it on hover. The two maps here MUST stay in
+// sync with WorkShowcase's COVER/INNER — same files, so /work and home present
+// the identical card on an equivalent device.
 //
-// ⚠️ This map is load-bearing beyond the picture: a beat is rendered as a
-// clickable <Link> ONLY when its slug has an entry here (see the thumb ternary
-// below). A published study missing from this map silently degrades to the
-// non-clickable "in progress" plate — which is exactly how ORO first shipped.
-// Adding a study to the route registry is not enough; it must land here too.
-const THUMB_SRC: Record<string, string> = {
-  "live-incident-response": "/case-study/image-1.webp",
-  // the annotated east-gate detection frame, re-cropped to the window's 16:9
+// ⚠️ Load-bearing beyond the picture: a beat is rendered as a clickable,
+// hover-revealing <Link> ONLY when its slug has a COVER entry (see the ternary
+// below). A published study missing here silently degrades to the non-clickable
+// "in progress" plate — which is exactly how ORO first shipped. Adding a study
+// to the route registry is not enough; it must land here too.
+const COVER: Record<string, string> = {
+  "live-incident-response": "/case-study/cover/lir-plate.webp",
+  "verkos-reports": "/case-study/cover/verkos-plate.webp",
+  "oro-connect": "/case-study/cover/oro-plate.webp",
+  // external project (links out to oroedit.com) — gets the same layered card
+  "oro-edit": "/case-study/cover/oro-edit-plate.webp",
+};
+// The interface shot that rises on hover (desktop) / sits seated (mobile).
+const INNER: Record<string, string> = {
+  "live-incident-response": "/case-study/cover/lir-ui.webp",
   "verkos-reports": "/case-study/verkos-cover.webp",
-  // the products grid — the /work card's plate is the storefront photo, so the
-  // home window shows the UI instead of repeating the same picture twice.
   "oro-connect": "/case-study/cover/oro-ui.webp",
+  "oro-edit": "/case-study/cover/oro-edit-ui.webp",
 };
 
 /**
@@ -117,7 +128,7 @@ const THUMB_SRC: Record<string, string> = {
  * Fire-and-forget; failures are irrelevant since the <img> still requests it.
  */
 if (typeof window !== "undefined") {
-  for (const src of Object.values(THUMB_SRC)) {
+  for (const src of [...Object.values(COVER), ...Object.values(INNER)]) {
     const im = new Image();
     im.decoding = "async";
     im.src = src;
@@ -154,7 +165,73 @@ function ProjectBeat({
   total: number;
 }) {
   const href = `/work/${project.slug}` as Route;
-  const thumb = THUMB_SRC[project.slug];
+  const cover = COVER[project.slug];
+  const inner = INNER[project.slug];
+  // A project with `externalUrl` is not a case study — its beat links straight
+  // out to the live site in a new tab instead of to `/work/slug`.
+  const external = project.externalUrl;
+
+  // Shared frame style — IDENTICAL across the external <a>, internal <Link>, and
+  // in-progress <div> so the ticker's morph (which drives width/height/opacity/
+  // pointerEvents on [data-frame]) behaves the same whichever wrapper renders.
+  // pointerEvents stays "none"; the ticker flips it to "auto" only once the
+  // window is ~formed (frameAlpha > 0.5), so nothing here is clickable — and no
+  // hover fires — while the beat is still a flying cube.
+  const frameStyle: CSSProperties = {
+    width: NODE_W,
+    height: NODE_H,
+    borderRadius: NODE_R,
+    opacity: 0,
+    pointerEvents: "none",
+  };
+
+  // The formed two-layer card (plate + hover-revealed interface shot), shared by
+  // internal studies and any external project that has a cover. See the note at
+  // the render site — it mirrors /work's WorkShowcase card exactly.
+  const cardBody = cover ? (
+    <>
+      <img
+        data-cover
+        src={cover}
+        alt=""
+        decoding="sync"
+        fetchPriority="high"
+        className="absolute inset-0 h-full w-full scale-[1.06] object-cover"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-black/55 transition-opacity duration-500 lg:opacity-0 lg:group-hover:opacity-100"
+      />
+      {inner ? (
+        <div className="absolute left-1/2 top-[12%] w-[75.8%] -translate-x-1/2 overflow-hidden rounded-[3px] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9)] ring-1 ring-white/10 transition-transform duration-500 ease-out lg:translate-y-[130%] lg:group-hover:translate-y-0">
+          <img src={inner} alt="" decoding="sync" className="block h-auto w-full" />
+        </div>
+      ) : null}
+      <span className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white opacity-0 transition-opacity duration-300 lg:group-hover:opacity-100">
+        <ArrowUpRight size={18} />
+      </span>
+    </>
+  ) : null;
+
+  // Placeholder shown INSIDE the external card until its real thumbnail lands —
+  // reads "view live site" rather than the "coming soon" of an unpublished study,
+  // because the destination is already live.
+  const livePlaceholder = (
+    <span
+      className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center"
+      style={{
+        background: "linear-gradient(160deg,#141821 0%,#0d1016 60%,#0a0c11 100%)",
+        borderRadius: NODE_R,
+        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.14)",
+      }}
+    >
+      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.28em] text-white/70">
+        View live site <ArrowUpRight size={13} />
+      </span>
+      <span className="text-[12px] font-medium text-white/35">Opens in a new tab</span>
+    </span>
+  );
+
   return (
     // hidden inline until its beat scrubs in (autoAlpha) — FOUC/reduced-motion safe
     <div
@@ -218,45 +295,37 @@ function ProjectBeat({
                 filter: "blur(14px)",
               }}
             />
-            {/* The window is a LINK only for studies that actually exist. The
-                placeholder slugs 404, so their beats render as a non-clickable
-                "in progress" plate instead of a blank white box that looks
-                like a broken image (which is how it read on device). */}
-            {thumb ? (
+            {/* Three window kinds, all sharing the SAME data-frame + PlateSkin so
+                the morph is identical whichever renders:
+                  · EXTERNAL (has externalUrl) → <a target=_blank> to the live
+                    site. Shows the formed card if it has a cover, else the
+                    "view live site" placeholder until its thumbnail lands.
+                  · INTERNAL study (has cover) → <Link> to /work/slug, the
+                    plate + hover-reveal card mirroring /work's WorkShowcase.
+                  · UNPUBLISHED (neither) → non-clickable "in progress" plate,
+                    so a 404 slug never ships a blank/broken-looking box. */}
+            {external ? (
+              <a
+                data-frame
+                href={external}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`${project.title} — open the live site in a new tab`}
+                className="group relative block overflow-hidden bg-black"
+                style={frameStyle}
+              >
+                {cardBody ?? livePlaceholder}
+                <PlateSkin />
+              </a>
+            ) : cover ? (
               <Link
                 data-frame
                 href={href}
                 aria-label={`${project.title} — open case study`}
-                className="group relative block overflow-hidden bg-white"
-                style={{
-                  width: NODE_W,
-                  height: NODE_H,
-                  borderRadius: NODE_R,
-                  // hidden + inert until the morph — the flight is the 3D cuboid
-                  // in the canvas (or, on the video fallback, the ticker raises
-                  // this during the flight instead). The ticker owns both.
-                  opacity: 0,
-                  pointerEvents: "none",
-                }}
+                className="group relative block overflow-hidden bg-black"
+                style={frameStyle}
               >
-                {/* window content — revealed as the energy skin burns off.
-                    fetchPriority=high + decoding=sync: the window is inside a
-                    scroll-scrubbed pin, so an image that decodes lazily can
-                    miss the frames where its beat is actually on stage and
-                    read as "no thumbnail". Beat 2's cover is the heaviest of
-                    the set, which is why it was the one that failed on device
-                    while beat 1 was fine. Small, above-the-journey images —
-                    correctness matters more than the decode cost here. */}
-                <img
-                  src={thumb}
-                  alt=""
-                  decoding="sync"
-                  fetchPriority="high"
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-                />
-                <span className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                  <ArrowUpRight size={18} />
-                </span>
+                {cardBody}
                 <PlateSkin />
               </Link>
             ) : (
@@ -265,11 +334,7 @@ function ProjectBeat({
                 aria-hidden="true"
                 className="relative block overflow-hidden"
                 style={{
-                  width: NODE_W,
-                  height: NODE_H,
-                  borderRadius: NODE_R,
-                  opacity: 0,
-                  pointerEvents: "none",
+                  ...frameStyle,
                   // deliberately NOT white — a dark plate with a hairline reads
                   // as "not published yet", where an empty white rectangle just
                   // reads as a failed image load.
@@ -446,18 +511,21 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         gsap.set(intro, { autoAlpha: 0 });
       }
     });
-    // resting mid-intro settles on the fully-risen line (hold runs 0.9→1.4);
-    // resting mid-EXIT carries the line out to the clean tunnel (1.4→2.1)
+    // resting mid-intro settles on the fully-risen line (hold runs 0.9→1.4).
     snapSpans.push({
       from: worksStart + 0.15,
       to: worksStart + 1.35,
       rest: worksStart + 1.1,
     });
-    snapSpans.push({
-      from: worksStart + 1.35,
-      to: worksStart + 2.1,
-      rest: worksStart + 2.1,
-    });
+    // NO blank-tunnel rest after the heading exits. There used to be a rest at
+    // worksStart + 2.1 (heading gone, first node not yet in flight) — so leaving
+    // "HERE'S SOME OF MY WORK" parked the escalator on an empty tunnel instead of
+    // carrying the reader onto the first case study. Dropping it means the next
+    // rest above the heading is the first beat's fully-formed window, so a nudge
+    // off the heading glides the line out AND the first project in as ONE ride —
+    // the same content-to-content escalator the phrases have. The introGuard
+    // (t > worksStart + 2.1 → hide) still clears the heading as the glide passes
+    // through, so nothing is stranded.
   }
 
   // --- five project beats ---------------------------------------------------
@@ -935,12 +1003,10 @@ export function WorksIndexStatic({
         Here&rsquo;s some of my work
       </h2>
       <ul className="mt-12 flex flex-col gap-10">
-        {projects.map((p, i) => (
-          <li key={p.slug}>
-            <Link
-              href={`/work/${p.slug}` as Route}
-              className="group block max-w-2xl"
-            >
+        {projects.map((p, i) => {
+          // external projects link out in a new tab; studies go to /work/slug
+          const inner = (
+            <>
               <p className="text-[12px] font-bold tabular-nums tracking-[0.3em] text-fg/50">
                 {String(i + 1).padStart(2, "0")}
               </p>
@@ -953,9 +1019,30 @@ export function WorksIndexStatic({
               <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.25em] text-fg/40">
                 {p.year} · {p.tags.join(" · ")}
               </p>
-            </Link>
-          </li>
-        ))}
+            </>
+          );
+          return (
+            <li key={p.slug}>
+              {p.externalUrl ? (
+                <a
+                  href={p.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block max-w-2xl"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <Link
+                  href={`/work/${p.slug}` as Route}
+                  className="group block max-w-2xl"
+                >
+                  {inner}
+                </Link>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
