@@ -58,12 +58,10 @@ export const ORO_DESIGN: LirDesign = {
   backLabel: "Back to work",
   accent: "gold",
 
-  // Opening cover plate. No `title`/`role` SVGs for this study — the cover
-  // renders the title in the display face and the company/role as text from
-  // `meta` instead. (The FlytBase studies have bespoke lockups; ORO does not,
-  // and inventing one would mean drawing a brand mark that isn't theirs.)
   intro: {
     bg: `/case-study/cover/oro-cover-bg.webp`,
+    title: "/case-study/cover/oro-title.svg",
+    role: "/case-study/cover/oro-company-role.svg",
   },
 
   eyebrow:
@@ -229,12 +227,6 @@ export const ORO_DESIGN: LirDesign = {
           cite: "My manager, on why the landing page mattered",
         },
         { t: "sceneBreak" },
-        {
-          t: "microInteraction",
-          which: "oroProductCard",
-          caption:
-            "On hover the specification panel gives way to a macro crop of the piece. On a wall of 70,000 near-identical bangles, you identify a design by its surface — not by memorising its number.",
-        },
       ],
     },
 
@@ -326,27 +318,7 @@ export const ORO_DESIGN: LirDesign = {
             label:
               "The power-interest matrix — R2 and R3 as key players, R1 needing to be met, R4 kept informed. This is what made the prioritisation a decision rather than a preference.",
           },
-          wide: true,
-        },
-        { t: "sceneBreak" },
-        {
-          t: "heading",
-          text: "Every persona traced to something that shipped",
-        },
-        {
-          t: "p",
-          text:
-            "Research earns its place only if you can point at the interface and say which finding put it there. I kept an explicit map from each buyer's blocking problem to the screens that answer it — and a set of common solutions that serve all four at once.",
-        },
-        {
-          t: "media",
-          slot: {
-            id: "solutions-summary",
-            src: `${A}/solutions-summary.webp`,
-            label:
-              "Solutions summary — each persona's core problem mapped to the specific screens that resolve it, plus the common solutions shared across all four.",
-          },
-          wide: true,
+          scale: 0.7,
         },
         { t: "sceneBreak" },
         {
@@ -359,30 +331,15 @@ export const ORO_DESIGN: LirDesign = {
             "Mapping the full flow was what made the scale of the problem legible. Once every moving piece was on one surface — catalogue, product collections, the configurator, retailer onboarding, cart, order history, and the two ID systems running underneath — it was obvious which screens were carrying more than they should.",
         },
         {
-          t: "media",
-          slot: {
-            id: "ia-map",
-            src: `${A}/ia-map.webp`,
-            label:
-              "The information architecture — the full service mapped end to end, prioritising user needs against business decisions to decide the flow and hierarchy.",
-            caption:
-              "Click to open full size — the tree covers the catalogue, configurator, retailer onboarding and account flows.",
-          },
-          wide: true,
+          t: "figjamEmbed",
+          url: "https://embed.figma.com/board/w5G7BAVXKKXfJ6E2pBDhUS/ORO-Connect-IA?node-id=0-1&embed-host=share",
+          caption:
+            "The information architecture — pan and zoom to explore the catalogue, configurator, retailer onboarding and account flows.",
         },
         {
           t: "p",
           text:
             "I used the Moon design system as the foundation rather than building components from scratch. With one designer and three months, inventing a component library would have consumed the time the actual problem needed — and the aesthetic already matched the direction I wanted.",
-        },
-        {
-          t: "media",
-          slot: {
-            id: "process-whiteboard",
-            src: `${A}/process-whiteboard.webp`,
-            label:
-              "Wireframing the reorder flow before committing anything to high fidelity.",
-          },
         },
       ],
     },
@@ -426,7 +383,7 @@ export const ORO_DESIGN: LirDesign = {
           media: [
             {
               id: "feature-products",
-              src: `${A}/products.webp`,
+              src: `${A}/product-cards.webp`,
               label:
                 "The products page — filtered browsing across the full catalogue, with product cards showing the piece rather than a code.",
             },
@@ -446,9 +403,9 @@ export const ORO_DESIGN: LirDesign = {
           media: [
             {
               id: "feature-search",
-              src: `${A}/search-scoped.webp`,
+              src: `${A}/search-box.webp`,
               label:
-                "Intent-scoped search over the catalogue — the query is narrowed to products, orders or cart before it is sent, and the cards below it carry the hover micro-interaction shown earlier.",
+                "Intent-scoped search — the query is narrowed to products, orders or cart before it is sent.",
             },
           ],
         },
@@ -604,49 +561,13 @@ export const ORO_DESIGN: LirDesign = {
               ],
             },
           ],
-          img: `${A}/cart.webp`,
+          img: `${A}/two-id-system.webp`,
           imgAlt:
-            "The reference-number system in the cart — a Global Reference No for the whole order, a Product Reference No per line, each reconciled against the factory's own Design No.",
+            "The dual ID system — factory Design No and client Reference No reconciled on the same order line, so both parties can navigate to a specific item without a human translating.",
         },
         {
           t: "decisionText",
           n: "02",
-          heading: "Search that could not return text across the full catalogue",
-          cards: [
-            {
-              kind: "tempting",
-              label: "The tempting option:",
-              body:
-                "A conventional free-text search bar over everything, and accept that it is slow or incomplete at 70,000 entries.",
-            },
-            {
-              kind: "problem",
-              label: "The problem:",
-              body:
-                "A search that returns slowly, or returns nothing useful, teaches buyers not to use search. They fall back to asking someone at ORO — which is the behaviour the whole project was trying to end.",
-            },
-            {
-              kind: "chose",
-              label: "What I chose instead:",
-              body:
-                "An intent filter in the search bar that scopes the query before it is sent, so the backend answers a narrow question quickly instead of a broad one slowly.",
-            },
-            {
-              kind: "why",
-              label: "Why?:",
-              body: [
-                {
-                  lead: "The constraint and the user need pointed the same way.",
-                  text:
-                    "A backend limit forced the scoping, but a bulk buyer browsing an assortment usually has a category and a price band rather than an exact string. The technical ceiling produced a better interaction than an unconstrained search would have.",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          t: "decisionText",
-          n: "03",
           heading: "A cart carrying more information than any one screen should",
           cards: [
             {
@@ -679,6 +600,9 @@ export const ORO_DESIGN: LirDesign = {
               ],
             },
           ],
+          img: `${A}/orders-dd.webp`,
+          imgAlt:
+            "The orders interface — a dense but structured cart where every specification is visible and editable in place.",
         },
       ],
     },
@@ -698,6 +622,14 @@ export const ORO_DESIGN: LirDesign = {
           t: "p",
           text:
             "I designed a separate mobile version whose entire purpose was making bulk ordering easy on a phone. Buyers on the road — walking a shop floor, standing in a supplier's showroom — were never going to complete a multi-line gold order on a shrunk-down desktop grid, and treating mobile as a responsive afterthought would have quietly excluded the traditional buyers who are least likely to be at a desk.",
+        },
+        {
+          t: "imageRow",
+          imgs: [
+            { src: `${A}/mobile-screens.webp`, alt: "ORO Connect mobile — landing and catalogue browsing screens." },
+            { src: `${A}/mobile-screen-2.webp`, alt: "ORO Connect mobile — product detail and cart screens." },
+          ],
+          scale: 0.55,
         },
         { t: "sceneBreak" },
         {

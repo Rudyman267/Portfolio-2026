@@ -330,7 +330,7 @@ async function darkenVector(buf, outPath) {
 // shows them WITHOUT a panel (the outer rectangle must vanish into the page),
 // and the boards' "dark cards" are actually transparent regions read via their
 // white hairline borders — so page-colour flattening keeps the cards legible
-// while removing the boxed-slide look. The matrix keeps the figure fill.
+// while removing the boxed-slide look. The matrix also uses page colour now.
 const VECTORS = [
   { from: "Persona 1.svg", to: "persona-r1.webp", cropTop: 0.208, bg: "#06080c" },
   { from: "Persona 2.svg", to: "persona-r2.webp", cropTop: 0.208, bg: "#06080c" },
@@ -344,6 +344,7 @@ const VECTORS = [
     from: "Stakeholder matrix.svg",
     to: "power-interest.webp",
     rLabels: true,
+    bg: "#06080c",
   },
 ];
 
@@ -371,7 +372,7 @@ function withRLabels(svg) {
   const g = [
     // Rasterised here, so name a font the machine actually has as fallback —
     // Jakarta is loaded by next/font in the app, not installed system-wide.
-    `<g font-family="Plus Jakarta Sans, Segoe UI, Arial, sans-serif" font-weight="700" font-size="34" fill="#12D398" text-anchor="middle">`,
+    `<g font-family="Plus Jakarta Sans, Segoe UI, Arial, sans-serif" font-weight="700" font-size="34" fill="#D9A441" text-anchor="middle">`,
     ...R_LABELS.map((l) => `<text x="${l.x}" y="${l.y}">${l.t}</text>`),
     `</g>`,
   ].join("\n");
@@ -426,8 +427,8 @@ for (const v of VECTORS) {
     });
   }
   await pipe
-    // Per-vector background (see VECTORS note). Personas flatten onto the page
-    // colour so no panel shows; the matrix keeps the figure fill #10141b.
+    // Per-vector background (see VECTORS note). All vectors flatten onto the
+    // page colour #06080c so no panel shows; fallback #10141b for any future add.
     .flatten({ background: v.bg ?? "#10141b" })
     .webp({ quality: 84 })
     .toFile(dest);

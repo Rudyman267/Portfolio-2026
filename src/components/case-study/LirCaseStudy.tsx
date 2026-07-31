@@ -1002,7 +1002,9 @@ function ProseBody({
               </W>
             ) : (
               <W key={i} className={b.wide ? "" : "max-w-[var(--lir-measure)]"}>
-                <Figure slot={b.slot} fig={nextFig()} />
+                <div style={b.scale ? { maxWidth: `${b.scale * 100}%`, marginInline: "auto" } : undefined}>
+                  <Figure slot={b.slot} fig={nextFig()} />
+                </div>
               </W>
             );
           case "gapConclusion":
@@ -1162,11 +1164,61 @@ function ProseBody({
               </W>
             );
           case "personaCarousel":
-            // Navigable persona boards — full-width, no panel. Extra top margin
-            // so it breathes after the preceding section.
             return (
               <W key={i} className="mt-16">
                 <PersonaCarousel personas={b.personas} />
+              </W>
+            );
+          case "figjamEmbed":
+            return (
+              <W key={i} className="mt-8">
+                <figure className="w-full">
+                  <div
+                    className="relative w-full overflow-hidden rounded-lg border border-white/10"
+                    style={{ aspectRatio: "16/9" }}
+                  >
+                    <iframe
+                      src={b.url}
+                      className="absolute inset-0 h-full w-full"
+                      allowFullScreen
+                      loading="lazy"
+                      title="FigJam board"
+                    />
+                  </div>
+                  {b.caption && (
+                    <figcaption className="mx-auto mt-4 max-w-[var(--lir-measure)] text-center text-[length:var(--lir-caption)] leading-[1.5] text-muted">
+                      {b.caption}
+                    </figcaption>
+                  )}
+                </figure>
+              </W>
+            );
+          case "imageRow":
+            return (
+              <W key={i}>
+                <figure className="w-full">
+                  <div
+                    className="mx-auto flex items-start justify-center gap-[clamp(0.75rem,2vw,1.5rem)]"
+                    style={b.scale ? { maxWidth: `${b.scale * 100}%` } : undefined}
+                  >
+                    {b.imgs.map((img, j) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={j}
+                        src={img.src}
+                        alt={img.alt}
+                        className="h-auto flex-1 rounded-[6px]"
+                        style={{ minWidth: 0 }}
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
+                  {b.caption && (
+                    <figcaption className="mx-auto mt-4 max-w-[var(--lir-measure)] text-center text-[length:var(--lir-caption)] leading-[1.5] text-muted">
+                      {b.caption}
+                    </figcaption>
+                  )}
+                </figure>
               </W>
             );
           case "heading":

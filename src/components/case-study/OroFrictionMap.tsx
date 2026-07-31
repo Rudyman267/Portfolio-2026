@@ -12,9 +12,9 @@
  * WHY GSAP (the house tool), not shadcn/BLKit
  * This is a sequenced timeline: title → each segment reveals label, then
  * sub-label, then draws its connector → the destination node scales in → the
- * outcomes stagger up → hold → dissolve → loop. A paused, `repeat: -1` GSAP
- * timeline gives ordered beats, stroke-dashoffset path drawing and a seamless
- * loop for free. shadcn is a component kit (no animation), and the project is
+ * outcomes stagger up. Plays once per viewport entry, resets on leave. A paused
+ * GSAP timeline gives ordered beats and stroke-dashoffset path drawing.
+ * shadcn is a component kit (no animation), and the project is
  * Tailwind-v4 CSS-first with no config to init into.
  *
  * DESIGN LANGUAGE (Apple / Linear / Stripe / Anthropic keynote register)
@@ -28,10 +28,9 @@
  *  - Connector geometry is MEASURED from the real DOM (each segment's right/
  *    bottom edge → the ORO node), so the same code works at any width and after
  *    a reflow. Re-measured on resize and after fonts settle.
- *  - The loop DISSOLVES before it restarts (a fade-out beat + repeatDelay) so
- *    there is no hard snap back to the empty state.
- *  - Pauses when off-screen (IntersectionObserver) — no background animation
- *    over a long read.
+ *  - Plays ONCE per viewport entry (restarts from hidden each time the reader
+ *    scrolls back), not a loop — the reader controls the pace.
+ *  - Pauses when off-screen (IntersectionObserver).
  *  - `prefers-reduced-motion: reduce` renders the finished state, no timeline.
  */
 
@@ -165,8 +164,6 @@ export function OroFrictionMap({ caption }: { caption?: string }) {
       });
 
       const tl = gsap.timeline({
-        repeat: -1,
-        repeatDelay: 0.35,
         paused: true,
         defaults: { ease: OUT },
       });
@@ -199,16 +196,9 @@ export function OroFrictionMap({ caption }: { caption?: string }) {
         converge + 0.5,
       );
 
-      // Beat 8 — hold, then dissolve so the loop restarts without a hard reset
-      const holdEnd = converge + 0.5 + 0.55 + OUTCOMES.length * 0.14 + 2;
-      tl.to(
-        [title, ...segEls.flatMap((s) => [s.label, s.sub]), oroWord, ...outcomes],
-        { opacity: 0, duration: 0.7, ease: "power2.inOut" },
-        holdEnd,
-      ).to(lines, { opacity: 0, duration: 0.7, ease: "power2.inOut" }, holdEnd);
-
-      // gate on visibility
-      if (visible) tl.play();
+      // On enter: restart from hidden so it replays every time.
+      // On leave: pause and reset to the start.
+      if (visible) tl.restart();
       else tl.pause(0);
 
       return () => {

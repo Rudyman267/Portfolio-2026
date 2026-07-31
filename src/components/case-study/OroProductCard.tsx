@@ -38,36 +38,26 @@ const DUR = 1000;
 const EASE = "cubic-bezier(0.3, 0, 0.55, 0.99)";
 
 /**
- * The photograph's placement, taken VERBATIM from the Figma node
- * (get_design_context on DSC2199): the portrait, diagonally-shot bangle is
- * cover-cropped — stretched wider than tall — so a HORIZONTAL band of the piece
- * fills the window. There is NO element rotation in the rest state; the
- * "horizontal bangle" is entirely this crop. (An earlier build rotated the whole
- * image instead, which is why the start frame was wrong.)
+ * Placement computed from the Figma prototype (Frame 1134 · Mouse enter ·
+ * Change to). Values are the Figma node dimensions expressed as percentages
+ * of their parent (window % of card, photo % of window).
  *
- * Rest = the exact Figma percentages. Macro = the same crop pushed larger and
- * re-centred onto the enamel + stones (a scale-in of the identical framing, so
- * the zoom can't distort what already reads correctly).
+ * DSC2199 (the photo) animates: rotate -15° → 45°, grows ~3.67×.
+ * Frame 1134 (the clip window) grows ~2.9× wide / ~4.6× tall and shifts
+ * up-left so the enlarged rotated photo covers the card with no white corners.
  */
 const IMG = {
   window: {
-    // Rest = the small upper crop window. Macro (Frame 1134 in Figma) grows to
-    // full-bleed — big enough that the ROTATED photo still covers the card with
-    // no white corners.
-    rest: { left: "11.375%", top: "-1.616%", width: "77.25%", height: "70.106%" },
-    macro: { left: "-42%", top: "-42%", width: "184%", height: "184%" },
+    // 276.226×220.766 of 357×315 card
+    rest: { left: "11.375%", top: "-1.616%", width: "77.37%", height: "70.08%" },
+    // 810.512×1014.125, shifted (-400.258, -390.562) from rest
+    macro: { left: "-100.75%", top: "-125.61%", width: "227.03%", height: "321.94%" },
   },
   photo: {
-    // Rest = the exact Figma cover-crop (reads as a horizontal band). Macro
-    // ZOOMS ~3.6× AND ROTATES to the diagonal the Figma prototype shows
-    // (DSC2199 rotate -15 → 45; Figma's +45 is CSS −45..−50, band running
-    // lower-left → upper-right onto the enamel + stones).
-    // SAME crop in both states — the macro difference is a pure transform (scale
-    // + rotate) around the enamel, so it zooms the identical framing instead of
-    // re-cropping (which tweens cleanly and can't distort what already reads
-    // right). Window growth adds the rest of the zoom.
-    rest: { height: "195.49%", width: "192.87%", left: "-46.44%", top: "-47.75%", transformOrigin: "52% 42%", transform: "rotate(0deg) scale(1)" },
-    macro: { height: "195.49%", width: "192.87%", left: "-46.44%", top: "-47.75%", transformOrigin: "52% 42%", transform: "rotate(-58deg) scale(2.1)" },
+    // 163.68×242.112 in rest window, rotate -15°, at layout origin
+    rest: { width: "59.26%", height: "109.67%", left: "0%", top: "0%", transform: "rotate(-15deg)" },
+    // 600.929×888.881 in macro window, rotate 45°, shifted (-101.806, +524.157)
+    macro: { width: "74.14%", height: "87.65%", left: "-12.56%", top: "51.69%", transform: "rotate(45deg)" },
   },
 } as const;
 

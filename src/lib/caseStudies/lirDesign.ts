@@ -114,7 +114,7 @@ export type Block =
   // quote. `tone` "bright" = white + bolder (Verkos's reframe thesis); default
   // grey. `wide` widens the measure so it breaks to ~2 lines instead of 3.
   | { t: "quoteFlash"; text: string; tone?: "grey" | "bright"; wide?: boolean }
-  | { t: "media"; slot: MediaSlot; wide?: boolean; caption?: string }
+  | { t: "media"; slot: MediaSlot; wide?: boolean; caption?: string; scale?: number }
   // the orange "gap conclusion" card (Figma SVG, copy baked in) — the CEO
   // scenario, shown as a full-width orange panel right after the warehouse
   // scenario. Pops in via GapReveal's spring-in.
@@ -224,6 +224,17 @@ export type Block =
   | {
       t: "personaCarousel";
       personas: { src: string; name: string; role: string; alt: string }[];
+    }
+  | {
+      t: "figjamEmbed";
+      url: string;
+      caption?: string;
+    }
+  | {
+      t: "imageRow";
+      imgs: { src: string; alt: string }[];
+      caption?: string;
+      scale?: number;
     };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
