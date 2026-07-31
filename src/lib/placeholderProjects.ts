@@ -43,12 +43,16 @@ export const PLACEHOLDER_PROJECTS: GalleryProject[] = [
     tags: ["Product", "AI", "FlytBase"],
     size: "sm",
   },
+  // THIRD REAL STUDY — /work/oro-connect. Replaced the "Nightshift" placeholder
+  // so it sits directly after the two FlytBase studies in the journey.
   {
-    title: "Nightshift",
-    slug: "nightshift",
-    summary: "A generative editing tool where designers and models co-author in real time.",
-    year: "2024",
-    tags: ["Tooling", "AI", "Prototype"],
+    title: "ORO Connect",
+    slug: "oro-connect",
+    summary:
+      "A 70,000-piece jewellery catalogue a buyer can actually shop — rebuilt for ORO Precious Metals.",
+    // matches the study's own meta (Duration: 6 weeks · 2025)
+    year: "2025",
+    tags: ["Product", "B2B", "ORO"],
     size: "md",
   },
   {

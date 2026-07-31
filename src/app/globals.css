@@ -161,6 +161,16 @@
   --color-ring: 8 230 255;
 }
 
+/* ORO Connect = gold. Deliberately a MUTED metal (#d9a441), not a saturated
+   yellow: this study is full of jewellery photography, and a hot accent next to
+   gold product shots reads as a colour clash rather than a signal. Dark enough
+   that white body copy still sits comfortably beside it on the near-black
+   canvas. */
+.lir[data-accent="gold"] {
+  --color-accent: 217 164 65;       /* #d9a441 — ORO signal gold */
+  --color-ring: 217 164 65;
+}
+
 /* Section headings in the case study use Tanker, uppercase, tight. */
 .lir .display {
   font-family: var(--font-display-tanker);

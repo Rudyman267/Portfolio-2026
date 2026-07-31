@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { LirCaseStudy } from "@/components/case-study/LirCaseStudy";
 import { LIR_DESIGN } from "@/lib/caseStudies/lirDesign";
 import { VERKOS_DESIGN } from "@/lib/caseStudies/verkosDesign";
+import { ORO_DESIGN } from "@/lib/caseStudies/oroDesign";
 import type { LirDesign } from "@/lib/caseStudies/lirDesign";
 
 /**
@@ -19,6 +20,7 @@ import type { LirDesign } from "@/lib/caseStudies/lirDesign";
 const STUDIES: Record<string, LirDesign> = {
   [LIR_DESIGN.slug]: LIR_DESIGN,
   [VERKOS_DESIGN.slug]: VERKOS_DESIGN,
+  [ORO_DESIGN.slug]: ORO_DESIGN,
 };
 
 export function generateStaticParams() {

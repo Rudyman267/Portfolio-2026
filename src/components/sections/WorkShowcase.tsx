@@ -69,6 +69,8 @@ import type { GalleryProject } from "@/lib/placeholderProjects";
 const COVER: Record<string, string> = {
   "live-incident-response": "/case-study/cover/lir-plate.webp",
   "verkos-reports": "/case-study/cover/verkos-plate.webp",
+  // the storefront thumbnail the user supplied ("Project cover thumbnail.png")
+  "oro-connect": "/case-study/cover/oro-plate.webp",
 };
 
 /**
@@ -83,12 +85,16 @@ const COVER: Record<string, string> = {
 const INNER: Record<string, string> = {
   "live-incident-response": "/case-study/cover/lir-ui.webp",
   "verkos-reports": "/case-study/verkos-cover.webp",
+  // ⚠️ MUST differ from the plate above (see the header note) — the plate is the
+  // landing page, this is the products grid.
+  "oro-connect": "/case-study/cover/oro-ui.webp",
 };
 
 /** The study's one-line headline, revealed under the title. */
 const KICKER: Record<string, string> = {
   "live-incident-response": "A situation room that assembles itself in 30s.",
   "verkos-reports": "AI powered automated security report generation",
+  "oro-connect": "A 70,000-piece catalogue a buyer can actually shop",
 };
 
 /** Accent-coloured discipline line under the kicker. */
@@ -97,6 +103,7 @@ const EYEBROW: Record<string, string> = {
     "corporate drone ops · emergency response · real-time collaboration",
   "verkos-reports":
     "drone operations · AI report generation · enterprise security",
+  "oro-connect": "B2B jewellery · bulk ordering · catalogue at scale",
 };
 
 /** How the thing was built — the positioning line, from the Figma. */
@@ -105,12 +112,42 @@ const BUILD_NOTE: Record<string, string> = {
     "Designed and built to production as a solo design builder using claude code",
   "verkos-reports":
     "Designed and built to production as a solo design builder using claude code",
+  // ORO predates the design-builder work — it was a design handoff, and saying
+  // otherwise here would misrepresent it.
+  "oro-connect":
+    "Designed solo end to end, from platform audit through to engineering handoff",
 };
 
-/** Duration shown beside the FlytBase mark. */
+/** Duration shown beside the company mark. */
 const DURATION: Record<string, string> = {
   "live-incident-response": "6 Weeks",
   "verkos-reports": "9 Weeks",
+  "oro-connect": "3 Months",
+};
+
+/**
+ * The company mark shown in the card's meta line.
+ *
+ * ⚠️ This used to be a hardcoded FlytBase logo, which was fine while every
+ * study was a FlytBase study — ORO Connect is not, and would have shipped a
+ * card crediting the wrong company. Studies without a logo asset fall back to
+ * `name` rendered as text, so adding a study never requires producing an SVG
+ * first.
+ */
+const COMPANY: Record<string, { name: string; logo?: string; width?: number }> = {
+  "live-incident-response": {
+    name: "FlytBase",
+    // the committed `flytbase-logo.svg` has a `fill="black"` wordmark, which is
+    // invisible on this dark page — hence the light variant
+    logo: "/case-study/flytbase-logo-light.svg",
+    width: 94,
+  },
+  "verkos-reports": {
+    name: "FlytBase",
+    logo: "/case-study/flytbase-logo-light.svg",
+    width: 94,
+  },
+  "oro-connect": { name: "ORO Precious Metals" },
 };
 
 function ProjectPlate({ project }: { project: GalleryProject }) {
@@ -120,6 +157,7 @@ function ProjectPlate({ project }: { project: GalleryProject }) {
   const eyebrow = EYEBROW[project.slug] ?? project.tags.join(" · ");
   const buildNote = BUILD_NOTE[project.slug];
   const duration = DURATION[project.slug];
+  const company = COMPANY[project.slug];
 
   return (
     <article
@@ -273,22 +311,28 @@ function ProjectPlate({ project }: { project: GalleryProject }) {
             </p>
           ) : null}
 
-          {/* META — the FlytBase mark, a dot, and the duration. The light
-              variant of the logo: the committed `flytbase-logo.svg` has a
-              `fill="black"` wordmark, which is invisible on this dark page. */}
+          {/* META — the company mark, a dot, and the duration. Per-slug (see
+              COMPANY): studies with a logo asset render it, the rest render the
+              company name as text, so a new study is never blocked on an SVG. */}
           <div
             data-reveal-item
             className="mt-4 flex items-center gap-[9px]"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/case-study/flytbase-logo-light.svg"
-              alt="FlytBase"
-              width={94}
-              height={16}
-              className="h-4 w-auto"
-              loading="lazy"
-            />
+            {company?.logo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={company.logo}
+                alt={company.name}
+                width={company.width ?? 94}
+                height={16}
+                className="h-4 w-auto"
+                loading="lazy"
+              />
+            ) : company ? (
+              <span className="text-[13px] font-medium leading-none text-white/85">
+                {company.name}
+              </span>
+            ) : null}
             <span
               aria-hidden
               className="size-[5.9px] rounded-full bg-white/70"

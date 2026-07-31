@@ -91,11 +91,20 @@ const MORPH_LEAD = 0.35; // how far before dock the morph begins
 const HOLD = 0.6;
 const EXIT = 0.6;
 
-// real window thumbnails, per slug (the rest stay clean white for now)
+// Real window thumbnails, per slug (the rest stay clean white for now).
+//
+// ⚠️ This map is load-bearing beyond the picture: a beat is rendered as a
+// clickable <Link> ONLY when its slug has an entry here (see the thumb ternary
+// below). A published study missing from this map silently degrades to the
+// non-clickable "in progress" plate — which is exactly how ORO first shipped.
+// Adding a study to the route registry is not enough; it must land here too.
 const THUMB_SRC: Record<string, string> = {
   "live-incident-response": "/case-study/image-1.webp",
   // the annotated east-gate detection frame, re-cropped to the window's 16:9
   "verkos-reports": "/case-study/verkos-cover.webp",
+  // the products grid — the /work card's plate is the storefront photo, so the
+  // home window shows the UI instead of repeating the same picture twice.
+  "oro-connect": "/case-study/cover/oro-ui.webp",
 };
 
 /**

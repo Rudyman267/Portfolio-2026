@@ -20,12 +20,16 @@ import {
   GapCards,
   DecisionCluster,
   DroneMark,
+  OroMark,
   PersonaSplitDiagram,
   OnboardingFlowDiagram,
   StakeholderActionsDiagram,
 } from "@/components/case-study/lirBlocks";
 import { DecisionText, VerkosDiagram } from "@/components/case-study/verkosBlocks";
 import { VerkosPrototype } from "@/components/case-study/VerkosPrototype";
+import { OroProductCard } from "@/components/case-study/OroProductCard";
+import { OroFrictionMap } from "@/components/case-study/OroFrictionMap";
+import { PersonaCarousel } from "@/components/case-study/PersonaCarousel";
 import { ImageLightbox } from "@/components/case-study/ImageLightbox";
 import { NowPlaying } from "@/components/audio/NowPlaying";
 
@@ -56,18 +60,51 @@ import type {
    the sticky nav + overview meta pinned to the left gutter on wide screens.
    ========================================================================== */
 
-const flytbaseLogo = (
-  // The FlytBase wordmark is a dark/gradient logo that vanishes on the dark
-  // meta card — seat it on a small light chip so it always reads.
-  <span className="inline-flex items-center rounded-[5px] bg-white px-1.5 py-0.5 align-middle">
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img
-      src="/case-study/flytbase-logo.svg"
-      alt="FlytBase"
-      className="inline-block h-2.5 w-auto"
-    />
-  </span>
-);
+/* ── Company logo for the overview meta card. Keyed by slug, because a
+   hardcoded logo here silently credits the wrong company the moment a study
+   from a different client renders. `chip` matters: the FlytBase wordmark is
+   dark/gradient and vanishes on the dark card, so it needs a light chip
+   behind it; the ORO wordmark is already white and must NOT get one. Any
+   slug missing from this map falls back to the plain text value. ────────── */
+const COMPANY_LOGO: Record<string, { src: string; alt: string; chip: boolean }> =
+  {
+    "live-incident-response": {
+      src: "/case-study/flytbase-logo.svg",
+      alt: "FlytBase",
+      chip: true,
+    },
+    "verkos-reports": {
+      src: "/case-study/flytbase-logo.svg",
+      alt: "FlytBase",
+      chip: true,
+    },
+    "oro-connect": {
+      src: "/case-study/oro-logo.svg",
+      alt: "ORO Precious Metals",
+      chip: false,
+    },
+  };
+
+function CompanyLogo({ slug, fallback }: { slug: string; fallback: string }) {
+  const logo = COMPANY_LOGO[slug];
+  if (!logo) return <>{fallback}</>;
+  return (
+    <span
+      className={
+        logo.chip
+          ? "inline-flex items-center rounded-[5px] bg-white px-1.5 py-0.5 align-middle"
+          : "inline-flex items-center align-middle"
+      }
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={logo.src}
+        alt={logo.alt}
+        className={logo.chip ? "inline-block h-2.5 w-auto" : "inline-block h-3 w-auto"}
+      />
+    </span>
+  );
+}
 
 /* ── GapReveal — the orange "gap conclusion" card, revealed with a spring-in
    (scale + rise + a soft orange glow that pulses on arrival). Reduced motion:
@@ -298,11 +335,31 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
     { scope: root },
   );
 
+  // "<Company> — <Role>" for the cover's role strip: the alt text when a strip
+  // SVG exists, and the rendered text when it doesn't. Read from `meta` so it
+  // can never disagree with the study's own stated company/role.
+  const introRoleAlt = [
+    data.meta.find((m) => m.label === "Company")?.value,
+    data.meta.find((m) => m.label === "Role")?.value,
+  ]
+    .filter(Boolean)
+    .join(" — ");
+
+  // The headline mark, chosen by company rather than baked in — see the note at
+  // its render site. FlytBase studies keep the drone star; ORO gets its own
+  // monogram. Both fill from currentColor so the accent token drives the colour.
+  const Mark = data.slug === "oro-connect" ? OroMark : DroneMark;
+
   return (
+    // `data-accent` passes the study's accent THROUGH rather than testing for
+    // one known value: it used to read `=== "cyan" ? "cyan" : undefined`, which
+    // silently dropped any new study colour. "orange" is the default already
+    // baked into `.lir`, so it needs no attribute; any other value selects its
+    // own token block in globals.css.
     <article
       ref={root}
       className="lir relative bg-bg text-fg"
-      data-accent={data.accent === "cyan" ? "cyan" : undefined}
+      data-accent={data.accent && data.accent !== "orange" ? data.accent : undefined}
       data-header-dark={undefined}
     >
       {/* ── THUMBNAIL INTRO — a fixed, fully-OPAQUE cover pinned BEHIND the page
@@ -321,8 +378,8 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
           company/role strip as VECTOR overlays on top. That's the whole point
           of the split — on a phone the photo crops down hard, but the SVG type
           is laid out independently and stays legible at its own scale instead
-          of being shrunk along with the background. `intro` is per-study; the
-          role strip is shared by every FlytBase study. */}
+          of being shrunk along with the background. Both `intro` and the role
+          strip are per-study; the strip reads its company/role from `meta`. */}
       <div
         data-intro
         aria-hidden
@@ -349,22 +406,47 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                 clamps so each SVG scales on its OWN curve, independent of how
                 far the background has been cropped. */}
             <div className="absolute inset-x-0 bottom-0 flex flex-col gap-6 px-[6vw] pb-[8vh] sm:px-[5vw] lg:flex-row lg:items-end lg:justify-between lg:gap-10 lg:px-[4vw] lg:pb-[7vh]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                data-intro-title
-                src={data.intro.title}
-                alt={`${data.title} — case study cover`}
-                className="block h-auto w-[min(88vw,320px)] sm:w-[min(72vw,480px)] lg:w-[clamp(480px,42vw,803px)]"
-                data-no-zoom
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                data-intro-role
-                src="/case-study/cover/company-role.svg"
-                alt="FlytBase — AI Product Design Builder"
-                className="block h-auto w-[min(64vw,240px)] shrink-0 lg:mb-2 lg:w-[clamp(280px,24vw,552px)]"
-                data-no-zoom
-              />
+              {/* Title: a per-study SVG lockup when one exists, otherwise the
+                  study's own title set in the display face. The fallback means a
+                  new study is never blocked on someone exporting a vector. */}
+              {data.intro.title ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  data-intro-title
+                  src={data.intro.title}
+                  alt={`${data.title} — case study cover`}
+                  className="block h-auto w-[min(88vw,320px)] sm:w-[min(72vw,480px)] lg:w-[clamp(480px,42vw,803px)]"
+                  data-no-zoom
+                />
+              ) : (
+                <h1
+                  data-intro-title
+                  className="display max-w-[14ch] text-[clamp(2.75rem,9vw,7rem)] uppercase leading-[0.92] text-white"
+                >
+                  {data.title}
+                </h1>
+              )}
+              {/* ⚠️ Role strip is PER-STUDY. It was a hardcoded FlytBase SVG,
+                  which silently credited the wrong company the moment a study
+                  from anywhere else was added. Studies without a strip asset
+                  render their company + role as text from `meta`. */}
+              {data.intro.role ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  data-intro-role
+                  src={data.intro.role}
+                  alt={introRoleAlt}
+                  className="block h-auto w-[min(64vw,240px)] shrink-0 lg:mb-2 lg:w-[clamp(280px,24vw,552px)]"
+                  data-no-zoom
+                />
+              ) : introRoleAlt ? (
+                <p
+                  data-intro-role
+                  className="shrink-0 text-[clamp(0.8rem,1.4vw,1.05rem)] uppercase tracking-[0.14em] text-white/70 lg:mb-3"
+                >
+                  {introRoleAlt}
+                </p>
+              ) : null}
             </div>
           </>
         ) : null}
@@ -413,7 +495,11 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
                       {m.label}
                     </dt>
                     <dd className="text-right text-[length:var(--lir-rail-meta)] font-medium text-fg">
-                      {m.label === "Company" ? flytbaseLogo : m.value}
+                      {m.label === "Company" ? (
+                        <CompanyLogo slug={data.slug} fallback={m.value} />
+                      ) : (
+                        m.value
+                      )}
                     </dd>
                   </div>
                 ))}
@@ -485,9 +571,11 @@ export function LirCaseStudy({ data }: { data: LirDesign }) {
             {/* headline (46px ExtraBold, LH 80%) with the drone mark to its left */}
             <Reveal delay={0.06}>
               <div className="mt-[3.75rem] flex items-center gap-5 sm:gap-[35px]">
-                {/* text-accent drives the star via currentColor: LIR resolves
-                    to the same #ff8d3b as before, Verkos to its cyan #08e6ff */}
-                <DroneMark
+                {/* The mark is PER-COMPANY: the FlytBase star would credit the
+                    wrong brand on a non-FlytBase study. Both marks fill from
+                    currentColor, so text-accent recolors either one — LIR
+                    #ff8d3b, Verkos cyan #08e6ff, ORO gold #d9a441. */}
+                <Mark
                   size={86}
                   className="w-[52px] shrink-0 text-accent sm:w-[86px]"
                 />
@@ -1051,6 +1139,35 @@ function ProseBody({
               >
                 <VerkosPrototype />
               </div>
+            );
+          case "microInteraction":
+            // A looping component demo. Sits INSIDE the reading measure — it is
+            // one card, not a full UI, so staging it full-bleed would oversell
+            // it. The component owns its own loop, visibility gating and
+            // reduced-motion fallback.
+            return (
+              <W key={i} className="mt-10">
+                <OroProductCard caption={b.caption} />
+              </W>
+            );
+          case "animatedDiagram":
+            // A self-looping narrative diagram. Spans the WIDE column (like the
+            // slide it replaces) — it is a full figure, not an inline card, so
+            // it gets the full measure rather than the reading column.
+            return (
+              <W key={i} className="mt-8">
+                {b.which === "oroFrictionMap" && (
+                  <OroFrictionMap caption={b.caption} />
+                )}
+              </W>
+            );
+          case "personaCarousel":
+            // Navigable persona boards — full-width, no panel. Extra top margin
+            // so it breathes after the preceding section.
+            return (
+              <W key={i} className="mt-16">
+                <PersonaCarousel personas={b.personas} />
+              </W>
             );
           case "heading":
             // bold white subsection title (2-line, tight) — Figma 229:3.

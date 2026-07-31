@@ -27,6 +27,7 @@ export const VERKOS_DESIGN: LirDesign = {
   intro: {
     bg: "/case-study/cover/verkos-cover-bg.webp",
     title: "/case-study/cover/verkos-title.svg",
+    role: "/case-study/cover/company-role.svg",
   },
   eyebrow:
     "drone operations · AI report generation · enterprise security · FlytBase",

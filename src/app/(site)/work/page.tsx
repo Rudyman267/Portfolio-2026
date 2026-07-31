@@ -20,8 +20,11 @@ export default function WorkPage() {
   // Only the studies that actually exist get a card. The placeholder slugs
   // (nightshift/atlas/ember) 404, so they're filtered out rather than shown as
   // dead links on the page whose whole job is to send people INTO the work.
+  // ⚠️ This list must stay in step with the STUDIES registry in
+  // work/[slug]/page.tsx — a slug here without a study there ships a card that
+  // 404s, which is the exact failure this filter exists to prevent.
   const projects = PLACEHOLDER_PROJECTS.filter((p) =>
-    ["live-incident-response", "verkos-reports"].includes(p.slug),
+    ["live-incident-response", "verkos-reports", "oro-connect"].includes(p.slug),
   );
 
   return (

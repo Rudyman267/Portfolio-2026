@@ -207,7 +207,24 @@ export type Block =
   /** Interactive exhibit. `full` stages it on its own full viewport (centred,
    *  min-h-svh) so it reads as a self-contained artifact rather than an inline
    *  figure butted up against the next block. */
-  | { t: "prototype"; which: "verkosReport"; full?: boolean };
+  | { t: "prototype"; which: "verkosReport"; full?: boolean }
+  // A single UI component replayed as a looping micro-interaction, for cases
+  // where the ARGUMENT is the interaction itself and a still frame cannot carry
+  // it. `oroProductCard`: the catalogue → macro-detail hover swap that makes an
+  // individual SKU identifiable on a 70,000-piece scroll wall.
+  | { t: "microInteraction"; which: "oroProductCard"; caption?: string }
+  // An animated, self-looping narrative DIAGRAM (not a UI micro-interaction):
+  // `oroFrictionMap` is the "Why?" problem framing — four buyer segments, each
+  // with its own friction, converging by drawn SVG connectors onto one ORO
+  // outcome node. Owns its own GSAP timeline, visibility gating and
+  // reduced-motion fallback.
+  | { t: "animatedDiagram"; which: "oroFrictionMap"; caption?: string }
+  // A navigable carousel of persona boards (ORO R1–R4). One board at a time with
+  // prev/next + dots and a calm fade/slide between them, on no panel background.
+  | {
+      t: "personaCarousel";
+      personas: { src: string; name: string; role: string; alt: string }[];
+    };
 
 /* ── Section ─────────────────────────────────────────────────────────────── */
 
@@ -274,9 +291,13 @@ export type LirDesign = {
   contents: { n: string; label: string; id?: string }[];
   buildStatement: string; // "I didn't hand a spec to engineers…"
   sections: Section[];
-  /** Per-study signal color. Defaults to LIR orange; "cyan" = Verkos (#08e6ff).
-   *  Applied as data-accent on the .lir root; overrides --color-accent. */
-  accent?: "orange" | "cyan";
+  /** Per-study signal color. Defaults to LIR orange; "cyan" = Verkos (#08e6ff);
+   *  "gold" = ORO Connect (#d9a441 — the metal the business actually sells).
+   *  Applied as data-accent on the .lir root; overrides --color-accent, which
+   *  cascades to the eyebrow, stats, chapter flash, decision washes and the
+   *  contents rail — so a new study only needs the token, never per-component
+   *  colour work. */
+  accent?: "orange" | "cyan" | "gold";
   /** Optional demo video that closes the Overview. Omit for studies with no
    *  video (e.g. Verkos). `src` = basename under /case-study/video (.webm+.mp4). */
   demoVideo?: { src: string; poster: string; label: string };
@@ -292,8 +313,16 @@ export type LirDesign = {
   intro?: {
     /** raster background (webp), full-bleed + object-cover */
     bg: string;
-    /** per-study title lockup SVG (logo + name + timeline/tools/team) */
-    title: string;
+    /** Per-study title lockup SVG (logo + name + timeline/tools/team).
+     *  Optional: omit it and the cover sets `title` in the display face
+     *  instead, so a study is never blocked on a vector export. */
+    title?: string;
+    /** Per-study company/role strip SVG. Optional for the same reason — with
+     *  no asset the cover renders "<Company> — <Role>" from `meta` as text.
+     *  ⚠️ This used to be a hardcoded FlytBase file shared by every study,
+     *  which credited the wrong company as soon as a non-FlytBase study
+     *  existed. */
+    role?: string;
     /** optional focal point for the background crop, e.g. "50% 40%" */
     bgPosition?: string;
   };
@@ -309,6 +338,7 @@ export const LIR_DESIGN: LirDesign = {
   intro: {
     bg: "/case-study/cover/lir-cover.webp",
     title: "/case-study/cover/lir-title.svg",
+    role: "/case-study/cover/company-role.svg",
   },
   eyebrow: "corporate drone ops · emergency response · real-time collaboration",
   title: "Live Incidence Response",
