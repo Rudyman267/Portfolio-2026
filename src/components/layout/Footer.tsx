@@ -9,7 +9,7 @@ import { ArrowUpRight, ArrowUp } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { Magnetic } from "@/components/motion/Magnetic";
 import { scrollToTop } from "@/components/motion/lenisBridge";
-import { DEFAULT_NAV, type NavItem } from "@/components/layout/Nav";
+import { DEFAULT_NAV, isExternalHref, type NavItem } from "@/components/layout/Nav";
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
 import { scrollToWorks } from "@/components/sections/worksAnchor";
 import { NowPlaying } from "@/components/audio/NowPlaying";
@@ -205,7 +205,11 @@ export function Footer({
               Index
             </p>
             <ul className="space-y-3 font-medium">
-              {nav.map((item) => (
+              {/* Index = page routes only. External actions (Contact `mailto:`,
+                  the résumé PDF) are dropped — they're not routes this column's
+                  hardNavigate onClick can handle, and both are already surfaced
+                  (email as the big CTA above, Résumé in the Connect column). */}
+              {nav.filter((item) => !isExternalHref(item.href)).map((item) => (
                 <li key={item.href}>
                   <Link
                     href={item.href as Route}
