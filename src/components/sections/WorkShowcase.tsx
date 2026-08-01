@@ -71,6 +71,9 @@ const COVER: Record<string, string> = {
   "verkos-reports": "/case-study/cover/verkos-plate.webp",
   // the storefront thumbnail the user supplied ("Project cover thumbnail.png")
   "oro-connect": "/case-study/cover/oro-plate.webp",
+  // ORO Edit is an external project (links out to oroedit.com), not a written
+  // study — but it shares the same layered plate/reveal card here.
+  "oro-edit": "/case-study/cover/oro-edit-plate.webp",
 };
 
 /**
@@ -94,6 +97,7 @@ const INNER: Record<string, string> = {
   "live-incident-response": "/case-study/cover/lir-ui.webp",
   "verkos-reports": "/case-study/verkos-cover.webp",
   "oro-connect": "/case-study/cover/oro-ui.webp",
+  "oro-edit": "/case-study/cover/oro-edit-ui.webp",
 };
 
 /** The study's one-line headline, revealed under the title. */
@@ -101,6 +105,7 @@ const KICKER: Record<string, string> = {
   "live-incident-response": "A situation room that assembles itself in 30s.",
   "verkos-reports": "AI powered automated security report generation",
   "oro-connect": "A 70,000-piece catalogue a buyer can actually shop",
+  "oro-edit": "A live luxury-brand jewellery web experience",
 };
 
 /** Accent-coloured discipline line under the kicker. */
@@ -110,6 +115,7 @@ const EYEBROW: Record<string, string> = {
   "verkos-reports":
     "drone operations · AI report generation · enterprise security",
   "oro-connect": "B2B jewellery · bulk ordering · catalogue at scale",
+  "oro-edit": "luxury web · brand storytelling · live site",
 };
 
 /** How the thing was built — the positioning line, from the Figma. */
@@ -129,6 +135,8 @@ const DURATION: Record<string, string> = {
   "live-incident-response": "6 Weeks",
   "verkos-reports": "9 Weeks",
   "oro-connect": "3 Months",
+  // Not a written study with a build duration — it's a live site you click into.
+  "oro-edit": "Live",
 };
 
 /**
@@ -154,6 +162,7 @@ const COMPANY: Record<string, { name: string; logo?: string; width?: number }> =
     width: 94,
   },
   "oro-connect": { name: "ORO Precious Metals" },
+  "oro-edit": { name: "ORO Precious Metals" },
 };
 
 function ProjectPlate({ project }: { project: GalleryProject }) {
@@ -164,6 +173,68 @@ function ProjectPlate({ project }: { project: GalleryProject }) {
   const buildNote = BUILD_NOTE[project.slug];
   const duration = DURATION[project.slug];
   const company = COMPANY[project.slug];
+  // A project with `externalUrl` (ORO Edit) is a live site, not a written study:
+  // its card links straight out in a new tab instead of to `/work/slug`. The
+  // frame markup and the [data-card] hook the hover timeline binds to are
+  // identical either way, so desktop and mobile behave exactly like the studies.
+  const external = project.externalUrl;
+  const cardClassName =
+    "group/card relative row-start-2 block w-full self-center focus-visible:outline-none lg:col-start-1 lg:row-start-1";
+
+  // THE PLATE — the frame the inner image rises into. `overflow-hidden`
+  // is load-bearing: it's what hides the inner image below the bottom
+  // edge at rest, so the reveal reads as something entering the frame
+  // rather than fading in on top of it.
+  const frame = (
+    <div
+      data-frame
+      className="relative aspect-[16/9] w-full overflow-hidden rounded-[4px] border border-white/15 bg-black"
+    >
+      {cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          data-cover
+          src={cover}
+          alt=""
+          className="absolute inset-0 h-full w-full scale-[1.06] object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_30%_22%,#3a2a1c_0%,#1a1410_60%,#0b0d12_100%)]" />
+      )}
+
+      {/* DARKENING SCRIM. Sits between the cover and the inner image so it
+          darkens ONLY the backdrop — the screenshot on top keeps its full
+          contrast, which is what makes it read as lit from within.
+          Pre-darkened on mobile (see the `lg:opacity-0` split): the phone
+          layout has no hover, so it ships in the end state. */}
+      <div
+        data-scrim
+        aria-hidden
+        className="absolute inset-0 bg-black/55 lg:opacity-0"
+      />
+
+      {/* THE INNER IMAGE. Width is 75.8% of the frame — the Figma's
+          476.8/628.7 — and it's centred horizontally with a slight upward
+          bias vertically, matching `image 609`'s seat in frame 3.
+          At rest (desktop) the timeline parks it fully below the frame.
+          On mobile it renders in its landed position with no JS at all. */}
+      {inner ? (
+        <div
+          data-inner
+          className="absolute left-1/2 top-[12%] w-[75.8%] -translate-x-1/2 overflow-hidden rounded-[3px] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9)] ring-1 ring-white/10"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={inner}
+            alt={`${project.title} — interface`}
+            className="block h-auto w-full"
+            loading="lazy"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <article
@@ -176,71 +247,37 @@ function ProjectPlate({ project }: { project: GalleryProject }) {
       // can't be two separate grid rows.
       className="grid grid-cols-1 items-center gap-x-[clamp(2rem,4vw,4.5rem)] gap-y-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-y-0"
     >
-      <Link
-        href={`/work/${project.slug}` as Route}
-        data-card
-        aria-label={`${project.title} — open case study`}
-        // `lg:row-start-1` and NO row-span: the desktop grid is a single row, so
-        // the plate and the text column share it and the parent's
-        // `items-center` centres the text on the plate's own centreline. An
-        // earlier `lg:row-span-2` left over from a two-row layout made the plate
-        // span rows 1-2 while the text sat in row 1 only — so the text centred
-        // against half the card and hung ~180px above the thumbnail's centre.
-        className="group/card relative row-start-2 block w-full self-center focus-visible:outline-none lg:col-start-1 lg:row-start-1"
-      >
-        {/* THE PLATE — the frame the inner image rises into. `overflow-hidden`
-            is load-bearing: it's what hides the inner image below the bottom
-            edge at rest, so the reveal reads as something entering the frame
-            rather than fading in on top of it. */}
-        <div
-          data-frame
-          className="relative aspect-[16/9] w-full overflow-hidden rounded-[4px] border border-white/15 bg-black"
+      {/* THE CARD.
+          `lg:row-start-1` and NO row-span: the desktop grid is a single row, so
+          the plate and the text column share it and the parent's `items-center`
+          centres the text on the plate's own centreline. An earlier
+          `lg:row-span-2` left over from a two-row layout made the plate span
+          rows 1-2 while the text sat in row 1 only — so the text centred against
+          half the card and hung ~180px above the thumbnail's centre.
+          External projects (ORO Edit) render an <a> to the live site in a new
+          tab; studies render a <Link> to /work/slug. Both carry [data-card], so
+          the hover timeline binds identically. */}
+      {external ? (
+        <a
+          href={external}
+          data-card
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${project.title} — open the live site in a new tab`}
+          className={cardClassName}
         >
-          {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              data-cover
-              src={cover}
-              alt=""
-              className="absolute inset-0 h-full w-full scale-[1.06] object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_30%_22%,#3a2a1c_0%,#1a1410_60%,#0b0d12_100%)]" />
-          )}
-
-          {/* DARKENING SCRIM. Sits between the cover and the inner image so it
-              darkens ONLY the backdrop — the screenshot on top keeps its full
-              contrast, which is what makes it read as lit from within.
-              Pre-darkened on mobile (see the `lg:opacity-0` split): the phone
-              layout has no hover, so it ships in the end state. */}
-          <div
-            data-scrim
-            aria-hidden
-            className="absolute inset-0 bg-black/55 lg:opacity-0"
-          />
-
-          {/* THE INNER IMAGE. Width is 75.8% of the frame — the Figma's
-              476.8/628.7 — and it's centred horizontally with a slight upward
-              bias vertically, matching `image 609`'s seat in frame 3.
-              At rest (desktop) the timeline parks it fully below the frame.
-              On mobile it renders in its landed position with no JS at all. */}
-          {inner ? (
-            <div
-              data-inner
-              className="absolute left-1/2 top-[12%] w-[75.8%] -translate-x-1/2 overflow-hidden rounded-[3px] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9)] ring-1 ring-white/10"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={inner}
-                alt={`${project.title} — interface`}
-                className="block h-auto w-full"
-                loading="lazy"
-              />
-            </div>
-          ) : null}
-        </div>
-      </Link>
+          {frame}
+        </a>
+      ) : (
+        <Link
+          href={`/work/${project.slug}` as Route}
+          data-card
+          aria-label={`${project.title} — open case study`}
+          className={cardClassName}
+        >
+          {frame}
+        </Link>
+      )}
 
       {/* ── THE TITLE ──
           Mobile: ABOVE the plate, centred (grid row 1, plate in row 2).

@@ -17,15 +17,19 @@ export default function WorkPage() {
   // (the footer already carries the contact affordance), so the page is fully
   // static — nothing to await.
 
-  // Only the case studies that actually exist get a card here. ORO Edit is a
-  // live external site (externalUrl), not a written study, so it lives in the
-  // home works journey rather than on this index; any remaining placeholder
-  // slug would 404 and is filtered out rather than shipped as a dead link.
-  // ⚠️ This list must stay in step with the STUDIES registry in
-  // work/[slug]/page.tsx — a slug here without a study there ships a card that
-  // 404s, which is the exact failure this filter exists to prevent.
+  // Only projects with a real destination get a card here. The three studies
+  // link to their case-study pages; ORO Edit is a live external site
+  // (externalUrl) whose card links straight out in a new tab. Any remaining
+  // placeholder slug would 404 and is filtered out rather than shipped as a
+  // dead link.
+  // ⚠️ Study slugs in this list must stay in step with the STUDIES registry in
+  // work/[slug]/page.tsx — a slug here without a study there (and without an
+  // externalUrl) ships a card that 404s, which is the failure this filter
+  // exists to prevent.
   const projects = PLACEHOLDER_PROJECTS.filter((p) =>
-    ["live-incident-response", "verkos-reports", "oro-connect"].includes(p.slug),
+    ["live-incident-response", "verkos-reports", "oro-connect", "oro-edit"].includes(
+      p.slug,
+    ),
   );
 
   return (
