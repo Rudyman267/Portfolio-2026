@@ -65,6 +65,11 @@ next-env.d.ts
 /the-other-hand project/
 /the-other-hand project.zip
 
+# Verkos exhibit BUILD SOURCE — a separate project, NOT imported by the site
+# (it only serves the compiled output at public/verkos-demo/). Untracked so the
+# proprietary source isn't published; the local copy is kept on disk.
+/verkos-exhibit-src/
+
 # local Claude session permissions
 .claude/settings.json
 
