@@ -36,10 +36,10 @@ export const DEFAULT_NAV: NavItem[] = [
   { label: "Play", href: "/play" },
   { label: "Me", href: "/about" },
   // Contact opens a pre-addressed email — the footer's big email link is the
-  // same address. Resume will point at /riddhiman-deb-resume.pdf once that PDF
-  // is added to /public; kept as a no-op anchor until then so it can never 404
-  // on the live site.
-  { label: "Resume", href: "/#resume" },
+  // same address. Resume points at the PDF in /public; isExternalHref matches
+  // the `.pdf` and renders it as a real <a target="_blank"> so it opens in a
+  // new tab on every page and device.
+  { label: "Resume", href: "/riddhiman-deb-resume.pdf" },
   { label: "Contact", href: "mailto:riddhimandeb12@gmail.com" },
 ];
 
