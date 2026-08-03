@@ -133,6 +133,38 @@ const GESTURE_GAP_MS = 100;
  */
 const POST_RIDE_QUIET_MS = 260;
 
+/**
+ * ── SCROLL FREEDOM ─────────────────────────────────────────────────────────
+ * A ride owns the scroll, and rides can now run up to 3s. That is correct for
+ * the reader being carried, but it also meant *"I can't scroll forward until
+ * the scene is set"* — no way to push past a transition you've already read.
+ *
+ * So a SECOND, DELIBERATE gesture while a ride is in flight HANDS CONTROL BACK:
+ * the ride is cancelled, Lenis' lock is released, and the reader free-scrubs
+ * for the rest of that gesture. The escalator re-arms by itself on the next
+ * gesture — so "keep scrolling" means full manual control, and "stop, then
+ * nudge" puts you back on rails and seats you on the next reveal.
+ *
+ * Deliberately NOT auto-resumed after the reader stops: every "move them once
+ * scrolling ends" mechanism in this component's history has produced a
+ * complaint, and it would fight Lenis' own settle. Asking for manual control
+ * keeps it until you ask for the escalator again.
+ *
+ * ⚠️ Detecting the second gesture is the hard part on macOS, because the first
+ * flick's momentum is still streaming — there is no 100ms hole to find. So a
+ * DELTA SPIKE also counts: momentum decays monotonically, so a big delta
+ * arriving right after small ones is a fresh push of the fingers. Both guards
+ * matter:
+ *   - `SPIKE_AFTER_MS` — a flick RAMPS UP over its first ~150ms (2→8→25…),
+ *     which looks exactly like a spike. Ignoring spikes for the first 500ms of
+ *     a ride skips that ramp entirely.
+ *   - `lastAbs < SPIKE_MIN_DELTA / 2` — the spike must follow genuinely small
+ *     deltas, i.e. a decayed tail, not a mid-ramp step up.
+ */
+const SPIKE_MIN_DELTA = 24;
+const SPIKE_RATIO = 3;
+const SPIKE_AFTER_MS = 500;
+
 /** power2.inOut — matches the site's motion tokens. No overshoot, ever. */
 const easeInOut = (t: number) =>
   t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -160,6 +192,12 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   let lastInputAt = 0;
   /** When the last ride landed — see POST_RIDE_QUIET_MS. */
   let landedAt = 0;
+  /** When the ride in flight began — arms the delta-spike takeover test. */
+  let rideStartedAt = 0;
+  /** |deltaY| of the previous wheel event, for that same spike test. */
+  let lastAbs = 0;
+  /** Reader has taken the wheel for the rest of this gesture — see SCROLL FREEDOM. */
+  let free = false;
   let failsafe = 0;
 
   const now = () =>
@@ -208,6 +246,7 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
 
     target = to;
     riding = true;
+    rideStartedAt = now();
     // Failsafe: if onComplete somehow never arrives, release anyway. A stuck
     // `riding` flag would swallow every wheel event inside the pin, and a page
     // you cannot scroll is far worse than a missed step.
@@ -238,36 +277,75 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     return nextRest(base, d) !== null;
   };
 
+  /** Cancel the ride in flight and give the scroll back to the reader. Lenis'
+   *  stop()/start() pair runs its `reset()`, which clears the lock, halts the
+   *  ride tween and re-seats its internal scroll on the real one — so the
+   *  handover is seamless and Lenis picks up this very event. */
+  const handOver = () => {
+    const lenis = lenisRef.current;
+    if (lenis) {
+      lenis.stop();
+      lenis.start();
+    }
+    // reset() kills the tween, so onComplete will never fire — land by hand.
+    land();
+    free = true;
+  };
+
   /** Shared by wheel and keys. `e` is preventDefault'd whenever we take the
    *  input, including for the tail of a gesture we've already acted on — the
-   *  reader must not free-scroll underneath a ride. */
-  const drive = (e: Event, d: 1 | -1) => {
+   *  reader must not free-scroll underneath a ride. While `free`, we never
+   *  preventDefault, so Lenis scrolls normally. */
+  const drive = (e: Event, d: 1 | -1, absDelta: number) => {
     const t = now();
-    const newGesture = t - lastInputAt > GESTURE_GAP_MS;
+    const gapGesture = t - lastInputAt > GESTURE_GAP_MS;
+    // A fresh push of the fingers while the previous gesture's momentum is
+    // still decaying — the only way to spot a second gesture on macOS.
+    const spike =
+      absDelta >= SPIKE_MIN_DELTA &&
+      lastAbs < SPIKE_MIN_DELTA / 2 &&
+      absDelta >= lastAbs * SPIKE_RATIO;
     lastInputAt = t;
+    lastAbs = absDelta;
+
+    // Any genuinely new gesture re-arms the escalator.
+    if (gapGesture) free = false;
+    // The reader has the wheel for the rest of this gesture: don't claim, don't
+    // preventDefault — Lenis scrolls it.
+    if (free) return;
+
     if (!claim(d)) return; // nowhere to go that way — let them leave the pin
+
+    if (riding) {
+      // Deliberate second gesture mid-ride → hand the scroll back.
+      if (gapGesture || (spike && t - rideStartedAt > SPIKE_AFTER_MS)) {
+        handOver();
+        return; // NOT preventDefault'd — this event starts their free scroll
+      }
+      // Otherwise it's the momentum tail of the gesture we're already serving.
+      e.preventDefault();
+      return;
+    }
+
     e.preventDefault();
-    // A ride owns the scroll outright. Not queued for later — see
-    // POST_RIDE_QUIET_MS for why deferring it was the two-steps-from-one-flick
-    // bug.
-    if (riding) return;
     // Momentum still coming in just after a landing is the tail of the gesture
     // we already served.
     if (t - landedAt < POST_RIDE_QUIET_MS) return;
     // Same gesture (a Mac momentum tail, or key auto-repeat) — already acted on.
-    if (!newGesture) return;
+    if (!gapGesture) return;
     // Not "after the scroll settles" — NOW, on this event.
     step(d);
   };
 
   const onWheel = (e: WheelEvent) => {
     const d: 1 | -1 | 0 = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0;
-    if (d) drive(e, d);
+    if (d) drive(e, d, Math.abs(e.deltaY));
   };
 
   const onKey = (e: KeyboardEvent) => {
     const d = e.key === " " && e.shiftKey ? -1 : KEYS[e.key];
-    if (d) drive(e, d);
+    // Keys have no delta; a repeat is caught by the gap test alone.
+    if (d) drive(e, d, SPIKE_MIN_DELTA);
   };
 
   // passive:false — preventDefault is the whole point: inside the pin WE own

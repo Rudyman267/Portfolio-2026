@@ -333,6 +333,29 @@ the tween durations by hand was attempted twice and was wrong both times.
 heading even begins to rise. The heading and phrase 3 are NOT overlapped — the fused feeling was
 purely the capped ride speed.
 
+#### SCROLL FREEDOM — taking the wheel back mid-ride
+Rides now run up to 3s, which is right for being carried but meant *"I can't scroll forward until
+the scene is set."* A **second, deliberate gesture while a ride is in flight hands control back**:
+the ride is cancelled, Lenis' lock released, and the reader free-scrubs for the rest of that
+gesture. The escalator **re-arms by itself on the next gesture**. So: keep scrolling = full manual
+control; stop and nudge = back on rails, seated on the next reveal.
+- The handover is `lenis.stop(); lenis.start();` — both public API, and both run Lenis' internal
+  `reset()`, which clears the lock, halts the ride tween and re-seats Lenis on the real scroll
+  position, so it picks up that very event. ⚠️ `reset()` kills the tween, so `onComplete` never
+  fires — `land()` must be called by hand or `riding` sticks and the pin goes dead.
+- ⚠️ **NOT auto-resumed once the reader stops.** Every "move them after scrolling ends" mechanism
+  in this component's history has produced a complaint, and it would fight Lenis' settle. Asking
+  for manual control keeps it until you ask for the escalator again.
+- ⚠️ **Detecting the second gesture on macOS is the hard part** — the first flick's momentum is
+  still streaming, so there is no 100ms hole. A **delta spike** also counts (momentum decays
+  monotonically, so a big delta after small ones is a fresh push). Two guards stop that
+  misfiring, and BOTH are needed: a flick **ramps up** over its first ~150ms (2→8→25…) which looks
+  exactly like a spike, so spikes are ignored for the first **500ms** of a ride; and the spike must
+  follow genuinely small deltas (`lastAbs < 12`), not a mid-ramp step up.
+- **The default feel is untouched** — verified by replaying the full measured rest table: same 11
+  steps, same durations, same 430 px/s, and **zero handovers** from a lone flick or from a 1.4s
+  momentum tail across the longest (2.9s) ride.
+
 #### Also shipped in this run
 - **macOS wheel normalisation** — `SmoothScrollProvider` now passes `wheelMultiplier` (0.55 → then
   **0.35** on Apple platforms, 1 elsewhere). Lenis runs in duration mode (`target += deltaY`), so
