@@ -200,7 +200,12 @@ which fights SplitText line-splitting).
 4. **`autoAlpha` writes `visibility`, not just `opacity`.** A child left at `visibility:hidden` by
    an interrupted entrance can NEVER be recovered by fading an ancestor. If a parent owns the
    fade, `clearProps` the child's `opacity,visibility` when its entrance lands.
-5. **`gsap.matchMedia()` callbacks re-run whenever the query re-evaluates** — which iOS Safari
+5. **NEVER decide scroll DIRECTION from scroll POSITION, and don't use ScrollTrigger's `snap`
+   for reader-facing auto-scroll.** Any position threshold has a "below the line" branch that
+   scrolls the reader backwards against their own gesture, and ST's snap only decides ~1.1s AFTER
+   the gesture (it waits for `getVelocity() < 10`). Direction comes from the wheel event.
+   **Four commits were spent relearning this — full account in §6 "THE SCROLL ESCALATOR".**
+6. **`gsap.matchMedia()` callbacks re-run whenever the query re-evaluates** — which iOS Safari
    does when the browser toolbar collapses mid-scroll (Android does not, which is why iOS-only
    bugs here are usually this). So: never cache element references across a re-run
    (`gsap.quickSetter` does), and never put page-wide side effects in a matchMedia cleanup.
@@ -222,15 +227,161 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ---
 
-## 6. Current State (as of Session 25)
+## 6. Current State (as of Session 26)
 
-**Status (as of Session 25): LIVE ON `rudyman.com`. The ORO Connect case study got a full pass —
+**Status (as of Session 26): LIVE ON `rudyman.com`. The scrolly-telling scroll model on the home
+hero and `/about` was rebuilt from the ground up after four failed threshold-based attempts — the
+reader's WHEEL EVENT now drives the escalator directly on desktop, ScrollTrigger's `snap` is off
+there entirely, and pacing is a single px/sec knob.** Five commits (`c4c7052`, `5b7f15c`,
+`f4b0710`, `a385d0a`, `fcbf1ce`), all pushed and verified live.
+**THE LINK TO SHARE IS `https://rudyman.com`.**
+
+### 🥇 THE SCROLL ESCALATOR — REBUILT — Session 26
+Read this whole section before touching `Hero.tsx`, `AboutIntro.tsx`, `SmoothScrollProvider.tsx`
+or anything in `src/lib/escalator*`/`scrollIntent`. The bug took five commits and the first four
+were all the SAME mistake in different clothes.
+
+**The complaint:** on the hero and the /about scrolly, "I scroll down a little and it takes me
+back to the same text", plus "way too fast on a MacBook" (Windows felt fine).
+
+#### ⚠️⚠️ RULE ZERO: NEVER DECIDE SCROLL DIRECTION FROM SCROLL POSITION
+Four shipped attempts derived "which way is the reader going" from how far the scroll position had
+travelled, against a threshold:
+| Attempt | Model | Why it failed |
+|---|---|---|
+| original | fraction of the segment (`SNAP_FWD/REV = 0.5`) | anything short of halfway snapped back |
+| 1 (`c4c7052`) | same, lowered to `0.15` | segments are wildly different LENGTHS, so 15% is a different number of real px at every point; on long segments a deliberate nudge still fell short |
+| 2 (`f4b0710`) | absolute 22px + anchor sign | same class — the fallback for "no intent" was nearest-rounding, which is a 50% threshold wearing a hat |
+| 3 | (any threshold) | — |
+
+**EVERY threshold has a "below the line" branch, and that branch scrolls the reader BACK to where
+they started. That IS "the page moved against my gesture."** No value of the number fixes it. The
+user diagnosed this before the code did: *"the threshold approach is wrong since it can lead to
+users scrolling in one direction and the page moving in another."*
+
+Scroll position is also a LAUNDERED signal: by the time it is read it has been through Lenis'
+easing AND ScrollTrigger's scrub lag, so a short deliberate gesture settles barely off the anchor
+and falls under any guard at all.
+
+#### ⚠️⚠️ WHY SCROLLTRIGGER'S `snap` CANNOT DO THIS (read the source, it settles it)
+`node_modules/gsap/ScrollTrigger.js` ~line 1103: the snap decision runs inside a
+`gsap.delayedCall` that only fires once `Math.abs(self.getVelocity()) < 10`. Under Lenis
+(`duration: 1.1`) that is **~1.1s of free-scrubbing drift AFTER the reader's gesture**, plus
+`snap.delay`, before anything is decided. That one fact produces all three symptoms at once:
+- **the gap** — a visible pause where nothing has committed;
+- **the bounce** — the reader has already drifted somewhere else, so committing means moving them;
+- **the inconsistency** — where they drift to depends on gesture strength, so "scroll manually"
+  and "flick and let go" land in different places.
+ScrollTrigger's snap is BY DESIGN *wait for the scroll to stop, then decide*. The brief was
+*decide at the moment of input*. It is the wrong tool; do not go back to it on desktop.
+
+#### THE MODEL NOW — `src/lib/escalatorDrive.ts` (desktop) + `escalatorSnap.ts` (touch)
+- **`scrollIntent.ts`** — reads the signed `deltaY` off the wheel event itself, plus keys
+  (incl. Shift+Space) and touch. One notch down is as unambiguous as ten; nothing downstream can
+  turn it into "up". `take()` CLEARS on read so one gesture can only ever cause one ride.
+- **`escalatorDrive.ts` — DESKTOP. The wheel event starts the ride, same frame.** No threshold, no
+  waiting, no drift to correct afterwards. Lands on the first reveal PAST the stop point in the
+  asked-for direction — never the one behind it (landing behind is a visible bounce-back even when
+  the net move is forward). `snap` is `undefined` on desktop; two systems moving the scroll fight.
+- **`escalatorSnap.ts` — TOUCH / reduced-motion only.** Intent-based, still no threshold, but it
+  goes through ScrollTrigger's snap because there is no Lenis instance to drive there.
+
+#### ⚠️ THE THREE NON-OBVIOUS FACTS THE DRIVE DEPENDS ON
+1. **Lenis' `Animate.fromTo` calls `onStart` SYNCHRONOUSLY** (`lenis.mjs` line 118). So
+   `scrollTo(..., {lock: true})` sets `isLocked` DURING our own call, and Lenis' own wheel handler
+   — which runs after ours, since child effects register before the provider's — hits its
+   `isLocked` early-return (line 611). **The two cannot fight.** If this ever changes, fall back to
+   `lenis.stop()` + `force: true` + `lenis.start()`, and keep a failsafe timer.
+2. **`reset()` clears the lock BEFORE `onComplete`** (line ~832), so the lock can never strand the
+   page. A failsafe `setTimeout` backs it up anyway — a page you cannot scroll is far worse than a
+   missed step.
+3. **ONE GESTURE = ONE REVEAL, gesture boundary = 100ms of wheel silence.** ⚠️ *This is what stops
+   macOS running away.* A Mac flick does NOT end when the fingers lift — the OS streams momentum
+   wheel events at ~120Hz for over a second. **Any rule of the form "events are still arriving =
+   the reader is still asking" takes 3-4 steps on a Mac and 1 on a Windows wheel** — which is
+   exactly the platform split being fixed. Momentum never leaves a 100ms hole; a human cannot flick
+   twice inside 100ms. A second flick arriving mid-ride is QUEUED, not lost.
+
+#### PACING — one knob, `RIDE_PX_PER_S` in `escalatorDrive.ts`
+Speed is in **scroll px/sec (430)**, clamped 0.9–1.8s — deliberately NOT a flat duration:
+- the gaps are not equal (a phrase-hold gap vs a works-beat exit span are very different
+  distances), so one duration made the long steps fly and the short ones crawl;
+- it decouples feel from geometry, so retuning a section's pin length can no longer silently
+  change how fast it reads.
+**Lower `RIDE_PX_PER_S` = slower. Tune there and nowhere else.**
+
+⚠️ **`RIDE_MAX_S` MUST STAY ABOVE THE LONGEST GAP, or it silently turns the speed back into a
+duration for exactly the longest rides — making the biggest transitions the FASTEST.** That
+shipped at 1.8s and was reported as *"'HERE'S SOME OF MY WORK' just gets insta scrolled... it feels
+like I'm scrolling age of intelligence and here's my work at the same time as one thing."* The
+works heading sits between the two LONGEST gaps in the journey, so it was the one scene ridden
+into AND out of far above everything else's pace. Cap is now **3.0s**; nothing clamps.
+
+**THE MEASURED HERO — the real rest table** (read out of a live production build; pin spacer
+**7745px**, timeline **19.1 units**, **12 rests**, **4 beats** not 5). Keep this: deriving it from
+the tween durations by hand was attempted twice and was wrong both times.
+| # | unit | px | gap | ride @430 | what it is |
+|---|---|---|---|---|---|
+| 0 | 0 | 0 | — | — | p1hold — "I AM A PRODUCT—DESIGN BUILDER" |
+| 1 | 1.77 | 718 | 718 | 1.67s | p2hold — "I TURN IDEAS—INTO CODE" |
+| 2 | 4.04 | 1638 | 920 | 2.14s | p3hold — "DESIGNING THE AGE OF INTELLIGENCE" |
+| 3 | 6.65 | 2697 | 1059 | 2.46s | **"HERE'S SOME OF MY WORK"** (`worksStart + 1.1`) |
+| 4 | 9.73 | 3945 | 1248 | 2.90s | project 1 window ← **the longest gap in the site** |
+| 5 | 10.4 | 4217 | 272 | 0.9s | clean tunnel (beat exit; hits the MIN floor, 302 px/s) |
+| 6–11 | … | … | 904 / 272 | 2.10s / 0.9s | projects 2–4, each preceded by a tunnel rest |
+`worksStart` = 5.55 units, so p3hold → worksStart is 1.51 units of phrase-3 exit before the
+heading even begins to rise. The heading and phrase 3 are NOT overlapped — the fused feeling was
+purely the capped ride speed.
+
+#### Also shipped in this run
+- **macOS wheel normalisation** — `SmoothScrollProvider` now passes `wheelMultiplier` (0.55 → then
+  **0.35** on Apple platforms, 1 elsewhere). Lenis runs in duration mode (`target += deltaY`), so
+  distance travelled IS the delta the OS hands over, and macOS accelerates trackpad/Magic Mouse
+  input and appends a momentum tail — ~2-3x the delta of the same Windows gesture. ⚠️ **This knob
+  does NOTHING under macOS Accessibility → "Reduce motion"**, which takes the
+  `prefers-reduced-motion` early-return and leaves the page on native scroll. Check that first if a
+  Mac still feels fast.
+- **Short-viewport pin floor (900px), FINE POINTERS ONLY** in both pins. Pin length is a multiple
+  of `innerHeight`, so a 13" MacBook (~750-800 CSS px) got ~20% fewer scroll pixels for the same
+  beats than a 1080p Windows window (~945). Floor only — tall viewports byte-identical. Gated to
+  fine pointers after a first pass wrongly applied it on touch and silently undid the hand-tuned
+  mobile travel.
+- **Hero touch travel `endVh` 2.12 → 2.90** (scroll-px-per-timeline-unit, so **BIGGER = SLOWER**),
+  reported too fast on BOTH Android and iOS. History: 1.25 was hair-trigger, 2.12 still too fast.
+
+#### ⚠️ iOS "CAN'T SCROLL AT ALL" — CONFIRMED NOT REGRESSED
+The user flagged the 8-try Session 21/22 bug. Verified against it:
+- **`Loader.tsx` and `globals.css` are NOT in the diff** — the exit mask, the pre-paint
+  `is-loading` scroll lock and the 12s ceiling release are all untouched.
+- The drive registers **only `wheel` and `keydown`** — no `touch*` listener, so it cannot block a
+  touch scroll even in principle — and it is not attached on touch at all (`smooth = !isCoarse`).
+- `pinType: "fixed"` / `anticipatePin: 0` for coarse pointers unchanged; Lenis still early-returns
+  on touch so `wheelMultiplier` is a no-op there.
+- **The one genuinely new thing on the touch path:** `scrollIntent` adds a `touchmove` listener. It
+  is `{ passive: true }`, which makes `preventDefault` impossible — it can only read direction.
+
+#### ⚠️ VERIFICATION — WHAT WAS AND WAS NOT PROVEN
+- **Proven by simulation** (stubbed Lenis + fake wheel streams, in the scratchpad): a Windows notch
+  and a macOS flick with a 1.4s momentum tail both produce **exactly one step**; two deliberate
+  flicks produce two; **802 position/intent pairs with zero cases of moving against the gesture**;
+  past the last reveal the event is not claimed so the reader exits the pin.
+- **NOT proven:** the animation under real input. A local **production** build was served
+  (`npm run start`, NOT the dev server — a `portfolio-prod` entry was added to
+  `.claude/launch.json` for this) and driven via the Browser pane, but **the pane was never
+  displayed, so `requestAnimationFrame` stays paused and no JS-driven scroll can tick.** Native
+  `window.scrollTo` works; Lenis does not. ⚠️ **A synthetic `WheelEvent` is a valid input here (no
+  `isTrusted` gate in Lenis) but proves nothing while rAF is paused** — and `defaultPrevented` is
+  NOT a usable signal for "our handler claimed it", because Lenis calls `preventDefault` too.
+  **To verify for real: ask the user to display the Browser pane first.**
+
+### PRIOR STATUS (Session 25)
+
+**The ORO Connect case study got a full pass —
 hero now uses the same SVG title/company-role lockup as LIR/Verkos, several feature screenshots
 were swapped for cleaner source assets, the search decision (DD2) was cut and the cart decision
 renumbered to DD2 with its own supporting image, the interactive product-card micro-interaction
 and a whiteboard sketch were removed, and the stakeholder matrix's R-labels moved from green to
 the study's gold accent.** Shipped in one commit (`7912b98`), pushed to `main`.
-**THE LINK TO SHARE IS `https://rudyman.com`.**
 
 ### 🥇 ORO CONNECT CASE STUDY POLISH — Session 25 (`7912b98`)
 A single working session of iterative asset swaps and section edits on `/work/oro-connect`,
@@ -1696,7 +1847,26 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 
 ## 7. Next Steps (priority order)
 
-00000. **🥇 ORO CONNECT — verify the Session 25 pass on a real device + swap the GIF in.**
+000000. **🥇 FEEL THE SCROLL ESCALATOR ON REAL HARDWARE — nothing about it has been felt yet.**
+    The Session 26 rebuild is simulation-verified only (see §6 "VERIFICATION — WHAT WAS AND WAS NOT
+    PROVEN"). The decision logic is proven; the animation under real input is not.
+    a. **MacBook + Windows desktop:** one wheel notch / one trackpad flick should advance exactly
+       ONE reveal on both, at the same pace, with no bounce and no waiting gap. If a Mac still runs
+       away, **check macOS Accessibility → "Reduce motion" first** — it disables Lenis entirely and
+       makes `wheelMultiplier` a no-op.
+    b. **Pace:** `RIDE_PX_PER_S` (430 px/s) is the ONE knob. Lower = slower. ⚠️ If you lower it,
+       RAISE `RIDE_MAX_S` (3.0s) to match, or the longest gaps clamp and become the fastest rides —
+       that was the "here's some of my work gets insta scrolled" bug. See the measured rest table
+       in §6; the longest gap in the site is **1248px** (works heading → project 1).
+    c. **Real iPhone + Android** on the hero — touch keeps ScrollTrigger's snap (`escalatorSnap`),
+       which is a DIFFERENT path from desktop, and `endVh` went 2.12 → 2.90 there. §6 records why
+       the iOS no-scroll bug is believed not to have regressed, but that is a code-path argument,
+       not a device test.
+    d. To verify in-session: serve the **production** build (`portfolio-prod` in
+       `.claude/launch.json`) — but **ask the user to display the Browser pane first**, or rAF
+       stays paused and no smooth scroll can tick.
+
+00000. **ORO CONNECT — verify the Session 25 pass on a real device + swap the GIF in.**
     Everything in Session 25 was verified via the Browser pane / CDP on desktop only.
     a. **Real-device pass** on `/work/oro-connect` — the product-card hover geometry rewrite in
        particular (`OroProductCard.tsx`) has been through several wrong iterations already; confirm
@@ -1870,6 +2040,63 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ---
 
 ## 8. Session History
+
+### Session 26 — 2026-08-03
+**Rebuilt the scrolly-telling scroll model on the home hero + /about. Five commits, all pushed and
+confirmed live on `rudyman.com`. Full technical account in §6 "THE SCROLL ESCALATOR — REBUILT".**
+
+The user reported two things: the escalator dragged them BACK onto the text they were leaving, and
+the hero scrolled far too fast on a MacBook (Windows felt fine). The first four commits all failed
+the same way, and the honest summary is that **three of them were the same mistake re-tuned**:
+
+- `c4c7052` — fraction-of-segment threshold → absolute-pixel threshold, plus a macOS
+  `wheelMultiplier` (0.55) and a short-viewport pin floor. *Didn't work.*
+- `5b7f15c` — gated that pin floor to fine pointers (it had silently undone the hand-tuned mobile
+  travel).
+- `f4b0710` — direction from the WHEEL EVENT instead of scroll position (user's steer:
+  *"We should use intent direction as the approach, if i want to go up i go up"*), multiplier to
+  0.35. *Still didn't work* — the "no intent on record" fallback was nearest-rounding, i.e. a 50%
+  threshold in disguise, and it was being hit.
+- `a385d0a` — **the actual fix.** Stopped using ScrollTrigger's `snap` on desktop entirely and
+  built `escalatorDrive.ts`: the wheel event starts the ride on the same frame. Prompted by the
+  user's third message — *"It should also feel seamless without any awkward waiting gaps... whether
+  i take the scroll manually or let it go midway, the outcome is always going to be same"* — which
+  ruled out ST's snap architecturally, since it only decides ~1.1s after the gesture.
+- `fcbf1ce` — pacing: flat 0.85s ride → **430 px/sec** clamped 0.9–1.8s.
+- `d6cd2f8` — user: *"everything is perfect except 'HERE'S SOME OF MY WORK' just gets insta
+  scrolled... it feels like I'm scrolling age of intelligence and here's my work at the same time
+  as one thing."* **The 1.8s cap was the cause** — the works heading sits between the two longest
+  gaps in the journey (1059px and 1248px), so those two rides clamped and ran at 588 and 694 px/s
+  against everyone else's 430. Cap → 3.0s; every gap now runs at a true 430 px/s.
+  ⚠️ **My first hypothesis here was wrong** (a momentum-tail double-step) and I wrote a repro for
+  it — **the repro passed on the ALREADY-SHIPPED code, which is how I caught it.** Always run a new
+  repro against the old build before believing it. The real answer came from instrumenting the
+  live bundle (temporarily exposing `rests` on `window`, reading it out of a production build, then
+  reverting) rather than deriving the timeline by hand — hand-derivation was attempted twice and
+  was wrong both times. The measured table is now in §6; use it.
+
+**What actually unblocked it was reading source instead of reasoning:** `ScrollTrigger.js` (the
+`getVelocity() < 10` delayed-call that makes snap structurally "decide late") and `lenis.mjs`
+(`onStart` is synchronous, so `lock: true` wins the ordering race against Lenis' own wheel handler;
+`reset()` clears the lock before `onComplete`, so it can't strand the page; `stopPropagation` not
+`stopImmediatePropagation`, so our listener does fire).
+
+**Method notes worth keeping:**
+- Each attempt was checked by **simulating the model in node** with stubbed input (802 position/
+  intent pairs; fake 120Hz macOS momentum streams). This is what caught that a Mac flick would
+  chain 3-4 steps under a "still receiving events" rule, before shipping it. **It also caught two
+  of my own test expectations being wrong rather than the code** — worth re-deriving the expected
+  behaviour from the brief, not from the implementation.
+- A local **production** server was used to poke at the real bundle (`portfolio-prod` added to
+  `.claude/launch.json`) — explicitly not the dev server, which the user had ruled out. It proved
+  the wiring but not the motion: **the Browser pane was never displayed, so rAF stays paused.**
+- Live deploys were confirmed by grepping the served chunks for the EXACT minified expression from
+  the local build (e.g. `window.scrollY)/430`). ⚠️ Two earlier markers false-positived — `Spacebar`
+  collides with React's key map, and a bare `430` matches anything. Pick a marker, then verify it
+  appears in the local build output first.
+- User also asked how to re-add expired GitHub/Vercel tokens; **the GitHub token turned out to
+  still be valid** (classic PAT, `repo` scope, write confirmed via `gh api .../git/refs`), and no
+  Vercel token is needed at all — the GitHub App integration is what deploys on push.
 
 ### Session 25 — 2026-07-31
 **ORO Connect case study polish pass — hero lockup, asset swaps, section edits. One commit,

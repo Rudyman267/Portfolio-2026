@@ -66,9 +66,28 @@ const EPS = 0.0004;
  */
 const RIDE_PX_PER_S = 430;
 
-/** Floor and ceiling for a ride, so neither a tiny nor a huge gap misbehaves. */
+/**
+ * Floor and ceiling for a ride.
+ *
+ * ⚠️ THE CEILING MUST STAY ABOVE THE LONGEST GAP IN ANY SECTION, or it silently
+ * turns the speed above back into a duration for exactly the longest rides —
+ * i.e. it makes the biggest transitions the FASTEST ones. That shipped at 1.8s
+ * and was reported as "HERE'S SOME OF MY WORK just gets insta scrolled... it
+ * feels like I'm scrolling age of intelligence and here's my work at the same
+ * time as one thing". Measured on the live hero (pin 7745px, 12 rests):
+ *
+ *   gap 718px   phrase → phrase                 1.67s   430 px/s   ← correct
+ *   gap 1058px  phrase 3 → works heading        1.8s    588 px/s   ← capped
+ *   gap 1249px  works heading → first project   1.8s    694 px/s   ← capped, +61%
+ *
+ * The works heading sits between the two LONGEST gaps in the journey, so it was
+ * the one scene ridden into and out of well above everything else's pace. At
+ * 3.0s nothing in either section clamps and the whole journey runs at a true
+ * 430 px/s. If a section ever gains a bigger gap than ~1290px, raise this again
+ * rather than accepting the speed-up.
+ */
 const RIDE_MIN_S = 0.9;
-const RIDE_MAX_S = 1.8;
+const RIDE_MAX_S = 3.0;
 
 const rideSeconds = (distancePx: number) =>
   Math.min(
@@ -91,6 +110,28 @@ const rideSeconds = (distancePx: number) =>
  * so deliberate repeats are never swallowed.
  */
 const GESTURE_GAP_MS = 100;
+
+/**
+ * Dead time after a ride lands, before any input can start another one.
+ *
+ * ⚠️ THIS IS THE FIX FOR THE "TWO REVEALS FROM ONE FLICK" BUG — reported as
+ * phrase 3 and "HERE'S SOME OF MY WORK" behaving like one fused scene: a nudge
+ * into "DESIGNING THE AGE OF INTELLIGENCE" carried straight on to the works
+ * heading, and coming back up showed phrase 3 for a beat before continuing to
+ * phrase 2. That is one gesture producing TWO rides.
+ *
+ * Why it surfaced there and nowhere else: the p2→p3 gap is the SHORTEST in the
+ * journey (~1.1 timeline units, so a ~0.9s ride at the RIDE_MIN_S floor), while
+ * a macOS momentum tail runs well over a second. So that ride — and only that
+ * ride — lands while the tail is still delivering events, and the tail is
+ * ragged enough at the end to look like a fresh gesture.
+ *
+ * Two changes killed it: this quiet window, and dropping the old `queued`
+ * mechanism that deferred a mid-ride gesture to fire the instant the ride
+ * landed (which is precisely how one flick became two steps). Input during a
+ * ride is now simply ignored.
+ */
+const POST_RIDE_QUIET_MS = 260;
 
 /** power2.inOut — matches the site's motion tokens. No overshoot, ever. */
 const easeInOut = (t: number) =>
@@ -117,8 +158,8 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   /** Progress we're riding TO, so a chained step counts from the destination. */
   let target: number | null = null;
   let lastInputAt = 0;
-  /** A step asked for while a ride was in flight, taken as soon as it lands. */
-  let queued: 1 | -1 | null = null;
+  /** When the last ride landed — see POST_RIDE_QUIET_MS. */
+  let landedAt = 0;
   let failsafe = 0;
 
   const now = () =>
@@ -145,6 +186,11 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   const land = () => {
     riding = false;
     target = null;
+    landedAt = now();
+    // Treat anything still arriving as the TAIL of the gesture we just served,
+    // not the start of a new one. Without this, a momentum event landing a
+    // fraction later reads as a fresh ask and steps again.
+    lastInputAt = landedAt;
     window.clearTimeout(failsafe);
   };
 
@@ -176,14 +222,7 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
       lock: true,
       // ...and `force` lets a chained step start while that lock is still up.
       force: true,
-      onComplete: () => {
-        land();
-        // A second flick that arrived mid-ride is honoured now, so rapid
-        // repeats never get swallowed.
-        const q = queued;
-        queued = null;
-        if (q) step(q);
-      },
+      onComplete: land,
     });
   };
 
@@ -208,12 +247,15 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     lastInputAt = t;
     if (!claim(d)) return; // nowhere to go that way — let them leave the pin
     e.preventDefault();
+    // A ride owns the scroll outright. Not queued for later — see
+    // POST_RIDE_QUIET_MS for why deferring it was the two-steps-from-one-flick
+    // bug.
+    if (riding) return;
+    // Momentum still coming in just after a landing is the tail of the gesture
+    // we already served.
+    if (t - landedAt < POST_RIDE_QUIET_MS) return;
     // Same gesture (a Mac momentum tail, or key auto-repeat) — already acted on.
     if (!newGesture) return;
-    if (riding) {
-      queued = d; // taken the moment this ride lands
-      return;
-    }
     // Not "after the scroll settles" — NOW, on this event.
     step(d);
   };
