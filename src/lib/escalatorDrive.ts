@@ -31,22 +31,27 @@
  *   • TRACKPAD — ONE flick emits hundreds of events ~8ms apart: the fingers,
  *     then a momentum tail running over a second after they lift.
  *
- * 1. A **PUSH** — an event more than `PUSH_GAP_MS` after the last — is one
- *    request for one more reveal. The threshold is sized so a FLICK IS A SINGLE
- *    PUSH on either device, because *"when I flick just take me to the next
- *    one"*. Momentum at ~8ms can never manufacture one.
+ 1. A **BURST** — everything until `BURST_END_MS` of quiet — is ONE gesture, and
+ *    is worth exactly ONE beat, however many events it contains. That is the
+ *    only formulation that makes a flick one beat on both devices at once.
  * 2. **SUSTAIN** decides when to stop helping — see FREE_AFTER_MS /
- *    SUSTAIN_RATIO. Not a count of pushes: the one thing that truly separates a
+ *    SUSTAIN_RATIO. Not a count of events: the one thing that truly separates a
  *    flick from real scrolling is that **momentum decays and a reader still
  *    scrolling does not.**
  *
- *   push                → ride to the next reveal (the escalator)
- *   push again mid-ride → carry one reveal further, uninterrupted
- *   sustained input     → hand the scroll back (free scrolling)
+ *   a burst        → ride to the next reveal, and ONLY the next one
+ *   sustained input → hand the scroll back (free scrolling)
  *
- * A burst ends after `BURST_END_MS` of silence, which re-arms the escalator. So
- * one flick and stop = carried. Keep scrolling = free. Wait, then flick again =
- * carried again.
+ * ⚠️ **ONE BURST IS WORTH EXACTLY ONE BEAT.** Letting each "push" extend the
+ * ride was tried and was wrong: a mouse-wheel flick is often 2-3 notches spaced
+ * past any gap threshold, so one flick advanced two or three beats
+ * ("I am now skipping two beats in one flick"). Going further
+ * is a NEW gesture — `BURST_END_MS` of quiet re-arms it. That cannot strand a
+ * reader mid-ride, because the other way out stays open: keep scrolling and the
+ * sustain test hands the whole scroll back.
+ *
+ * So one flick and stop = one beat. Keep scrolling = free. Wait, then flick
+ * again = one more beat.
  *
  * ⚠️ A COUNT-BASED RULE IS WHY THIS IS SPELLED OUT. "A second gesture (>100ms
  * gap) hands over" is fine on a trackpad and broken on a mouse wheel, where
@@ -117,19 +122,15 @@ const RIDE_MIN_S = 0.9;
 const RIDE_MAX_S = 3.0;
 
 /**
- * Minimum spacing for an event to count as its own PUSH — i.e. as a request for
- * one more reveal.
+ * Silence that ends a burst and re-arms the escalator. Since a burst is worth
+ * exactly one beat, THIS is the knob for "how soon can I ask for another one".
  *
- * ⚠️ Sized so a FLICK IS ONE PUSH. A mouse-wheel flick is a fast spin whose
- * notches land ~20-80ms apart; at the old 45ms those counted as 2-3 separate
- * pushes and a flick travelled 2-3 reveals. The brief is *"when I flick just
- * take me to the next one"* — the same single-reveal ride the reader already
- * called perfect. Deliberate individual notches (120ms+) are still pushes, and
- * a trackpad's ~8ms momentum stream still can't fake one.
+ * (There used to be a `PUSH_GAP_MS` too, sized to make a flick a single
+ * "push". It is gone: one-step-per-burst subsumes it, because the first event
+ * of a new burst is by definition separated by more than this. Counting pushes
+ * at any threshold was the bug — a mouse-wheel flick's notches straddle every
+ * value you might pick.)
  */
-const PUSH_GAP_MS = 90;
-
-/** Silence that ends a burst and re-arms the escalator. */
 const BURST_END_MS = 500;
 
 /**
@@ -210,6 +211,8 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   let burstStartedAt = 0;
   /** Strongest |deltaY| seen in this burst — the decay yardstick. */
   let burstPeakAbs = 0;
+  /** This burst has already had its one beat. See the note at the step call. */
+  let stepped = false;
   /** Reader is scrolling freely; we claim nothing until the burst ends. */
   let free = false;
   let lastDir: 1 | -1 = 1;
@@ -330,12 +333,12 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     // A new burst re-arms the escalator.
     if (gap > BURST_END_MS) {
       free = false;
+      stepped = false;
       burstStartedAt = t;
       burstPeakAbs = 0;
     }
     burstPeakAbs = Math.max(burstPeakAbs, absDelta);
 
-    const isPush = gap > PUSH_GAP_MS;
     lastInputAt = t;
     lastDir = d;
 
@@ -364,17 +367,19 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     }
 
     e.preventDefault();
-    // Everything else in this burst is the tail of the push we already served.
-    if (!isPush) return;
+    // ⚠️ ONE STEP PER BURST — A FLICK MOVES EXACTLY ONE BEAT, ALWAYS.
+    // Letting every push extend the ride was wrong: a mouse-wheel flick is
+    // frequently 2-3 notches spaced past any gap threshold, so one flick advanced
+    // two or three beats ("I am now skipping two beats in one flick"). A
+    // trackpad momentum tail can do it too — its final events go sparse enough
+    // to clear the gap as the deltas die away.
+    // A burst is one gesture, so it is worth one beat. Going further is a NEW
+    // gesture: BURST_END_MS of quiet re-arms it. This does not strand a reader
+    // mid-ride, because the other way out is still open — keep scrolling and
+    // the sustain test above hands the whole scroll back.
+    if (stepped) return;
+    stepped = true;
     // Not "after the scroll settles" — NOW, on this event.
-    //
-    // ⚠️ This runs EVEN IF a ride is already in flight, and `step` counts from
-    // `target` rather than the live position, so a push mid-ride EXTENDS the
-    // journey onward by one more reveal instead of being swallowed. Without
-    // that, a reader who nudges again during a long ride (they run up to 3s)
-    // gets nothing at all — the "it waits for the scene to set before going
-    // next" complaint. Repeated pushes inside ONE burst never reach here; they
-    // hand the scroll back above.
     step(d);
   };
 

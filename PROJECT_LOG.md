@@ -365,29 +365,35 @@ over that:
 | trackpad | HUNDREDS of events ~8ms apart — the fingers, then a momentum tail running 1s+ after they lift |
 
 **Two ideas, and they do different jobs:**
-1. **PUSH** — an event more than `PUSH_GAP_MS` (**90ms**) after the last = one request for one more
-   reveal. Sized so **a flick is a SINGLE push on either device**, because *"when I flick just take
-   me to the next one."* Momentum at ~8ms can never manufacture one.
-2. **SUSTAIN** — when to stop helping. **NOT a push count.** The one thing that truly separates a
-   flick from real scrolling is that **momentum DECAYS and a reader still scrolling does not**:
+1. **BURST** — everything until `BURST_END_MS` (500ms) of quiet is ONE gesture, and is worth
+   **exactly ONE beat**, however many events it contains. This is the only formulation that makes a
+   flick one beat on BOTH devices at once.
+2. **SUSTAIN** — when to stop helping. **NOT a count of events.** The one thing that truly separates
+   a flick from real scrolling is that **momentum DECAYS and a reader still scrolling does not**:
    `t - burstStart > FREE_AFTER_MS (400) && |delta| >= burstPeak * SUSTAIN_RATIO (0.5)`.
    At 400ms a flick's tail is ~25% of its peak; a wheel spin is still at 100%. The time gate also
    covers a flick's own ramp-up, where delta is by definition at the running peak.
 
 ```
-push                → ride to the next reveal (the escalator)
-push again mid-ride → carry one reveal further, uninterrupted
-sustained input     → hand the scroll back (free scrolling)
+a burst         → ride to the next reveal, and ONLY the next one
+sustained input → hand the scroll back (free scrolling)
 ```
-A burst ends after `BURST_END_MS` (500ms) of silence, re-arming the escalator.
+Going further than one beat is a NEW gesture — 500ms of quiet re-arms it. That cannot strand a
+reader mid-ride, because the other exit stays open: keep scrolling and SUSTAIN hands the whole
+scroll back.
 
 ⚠️ **TWO COUNT-BASED VERSIONS FAILED FIRST — that is why this is spelled out.**
 - *"a second **gesture** (>100ms gap) hands over"* — fine on a trackpad, broken on a mouse wheel
   where **every notch is >100ms apart**: it handed over, re-armed and handed over again on each
   notch → *"a lot of hiccups and friction, and the delays are random too for each beat."*
-- *"**3 pushes** hands over"* (with `PUSH_GAP_MS` 45) — a fast 3-notch flick counted as 3 pushes,
+- *"**3 pushes** hands over"* (with a 45ms push gap) — a fast 3-notch flick counted as 3 pushes,
   tripped free mode, **cancelled its own ride** and stalled waiting to re-seat → *"when I flick the
   gap is too long between the transition."*
+- *"**each push extends the ride** by one more reveal"* (push gap raised to 90ms) — added to stop a
+  nudge mid-ride being swallowed, but a mouse-wheel flick's notches straddle EVERY gap threshold
+  you might pick, so a 3-notch flick advanced **3 beats** → *"I am now skipping two beats in one
+  flick."* ⚠️ **`PUSH_GAP_MS` IS GONE ENTIRELY** — counting events at any threshold was the bug.
+  One-step-per-burst subsumes it, since the first event of a new burst is separated by definition.
 The sustain test also subsumed a bolt-on "delta spike + ramp guard" heuristic that existed only to
 catch a second trackpad flick arriving mid-momentum; that whole mechanism is gone.
 
