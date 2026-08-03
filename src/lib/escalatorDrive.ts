@@ -1,68 +1,98 @@
 /**
- * escalatorDrive — the reader's scroll gesture IS the step, inside the two long
- * pinned scrolly-telling sections (home Hero, /about AboutIntro).
+ * escalatorDrive — inside the two long pinned scrolly-telling sections (home
+ * Hero, /about AboutIntro), a LAZY scroll is carried from reveal to reveal,
+ * while ACTIVELY scrolling hands the page straight back to the reader.
+ *
+ * The brief, in the user's words: *"I want the escalator to help only when I am
+ * lazy scrolling... just when I scroll freely let me do that without getting me
+ * stuck at beats."*
  *
  * ── Why this replaces ScrollTrigger's `snap` on desktop ─────────────────────
- * Four versions of this were built on ScrollTrigger's snap, and every one of
- * them was reported as "I scroll a little and it takes me back". The tuning was
- * never the problem — the ARCHITECTURE was:
+ * Four versions of this were built on ScrollTrigger's snap and every one was
+ * reported as "I scroll a little and it takes me back". The tuning was never
+ * the problem — the ARCHITECTURE was. ScrollTrigger's snap is, by design, *wait
+ * for the scroll to stop, then decide where it should have gone*: read its
+ * source, the decision runs in a `gsap.delayedCall` that only fires once
+ * `getVelocity() < 10`, which under Lenis (duration 1.1s) is ~1.1s of
+ * free-scrubbing drift AFTER the gesture. That gives a visible gap, a bounce
+ * (the reader has already drifted, so committing moves them again), and
+ * inconsistency (where they drift depends on gesture strength).
  *
- *   ScrollTrigger's snap is, by design, *wait for the scroll to stop, then
- *   decide where it should have gone*. Read its source: the decision runs in a
- *   `gsap.delayedCall` that only fires once `getVelocity() < 10`. Under Lenis
- *   (duration 1.1s) that is ~1.1s of free-scrubbing drift AFTER the reader's
- *   gesture, plus the snap's own delay, before anything is decided.
+ * ⚠️ RULE ZERO, learned four times: **never decide direction from scroll
+ * POSITION.** Every position threshold has a "below the line" branch, and that
+ * branch scrolls the reader backwards against their own gesture. Direction here
+ * comes from the wheel event's own `deltaY` and nothing else.
  *
- * That produces exactly the three complaints:
- *   • the *gap* — a visible pause where nothing has committed yet;
- *   • the *bounce* — whatever the decision is, the reader has already drifted
- *     somewhere else, so committing means moving them again;
- *   • the *inconsistency* — where they drift to depends on gesture strength, so
- *     "scroll manually" and "let it go midway" land differently.
+ * ── PUSHES: the one idea this file turns on ─────────────────────────────────
+ * A "push" is one deliberate shove of the input device. Counting them is what
+ * separates lazy from active, and it is the ONLY thing that works across both
+ * devices, because their event streams are nothing alike:
  *
- * There is no threshold anywhere in this file, and there is no waiting. The
- * wheel event itself starts the ride, in the direction of its own `deltaY`, on
- * the same frame. Take the scroll manually or flick and let go: the outcome is
- * the same, because the outcome is decided by the DIRECTION of the gesture and
- * nothing else.
+ *   • MOUSE WHEEL — every notch is its own physical push, arriving ~80-200ms
+ *     apart. One notch is a lazy scroll. Several in a row means the reader is
+ *     actually scrolling.
+ *   • TRACKPAD — ONE flick emits hundreds of events ~8ms apart (the fingers,
+ *     then a momentum tail that runs on for over a second after they lift).
+ *     All of that is a SINGLE push.
+ *
+ * So a push is an event separated from the last by more than `PUSH_GAP_MS`.
+ * Momentum, at ~8ms spacing, can never manufacture one — which is why the
+ * previous "a second gesture hands over" version fell apart on a mouse wheel:
+ * it treated the ~120ms between notches as a fresh gesture and so handed over,
+ * re-armed, and handed over again on every single notch. That is exactly the
+ * reported *"hiccups and friction, and the delays are random for each beat."*
+ *
+ *   push 1  → ride to the next reveal (the escalator; lazy scrolling)
+ *   push 2+ → hand the scroll back and stay out of the way (free scrolling)
+ *
+ * A burst ends after `BURST_END_MS` of silence, which re-arms the escalator. So
+ * one notch and stop = carried. Keep spinning the wheel = free. Wait, then one
+ * notch = carried again.
+ *
+ * ⚠️ A trackpad can't make a second push by gap alone (its momentum is still
+ * streaming), so a DELTA SPIKE counts as a push too: momentum decays
+ * monotonically, so a big delta right after small ones is a fresh shove. Two
+ * guards stop that misfiring and BOTH are needed — a flick RAMPS UP over its
+ * first ~150ms (2→8→25…), which looks exactly like a spike, so spikes are
+ * ignored for the first `RAMP_MS` of a burst; and the spike must follow
+ * genuinely small deltas, not a mid-ramp step up.
+ *
+ * ── Re-seating ──────────────────────────────────────────────────────────────
+ * After free scrolling stops, the reader is glided to the next reveal in the
+ * direction they were already travelling, so they are never left parked
+ * mid-transition. This is the ONE place this file waits for the scroll to
+ * settle — and it is safe where ST's snap was not, because the direction is the
+ * reader's own last input, so it can only ever carry them ONWARD.
  *
  * ── How it stays out of Lenis' way ──────────────────────────────────────────
- * The ride is `lenis.scrollTo(..., { lock: true })`. Lenis' `onVirtualScroll`
- * early-returns while `isLocked`, so the reader's own wheel input cannot fight
- * the ride, and `reset()` clears the lock before `onComplete` runs — so the
- * lock can never strand the page. (We still keep our own failsafe below; a
- * frozen scroll is the worst possible failure here.)
+ * A ride is `lenis.scrollTo(..., { lock: true })`. `Animate.fromTo` calls
+ * `onStart` synchronously, so the lock is set during our own call and Lenis'
+ * wheel handler — which runs after ours — hits its `isLocked` early-return.
+ * They cannot fight. `reset()` clears the lock before `onComplete`, so it can
+ * never strand the page; a failsafe timer backs that up regardless.
  *
  * ── Scope ───────────────────────────────────────────────────────────────────
- * DESKTOP ONLY — it requires Lenis, so callers attach it only when smooth
- * scroll is actually running (fine pointer + no reduced motion). Touch and
- * reduced-motion keep ScrollTrigger's snap (see escalatorSnap.ts), where native
- * momentum owns the scroll and there is no Lenis instance to drive.
+ * DESKTOP ONLY — it drives Lenis, so callers attach it only where smooth scroll
+ * actually runs (fine pointer + no reduced motion). Touch and reduced-motion
+ * keep ScrollTrigger's snap (escalatorSnap.ts).
  */
 
 import type { ScrollTrigger as ScrollTriggerInstance } from "gsap/ScrollTrigger";
 import { lenisRef } from "@/components/motion/lenisBridge";
 
-/** Progress slop so a value sitting a hair off a rest isn't "past" it. */
+/** Progress slop so a value sitting a hair off a reveal isn't "past" it. */
 const EPS = 0.0004;
 
 /**
  * ── THE SPEED KNOB ──────────────────────────────────────────────────────────
- * How fast a ride travels, in scroll pixels per second. This is the ONLY thing
- * that sets how fast the scrolly-telling sections read, so tune here and
- * nowhere else: lower = slower.
+ * How fast a ride travels, in scroll px/sec. The ONLY thing that sets how fast
+ * these sections read — tune here and nowhere else. Lower = slower.
  *
- * It is a SPEED, not a duration, on purpose. A flat duration (it was 0.85s)
- * makes the perceived pace depend on how much timeline a step happens to
- * cover — the gap between two phrase holds and the gap between two works beats
- * are very different distances, so the same 0.85s made the long ones fly and
- * the short ones crawl. Deriving duration from distance keeps the pace even
- * across the whole journey, and makes it independent of pin length, so
- * retuning a section's scroll length can no longer change how fast it feels.
- *
- * 430 px/s sits a little under a comfortable sustained wheel scroll, which is
- * the point: a step should read as unhurried. With power2.inOut the peak is
- * about twice this.
+ * A SPEED, not a duration, on purpose: the gaps are not equal (a phrase-hold
+ * gap and a works-beat exit span are very different distances), so one flat
+ * duration made the long steps fly and the short ones crawl. It also decouples
+ * feel from geometry, so retuning a section's pin length can't silently change
+ * its pace.
  */
 const RIDE_PX_PER_S = 430;
 
@@ -71,99 +101,45 @@ const RIDE_PX_PER_S = 430;
  *
  * ⚠️ THE CEILING MUST STAY ABOVE THE LONGEST GAP IN ANY SECTION, or it silently
  * turns the speed above back into a duration for exactly the longest rides —
- * i.e. it makes the biggest transitions the FASTEST ones. That shipped at 1.8s
- * and was reported as "HERE'S SOME OF MY WORK just gets insta scrolled... it
+ * i.e. it makes the biggest transitions the FASTEST. That shipped at 1.8s and
+ * was reported as "'HERE'S SOME OF MY WORK' just gets insta scrolled... it
  * feels like I'm scrolling age of intelligence and here's my work at the same
  * time as one thing". Measured on the live hero (pin 7745px, 12 rests):
  *
  *   gap 718px   phrase → phrase                 1.67s   430 px/s   ← correct
  *   gap 1058px  phrase 3 → works heading        1.8s    588 px/s   ← capped
- *   gap 1249px  works heading → first project   1.8s    694 px/s   ← capped, +61%
+ *   gap 1248px  works heading → first project   1.8s    694 px/s   ← capped, +61%
  *
- * The works heading sits between the two LONGEST gaps in the journey, so it was
+ * The works heading sits between the two LONGEST gaps in the site, so it was
  * the one scene ridden into and out of well above everything else's pace. At
- * 3.0s nothing in either section clamps and the whole journey runs at a true
- * 430 px/s. If a section ever gains a bigger gap than ~1290px, raise this again
- * rather than accepting the speed-up.
+ * 3.0s nothing clamps. If a section ever gains a gap bigger than ~1290px, raise
+ * this rather than accepting the speed-up.
  */
 const RIDE_MIN_S = 0.9;
 const RIDE_MAX_S = 3.0;
 
-const rideSeconds = (distancePx: number) =>
-  Math.min(
-    RIDE_MAX_S,
-    Math.max(RIDE_MIN_S, Math.abs(distancePx) / RIDE_PX_PER_S),
-  );
-
 /**
- * A gap this long with no wheel events means a NEW gesture. One gesture moves
- * exactly one reveal — that is the entire pacing model, and it is why this is
- * device-independent.
- *
- * ⚠️ THIS IS WHAT STOPS macOS RUNNING AWAY. A Mac trackpad flick does not end
- * when the fingers lift: the OS keeps streaming momentum wheel events at ~120Hz
- * for another second or more. Anything that treats "events are still arriving"
- * as "the reader is still asking" will take three or four steps from one flick
- * there and exactly one on a Windows wheel — which is precisely the platform
- * split being fixed. Momentum never leaves a 100ms hole, so it reads as the
- * same gesture and moves one reveal. A human cannot flick twice inside 100ms,
- * so deliberate repeats are never swallowed.
+ * Minimum spacing for an event to count as its own PUSH. Above a trackpad's
+ * ~8ms event stream (so momentum can never fake one), well below the ~80-200ms
+ * between mouse-wheel notches (so every notch counts as one).
  */
-const GESTURE_GAP_MS = 100;
+const PUSH_GAP_MS = 45;
 
-/**
- * Dead time after a ride lands, before any input can start another one.
- *
- * ⚠️ THIS IS THE FIX FOR THE "TWO REVEALS FROM ONE FLICK" BUG — reported as
- * phrase 3 and "HERE'S SOME OF MY WORK" behaving like one fused scene: a nudge
- * into "DESIGNING THE AGE OF INTELLIGENCE" carried straight on to the works
- * heading, and coming back up showed phrase 3 for a beat before continuing to
- * phrase 2. That is one gesture producing TWO rides.
- *
- * Why it surfaced there and nowhere else: the p2→p3 gap is the SHORTEST in the
- * journey (~1.1 timeline units, so a ~0.9s ride at the RIDE_MIN_S floor), while
- * a macOS momentum tail runs well over a second. So that ride — and only that
- * ride — lands while the tail is still delivering events, and the tail is
- * ragged enough at the end to look like a fresh gesture.
- *
- * Two changes killed it: this quiet window, and dropping the old `queued`
- * mechanism that deferred a mid-ride gesture to fire the instant the ride
- * landed (which is precisely how one flick became two steps). Input during a
- * ride is now simply ignored.
- */
-const POST_RIDE_QUIET_MS = 260;
+/** Silence that ends a burst and re-arms the escalator. */
+const BURST_END_MS = 500;
 
-/**
- * ── SCROLL FREEDOM ─────────────────────────────────────────────────────────
- * A ride owns the scroll, and rides can now run up to 3s. That is correct for
- * the reader being carried, but it also meant *"I can't scroll forward until
- * the scene is set"* — no way to push past a transition you've already read.
- *
- * So a SECOND, DELIBERATE gesture while a ride is in flight HANDS CONTROL BACK:
- * the ride is cancelled, Lenis' lock is released, and the reader free-scrubs
- * for the rest of that gesture. The escalator re-arms by itself on the next
- * gesture — so "keep scrolling" means full manual control, and "stop, then
- * nudge" puts you back on rails and seats you on the next reveal.
- *
- * Deliberately NOT auto-resumed after the reader stops: every "move them once
- * scrolling ends" mechanism in this component's history has produced a
- * complaint, and it would fight Lenis' own settle. Asking for manual control
- * keeps it until you ask for the escalator again.
- *
- * ⚠️ Detecting the second gesture is the hard part on macOS, because the first
- * flick's momentum is still streaming — there is no 100ms hole to find. So a
- * DELTA SPIKE also counts: momentum decays monotonically, so a big delta
- * arriving right after small ones is a fresh push of the fingers. Both guards
- * matter:
- *   - `SPIKE_AFTER_MS` — a flick RAMPS UP over its first ~150ms (2→8→25…),
- *     which looks exactly like a spike. Ignoring spikes for the first 500ms of
- *     a ride skips that ramp entirely.
- *   - `lastAbs < SPIKE_MIN_DELTA / 2` — the spike must follow genuinely small
- *     deltas, i.e. a decayed tail, not a mid-ramp step up.
- */
+/** Pushes in one burst before the reader is given the scroll back. */
+const FREE_AFTER_PUSHES = 2;
+
+/** Spike detection — see the header. RAMP_MS skips a flick's own ramp-up. */
 const SPIKE_MIN_DELTA = 24;
 const SPIKE_RATIO = 3;
-const SPIKE_AFTER_MS = 500;
+const RAMP_MS = 220;
+
+/** After free scrolling, how long to wait before re-seating on a reveal. */
+const RESEAT_DELAY_MS = 420;
+/** …and how often to re-check while Lenis is still settling. */
+const RESEAT_POLL_MS = 120;
 
 /** power2.inOut — matches the site's motion tokens. No overshoot, ever. */
 const easeInOut = (t: number) =>
@@ -187,18 +163,20 @@ export type EscalatorDriveOptions = {
 /** Attaches the drive. Returns a cleanup that detaches it. */
 export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   let riding = false;
-  /** Progress we're riding TO, so a chained step counts from the destination. */
+  /** Progress we're riding TO, so a re-read counts from the destination. */
   let target: number | null = null;
-  let lastInputAt = 0;
-  /** When the last ride landed — see POST_RIDE_QUIET_MS. */
-  let landedAt = 0;
-  /** When the ride in flight began — arms the delta-spike takeover test. */
-  let rideStartedAt = 0;
-  /** |deltaY| of the previous wheel event, for that same spike test. */
-  let lastAbs = 0;
-  /** Reader has taken the wheel for the rest of this gesture — see SCROLL FREEDOM. */
-  let free = false;
   let failsafe = 0;
+
+  // ── burst state ───────────────────────────────────────────────────────────
+  let lastInputAt = 0;
+  let burstStartedAt = 0;
+  let pushes = 0;
+  /** Reader is scrolling freely; we claim nothing until the burst ends. */
+  let free = false;
+  let lastDir: 1 | -1 = 1;
+  /** |deltaY| of the previous event, for the spike test. */
+  let lastAbs = 0;
+  let reseat = 0;
 
   const now = () =>
     typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -221,14 +199,13 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     return span > 0 ? (window.scrollY - st.start) / span : 0;
   };
 
+  /** Already sitting on a reveal? Then there is nothing to re-seat. */
+  const onARest = (p: number) =>
+    opts.getRests().some((r) => Math.abs(r - p) < EPS * 3);
+
   const land = () => {
     riding = false;
     target = null;
-    landedAt = now();
-    // Treat anything still arriving as the TAIL of the gesture we just served,
-    // not the start of a new one. Without this, a momentum event landing a
-    // fraction later reads as a fresh ask and steps again.
-    lastInputAt = landedAt;
     window.clearTimeout(failsafe);
   };
 
@@ -241,32 +218,68 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     if (to === null) return;
 
     const toPx = Math.round(st.start + to * (st.end - st.start));
-    // Pace the ride by how far it actually travels — see RIDE_PX_PER_S.
-    const seconds = rideSeconds(toPx - window.scrollY);
+    const seconds = Math.min(
+      RIDE_MAX_S,
+      Math.max(RIDE_MIN_S, Math.abs(toPx - window.scrollY) / RIDE_PX_PER_S),
+    );
 
     target = to;
     riding = true;
-    rideStartedAt = now();
-    // Failsafe: if onComplete somehow never arrives, release anyway. A stuck
-    // `riding` flag would swallow every wheel event inside the pin, and a page
-    // you cannot scroll is far worse than a missed step.
+    // Failsafe: if onComplete never arrives, release anyway. A stuck `riding`
+    // flag swallows every wheel event inside the pin, and a page you cannot
+    // scroll is far worse than a missed step.
     window.clearTimeout(failsafe);
     failsafe = window.setTimeout(land, seconds * 1000 + 600);
 
     lenis.scrollTo(toPx, {
       duration: seconds,
       easing: easeInOut,
-      // Lenis ignores user input while locked, so the ride cannot be fought
-      // half-way and left stranded mid-transition. Self-clears on completion.
+      // Lenis ignores user input while locked, so the ride can't be fought
+      // half-way and left stranded. Self-clears on completion.
       lock: true,
-      // ...and `force` lets a chained step start while that lock is still up.
+      // ...and `force` lets us retarget while that lock is still up.
       force: true,
       onComplete: land,
     });
   };
 
-  /** Shared by wheel and keys: should this input drive a step, or fall through
-   *  to normal scrolling (so the reader can leave the pin at either end)? */
+  /** Cancel any ride and give the scroll back. Lenis' stop()/start() pair runs
+   *  its internal `reset()`, which clears the lock, halts the ride tween and
+   *  re-seats Lenis on the real scroll position — so the handover is seamless
+   *  and Lenis picks up the very event that triggered it. */
+  const handBack = () => {
+    const lenis = lenisRef.current;
+    if (lenis && riding) {
+      lenis.stop();
+      lenis.start();
+    }
+    // reset() kills the tween, so onComplete will never fire — land by hand.
+    land();
+    free = true;
+  };
+
+  /** After free scrolling stops, carry the reader onto the next reveal in the
+   *  direction they were already going. Waits for Lenis to finish its own
+   *  settle first, otherwise the two animations fight over the same scroll. */
+  const scheduleReseat = () => {
+    window.clearTimeout(reseat);
+    reseat = window.setTimeout(function check() {
+      const st = opts.getTrigger();
+      const lenis = lenisRef.current;
+      if (!st || !lenis || !st.isActive) return;
+      if (lenis.isScrolling) {
+        reseat = window.setTimeout(check, RESEAT_POLL_MS);
+        return;
+      }
+      free = false;
+      pushes = 0;
+      if (riding) return;
+      if (onARest(progressOf(st))) return;
+      step(lastDir);
+    }, RESEAT_DELAY_MS);
+  };
+
+  /** Is the pin the right place for this input, and is there anywhere to go? */
   const claim = (d: 1 | -1): boolean => {
     if (!lenisRef.current) return false;
     // The intro overlay owns the scroll lock while it's up.
@@ -277,63 +290,68 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     return nextRest(base, d) !== null;
   };
 
-  /** Cancel the ride in flight and give the scroll back to the reader. Lenis'
-   *  stop()/start() pair runs its `reset()`, which clears the lock, halts the
-   *  ride tween and re-seats its internal scroll on the real one — so the
-   *  handover is seamless and Lenis picks up this very event. */
-  const handOver = () => {
-    const lenis = lenisRef.current;
-    if (lenis) {
-      lenis.stop();
-      lenis.start();
-    }
-    // reset() kills the tween, so onComplete will never fire — land by hand.
-    land();
-    free = true;
-  };
-
-  /** Shared by wheel and keys. `e` is preventDefault'd whenever we take the
-   *  input, including for the tail of a gesture we've already acted on — the
-   *  reader must not free-scroll underneath a ride. While `free`, we never
-   *  preventDefault, so Lenis scrolls normally. */
+  /** Shared by wheel and keys. We only ever call preventDefault when we are
+   *  actually taking the input — while `free`, every event goes to Lenis. */
   const drive = (e: Event, d: 1 | -1, absDelta: number) => {
     const t = now();
-    const gapGesture = t - lastInputAt > GESTURE_GAP_MS;
-    // A fresh push of the fingers while the previous gesture's momentum is
-    // still decaying — the only way to spot a second gesture on macOS.
+    const gap = t - lastInputAt;
+
+    // A new burst re-arms the escalator.
+    if (gap > BURST_END_MS) {
+      pushes = 0;
+      free = false;
+      burstStartedAt = t;
+      lastAbs = 0;
+    }
+
+    // A fresh shove: separated in time, or — for a trackpad, whose momentum
+    // leaves no gaps — a delta spike after the tail has decayed.
     const spike =
       absDelta >= SPIKE_MIN_DELTA &&
       lastAbs < SPIKE_MIN_DELTA / 2 &&
       absDelta >= lastAbs * SPIKE_RATIO;
+    const isPush =
+      gap > PUSH_GAP_MS || (spike && t - burstStartedAt > RAMP_MS);
+
     lastInputAt = t;
     lastAbs = absDelta;
+    lastDir = d;
 
-    // Any genuinely new gesture re-arms the escalator.
-    if (gapGesture) free = false;
-    // The reader has the wheel for the rest of this gesture: don't claim, don't
-    // preventDefault — Lenis scrolls it.
-    if (free) return;
-
-    if (!claim(d)) return; // nowhere to go that way — let them leave the pin
-
-    if (riding) {
-      // Deliberate second gesture mid-ride → hand the scroll back.
-      if (gapGesture || (spike && t - rideStartedAt > SPIKE_AFTER_MS)) {
-        handOver();
-        return; // NOT preventDefault'd — this event starts their free scroll
-      }
-      // Otherwise it's the momentum tail of the gesture we're already serving.
-      e.preventDefault();
+    if (!claim(d)) {
+      // Outside the pin, or nothing left in that direction — normal scrolling.
+      free = false;
+      window.clearTimeout(reseat);
       return;
     }
 
+    if (isPush) pushes++;
+
+    // Reader has the scroll. Don't claim, don't preventDefault.
+    if (free) {
+      scheduleReseat();
+      return;
+    }
+
+    // Second deliberate push in this burst → they're actively scrolling, not
+    // lazily nudging. Get out of the way for the rest of the burst.
+    if (isPush && pushes >= FREE_AFTER_PUSHES) {
+      handBack();
+      scheduleReseat();
+      return; // NOT preventDefault'd — this event begins their free scroll
+    }
+
     e.preventDefault();
-    // Momentum still coming in just after a landing is the tail of the gesture
-    // we already served.
-    if (t - landedAt < POST_RIDE_QUIET_MS) return;
-    // Same gesture (a Mac momentum tail, or key auto-repeat) — already acted on.
-    if (!gapGesture) return;
+    // Everything else in this burst is the tail of the push we already served.
+    if (!isPush) return;
     // Not "after the scroll settles" — NOW, on this event.
+    //
+    // ⚠️ This runs EVEN IF a ride is already in flight, and `step` counts from
+    // `target` rather than the live position, so a push mid-ride EXTENDS the
+    // journey onward by one more reveal instead of being swallowed. Without
+    // that, a reader who nudges again during a long ride (they run up to 3s)
+    // gets nothing at all — the "it waits for the scene to set before going
+    // next" complaint. Repeated pushes inside ONE burst never reach here; they
+    // hand the scroll back above.
     step(d);
   };
 
@@ -344,13 +362,13 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
 
   const onKey = (e: KeyboardEvent) => {
     const d = e.key === " " && e.shiftKey ? -1 : KEYS[e.key];
-    // Keys have no delta; a repeat is caught by the gap test alone.
+    // Keys carry no delta; auto-repeat is caught by the gap test alone.
     if (d) drive(e, d, SPIKE_MIN_DELTA);
   };
 
-  // passive:false — preventDefault is the whole point: inside the pin WE own
-  // the scroll, so the free-scrub drift that every snap-based version had to
-  // correct for afterwards never happens in the first place.
+  // passive:false — preventDefault is the whole point: while the escalator is
+  // carrying the reader WE own the scroll, so the free-scrub drift that every
+  // snap-based version had to correct for afterwards never happens at all.
   window.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("keydown", onKey);
 
@@ -358,5 +376,6 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     window.removeEventListener("wheel", onWheel);
     window.removeEventListener("keydown", onKey);
     window.clearTimeout(failsafe);
+    window.clearTimeout(reseat);
   };
 }

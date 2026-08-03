@@ -333,28 +333,58 @@ the tween durations by hand was attempted twice and was wrong both times.
 heading even begins to rise. The heading and phrase 3 are NOT overlapped — the fused feeling was
 purely the capped ride speed.
 
-#### SCROLL FREEDOM — taking the wheel back mid-ride
-Rides now run up to 3s, which is right for being carried but meant *"I can't scroll forward until
-the scene is set."* A **second, deliberate gesture while a ride is in flight hands control back**:
-the ride is cancelled, Lenis' lock released, and the reader free-scrubs for the rest of that
-gesture. The escalator **re-arms by itself on the next gesture**. So: keep scrolling = full manual
-control; stop and nudge = back on rails, seated on the next reveal.
-- The handover is `lenis.stop(); lenis.start();` — both public API, and both run Lenis' internal
-  `reset()`, which clears the lock, halts the ride tween and re-seats Lenis on the real scroll
-  position, so it picks up that very event. ⚠️ `reset()` kills the tween, so `onComplete` never
-  fires — `land()` must be called by hand or `riding` sticks and the pin goes dead.
-- ⚠️ **NOT auto-resumed once the reader stops.** Every "move them after scrolling ends" mechanism
-  in this component's history has produced a complaint, and it would fight Lenis' settle. Asking
-  for manual control keeps it until you ask for the escalator again.
-- ⚠️ **Detecting the second gesture on macOS is the hard part** — the first flick's momentum is
-  still streaming, so there is no 100ms hole. A **delta spike** also counts (momentum decays
-  monotonically, so a big delta after small ones is a fresh push). Two guards stop that
-  misfiring, and BOTH are needed: a flick **ramps up** over its first ~150ms (2→8→25…) which looks
-  exactly like a spike, so spikes are ignored for the first **500ms** of a ride; and the spike must
-  follow genuinely small deltas (`lastAbs < 12`), not a mid-ramp step up.
-- **The default feel is untouched** — verified by replaying the full measured rest table: same 11
-  steps, same durations, same 430 px/s, and **zero handovers** from a lone flick or from a 1.4s
-  momentum tail across the longest (2.9s) ride.
+#### ⚠️⚠️ LAZY vs FREE — the PUSH model (`escalatorDrive`'s single most important idea)
+The brief: *"I want the escalator to help only when I am lazy scrolling — that's what's happening
+currently, it's perfect. Just when I scroll freely let me do that without getting me stuck at
+beats."*
+
+A **push** is one deliberate shove of the input device — an event separated from the last by more
+than `PUSH_GAP_MS` (45ms). Counting pushes is the ONLY discriminator that works on both devices,
+because their event streams are nothing alike:
+| device | one physical gesture emits | so a push is |
+|---|---|---|
+| mouse wheel | ONE event per notch, ~80–200ms apart | every notch |
+| trackpad | HUNDREDS of events ~8ms apart (fingers, then a momentum tail running 1s+ after they lift) | the first event only |
+
+- **push 1** → ride to the next reveal (the escalator — lazy scrolling)
+- **push 2+ in the same burst** → hand the scroll back, stay out of the way (free scrolling)
+- a burst ends after `BURST_END_MS` (500ms) of silence, which re-arms the escalator
+
+⚠️ **A FAILED VERSION IS WHY THIS IS WRITTEN DOWN.** The first attempt used "a second *gesture*
+(>100ms gap) hands over". On a trackpad that is fine; **on a MOUSE WHEEL every notch is >100ms
+apart**, so it handed over, re-armed, and handed over again on literally every notch — reported as
+*"a lot of hiccups and friction... and the delays are random too for each beat."* Momentum at ~8ms
+can never fake a push, which is exactly what makes the 45ms threshold work for both.
+
+⚠️ **A trackpad cannot make a second push by gap alone** (its momentum leaves no holes), so a
+**delta spike** counts as a push too — momentum decays monotonically, so a big delta right after
+small ones is a fresh shove. Two guards stop it misfiring and BOTH are needed: a flick **ramps up**
+over its first ~150ms (2→8→25…) which looks exactly like a spike, so spikes are ignored for the
+first `RAMP_MS` (220ms) of a **burst**; and the spike must follow genuinely small deltas
+(`lastAbs < 12`), not a mid-ramp step up.
+
+⚠️ **A push while a ride is in flight EXTENDS the journey — it must not be swallowed.** `step()`
+counts from `target`, not the live position, so a nudge mid-ride rides one reveal further. Dropping
+this was the *"waits for the scene to set before going next"* complaint: rides run up to 3s, and a
+reader who nudged again during one got nothing at all. (Repeated pushes inside one burst never
+reach this path — they hand the scroll back instead.)
+
+**Re-seating.** After free scrolling stops, the reader is glided onto the next reveal in the
+direction they were already travelling, so they are never parked mid-transition. This is the ONE
+place the file waits for the scroll to settle, and it is safe where ScrollTrigger's snap was not,
+because the direction is the reader's own last input — it can only carry them ONWARD. It polls
+`lenis.isScrolling` first; firing while Lenis is still easing makes the two fight.
+
+**Handback** is `lenis.stop(); lenis.start();` — both public API, both running Lenis' internal
+`reset()`, which clears the lock, halts the ride tween and re-seats Lenis on the real scroll
+position so it picks up that very event. ⚠️ `reset()` kills the tween, so `onComplete` NEVER fires
+— `land()` must be called by hand or `riding` sticks and the pin goes dead.
+
+**Verified by simulation** (both device profiles, real measured rest table): one trackpad flick and
+one mouse notch each give exactly 1 ride and 0 handbacks; notch-wait-notch stays lazy; 8 continuous
+notches give 1 ride then ONE handback then free events, then a forward re-seat onto a real reveal;
+a second flick during a momentum tail frees via the spike; a lazy notch during a long ride extends
+onward; all 11 hero gaps still run at 430 px/s; direction never violated.
 
 #### Also shipped in this run
 - **macOS wheel normalisation** — `SmoothScrollProvider` now passes `wheelMultiplier` (0.55 → then
