@@ -43,11 +43,41 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // ── macOS wheel normalisation — why the site felt FAST on a Mac ──────────
+    // Lenis runs in duration mode: every wheel event does `target += deltaY`
+    // and it eases toward that target. So the distance a gesture covers is
+    // exactly the total deltaY the OS hands us — and the two platforms hand us
+    // very different amounts for the same physical gesture:
+    //   • Windows — a mouse-wheel notch is a fixed ~100px, and a precision
+    //     trackpad reports the raw finger travel. A comfortable gesture is a
+    //     few hundred px, delivered as a handful of events.
+    //   • macOS — the OS applies its OWN acceleration curve to trackpad and
+    //     Magic Mouse input AND appends a momentum tail after the fingers
+    //     lift, streamed at 120Hz. The same gesture arrives as roughly 2-3x
+    //     the deltaY.
+    // Nothing in the app compensated, so every scroll-linked pin (the home
+    // hero, /about) raced on a Mac while feeling right on Windows. Scaling the
+    // wheel down there brings a gesture back to comparable travel on both.
+    // This is the ONE knob for it — raise toward 1 if a Mac starts to feel
+    // sluggish, lower if it still runs away. Trackpad AND wheel go through the
+    // same multiplier because macOS accelerates both.
+    const MAC_WHEEL_MULTIPLIER = 0.55;
+    const platform =
+      (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData?.platform ??
+      navigator.platform ??
+      "";
+    // Note: iPadOS reports a Mac platform string, but touch devices never reach
+    // here (the isTouch early-return above owns them), so this only ever
+    // matches a real desktop Mac.
+    const isApple = /mac/i.test(platform) || /Mac OS X/.test(navigator.userAgent);
+
     const lenis = new Lenis({
       duration: 1.1,
       // easeOutExpo — matches the long, settling glide of the references.
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
+      wheelMultiplier: isApple ? MAC_WHEEL_MULTIPLIER : 1,
     });
     lenisRef.current = lenis;
 

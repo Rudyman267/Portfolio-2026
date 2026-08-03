@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { HeroCanvas } from "@/components/hero3d/HeroCanvas";
 import { heroScroll } from "@/components/hero3d/heroScroll";
 import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
+import { createEscalatorSnap } from "@/lib/escalatorSnap";
 import { LOADER_DONE_EVENT, loaderAlreadyDone } from "@/components/motion/Loader";
 import {
   WorksOverlay,
@@ -646,6 +647,19 @@ export function Hero() {
         // per-scroll — are IDENTICAL to the pre-works build ON DESKTOP.
         const OLD_UNITS = 5.75;
         const OLD_END_VH = 2.35;
+        // ── Short-viewport floor (the OTHER half of "it's fast on a Mac") ────
+        // The pin's length is a multiple of innerHeight, so the shorter the
+        // viewport the FEWER scroll pixels the same beats get. A 13" MacBook
+        // browser is ~750-800 CSS px once the menu bar, notch inset and browser
+        // chrome are gone; a maximised 1080p Windows window is ~940-950. That
+        // alone compresses the whole hero journey by ~20% on the Mac — and it
+        // compounds with the wheel-delta difference handled in
+        // SmoothScrollProvider. Floor the height the pin maths uses so a short
+        // screen still gets a full-length ride.
+        // FLOOR ONLY: taller viewports are untouched, so Windows/large-display
+        // pacing is byte-identical to before.
+        const PIN_VH_FLOOR = 900;
+        const pinVh = () => Math.max(window.innerHeight, PIN_VH_FLOOR);
         // On touch, only a GENTLE trim of the scroll length. An earlier ~half
         // reduction (1.25) made the whole journey feel hair-trigger sensitive —
         // a small thumb flick jumped several beats. Back to ~10% off the desktop
@@ -656,7 +670,7 @@ export function Hero() {
           typeof window !== "undefined" &&
           window.matchMedia("(pointer: coarse)").matches;
         const endVh = isCoarse ? 2.12 : OLD_END_VH;
-        const unitPx = () => (window.innerHeight * endVh) / OLD_UNITS;
+        const unitPx = () => (pinVh() * endVh) / OLD_UNITS;
 
         // ── Escalator snap: every "full reveal" the pinned timeline holds on —
         // each phrase fully risen (p1/p2/p3hold labels) plus every works-beat
@@ -676,27 +690,13 @@ export function Hero() {
               .map((t) => t / dur),
           ),
         ).sort((a, b) => a - b);
-        // "close enough to a rest to count as resting on it" — keeps an idle
-        // jiggle or hover from re-triggering a glide.
-        const SNAP_EPS = 0.0015;
-        // Threshold model — position-based, NOT instantaneous scroll direction.
-        // Direction at settle is unreliable under smooth scrolling (a half-drag
-        // down can report "up" as momentum eases), which snapped partial drags
-        // the wrong way. Instead we remember the reveal the reader is parked on
-        // (`lastRest`) and commit to a neighbour as soon as travel from it
-        // crosses a SMALL fraction toward that neighbour — in EITHER direction.
-        // This is the escalator feel: the moment the current text STARTS to
-        // leave (sliding up OR down), we ride to the next/previous reveal in that
-        // same direction. The threshold is deliberately low so a gentle nudge
-        // commits — a half-drag no longer gets yanked back the way it came, which
-        // was the "I scroll up but it still drags me down" bug (thresholds were
-        // 0.5, so anything short of halfway snapped back to where you started).
-        // Below the threshold a stray micro-scroll still eases back to the reveal
-        // you came from. The two thresholds are separate knobs: raise SNAP_REV to
-        // make going back a more deliberate pull than going forward.
-        const SNAP_FWD = 0.15; // fraction toward the NEXT reveal that commits (down)
-        const SNAP_REV = 0.15; // fraction back toward the PREVIOUS that commits (up)
-        let lastRest = rests[0] ?? 0;
+        // The commit model lives in lib/escalatorSnap.ts — shared with /about's
+        // pin so both scrolly-telling rides feel identical. Summary: travel more
+        // than a small ABSOLUTE pixel distance off the reveal you're parked on
+        // and you ride to the next reveal in THAT direction, always. It never
+        // pulls you back onto the text you were leaving (which the old
+        // fraction-of-segment threshold did on the longer segments).
+        const escalator = createEscalatorSnap({ getRests: () => rests });
 
         ScrollTrigger.create({
           animation: scrub,
@@ -716,62 +716,10 @@ export function Hero() {
           invalidateOnRefresh: true,
           // ESCALATOR — the reader can never settle in a blank mid-transition.
           // Wherever a drag stops, glide to a full reveal (phrase risen, or a
-          // works beat formed / clean tunnel — every rest in `rests`). Direction
-          // is set by which way you nudged off the reveal you were parked on:
-          // nudge up → ride up to the previous reveal, nudge down → ride down to
-          // the next, both governed by the low SNAP_FWD/SNAP_REV fraction below.
-          // Short of that fraction → ease back to where you were.
-          snap: {
-            snapTo: (value: number) => {
-              // Already parked on a reveal → stay (ignore idle jiggle/hover).
-              for (const r of rests) {
-                if (Math.abs(r - value) < SNAP_EPS) {
-                  lastRest = r;
-                  return r;
-                }
-              }
-              // Bracket the stop between the reveal below it and the one above.
-              let bi = 0;
-              for (let i = 0; i < rests.length; i++) {
-                if (rests[i] <= value) bi = i;
-                else break;
-              }
-              const below = rests[bi];
-              const above = rests[bi + 1];
-              // Past the last reveal → don't snap; let the reader scroll out of
-              // the pin into the footer. (Above the first is impossible: rest 0
-              // sits at progress 0.)
-              if (above === undefined) return value;
-              const f = (value - below) / (above - below); // 0 at below … 1 at above
-              let target: number;
-              if (below === lastRest) {
-                // moved DOWN out of the parked reveal → commit forward at halfway
-                target = f >= SNAP_FWD ? above : below;
-              } else if (above === lastRest) {
-                // moved UP toward the previous reveal → commit back past halfway
-                target = 1 - f >= SNAP_REV ? below : above;
-              } else {
-                // flicked clear past the adjacent segment → take the nearer reveal
-                target = f >= 0.5 ? above : below;
-              }
-              lastRest = target;
-              return target;
-            },
-            // inertia:false = snapTo receives the CURRENT progress (where the
-            // scroll actually STOPPED), not a velocity-projected landing — the
-            // threshold logic above is purely positional.
-            inertia: false,
-            // The ~200ms WAIT belongs HERE, on the delay: after the drag stops
-            // we hold briefly before the escalator takes over. This is the pause
-            // between "reader let go" and "we commit to a direction" — it is NOT
-            // the glide speed. (Earlier this was 0.04 and the 200ms had leaked
-            // onto the glide instead, making the ride feel instant.)
-            delay: 0.2,
-            // The GLIDE itself is slow + organic — an escalator easing the reader
-            // in and out to the next reveal, not the previous near-instant snap.
-            duration: { min: 0.45, max: 0.8 },
-            ease: "power2.inOut",
-          },
+          // works beat formed / clean tunnel — every rest in `rests`), in the
+          // direction they nudged. See lib/escalatorSnap.ts for the model and
+          // for why the previous fraction-of-segment threshold was wrong.
+          snap: escalator.config,
           // hero is first on the page → refresh before any later pins so
           // pin-spacing stacks in document order (higher number = first)
           refreshPriority: 1,
@@ -785,6 +733,13 @@ export function Hero() {
             heroScroll.progress = self.progress * (scrub.duration() / OLD_UNITS);
             const t = self.progress * scrub.duration();
             armCurves(t >= ARM_T && t < DISARM_T);
+            // Keep the escalator's anchor on the reveal the playhead most
+            // recently passed. Without this the direction test inside snapTo
+            // works off a stale anchor whenever the reader crosses a reveal
+            // without stopping on it (or re-enters the pin from below), and
+            // reports the wrong way. Also feeds it the live pin length so its
+            // commit threshold stays in real scroll pixels.
+            escalator.observe(self.progress, self.end - self.start);
           },
           // /#work glides INTO the pin (no #work element exists on this path) —
           // publish where the chapter intro finishes rising, refreshed with the

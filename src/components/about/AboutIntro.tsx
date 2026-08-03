@@ -4,6 +4,7 @@ import { useRef } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { gsap, ScrollTrigger, useGSAP } from "@/lib/gsap";
+import { createEscalatorSnap } from "@/lib/escalatorSnap";
 import { GameThumb } from "@/components/about/GameThumb";
 
 /**
@@ -179,14 +180,28 @@ export function AboutIntro() {
         // runtime via tl.duration() (the timeline isn't built yet here). A drag
         // that stops mid-transition glides to the neighbouring scene in the
         // direction nudged; short of a small threshold it eases back. Thresholds
-        // and glide timing are IDENTICAL to the hero so both pins feel the same.
+        // and glide timing are IDENTICAL to the hero so both pins feel the same
+        // (both use lib/escalatorSnap.ts — read the header there for the model).
         const REST_UNITS = [
           0, 2.65, 5.35, 7.3, 11.75, 13.6, 15.5, 20.8, 26.0, 28.95, 31.0,
         ];
-        const SNAP_EPS = 0.0015;
-        const SNAP_FWD = 0.15; // fraction toward the NEXT scene that commits
-        const SNAP_REV = 0.15; // fraction back toward the PREVIOUS that commits
-        let lastRest = 0;
+        const escalator = createEscalatorSnap({
+          // tl.duration() isn't known until the timeline below is built, so the
+          // unit→progress conversion is deferred to call time.
+          getRests: () => {
+            const dur = tl.duration() || 1;
+            return REST_UNITS.map((u) => u / dur).sort((a, b) => a - b);
+          },
+        });
+
+        // Short-viewport floor — same reasoning as the hero's PIN_VH_FLOOR: the
+        // pin length was `+=1050%` (10.5 viewport heights), so a short Mac
+        // laptop viewport gave the whole story ~20% fewer scroll pixels than a
+        // 1080p Windows window and the scenes flew past. Floor the height the
+        // pin maths uses. FLOOR ONLY — taller viewports are unchanged, so this
+        // is a no-op on the displays where the pacing already felt right.
+        const PIN_VH_FLOOR = 900;
+        const pinPx = () => Math.round(10.5 * Math.max(window.innerHeight, PIN_VH_FLOOR));
 
         const tl = gsap.timeline({
           defaults: { ease: "none" },
@@ -196,52 +211,21 @@ export function AboutIntro() {
             // total timeline shrank ~36.6→~31.9 units when scene 1's entrance
             // moved to the load intro; pin length drops proportionally so the
             // px-per-unit scroll speed (and every scene's feel) stays identical.
-            end: "+=1050%",
+            // (Was the literal "+=1050%"; now the same 10.5 viewport heights
+            // computed in px so the short-viewport floor above can apply.)
+            end: () => "+=" + pinPx(),
             pin: true,
             scrub: 0.5,
             anticipatePin: 1,
             invalidateOnRefresh: true,
-            // Glide to the nearest composed scene wherever a drag stops.
-            snap: {
-              snapTo: (value: number) => {
-                const dur = tl.duration() || 1;
-                const rests = REST_UNITS.map((u) => u / dur).sort(
-                  (a, b) => a - b,
-                );
-                // Already parked on a scene → stay (ignore idle jiggle).
-                for (const r of rests) {
-                  if (Math.abs(r - value) < SNAP_EPS) {
-                    lastRest = r;
-                    return r;
-                  }
-                }
-                // Bracket the stop between the scene below it and the one above.
-                let bi = 0;
-                for (let i = 0; i < rests.length; i++) {
-                  if (rests[i] <= value) bi = i;
-                  else break;
-                }
-                const below = rests[bi];
-                const above = rests[bi + 1];
-                // Past the last scene → let the reader scroll out into the footer.
-                if (above === undefined) return value;
-                const f = (value - below) / (above - below);
-                let target: number;
-                if (below === lastRest) {
-                  target = f >= SNAP_FWD ? above : below;
-                } else if (above === lastRest) {
-                  target = 1 - f >= SNAP_REV ? below : above;
-                } else {
-                  target = f >= 0.5 ? above : below;
-                }
-                lastRest = target;
-                return target;
-              },
-              inertia: false,
-              delay: 0.2,
-              duration: { min: 0.45, max: 0.8 },
-              ease: "power2.inOut",
-            },
+            // Glide to the composed scene in the direction the reader nudged.
+            snap: escalator.config,
+            // Keeps the escalator's anchor on the scene the playhead last
+            // passed, and feeds it the live pin length so its commit threshold
+            // is measured in real scroll pixels. Without it the direction test
+            // works off a stale anchor and can ride the wrong way.
+            onUpdate: (self) =>
+              escalator.observe(self.progress, self.end - self.start),
           },
         });
 
