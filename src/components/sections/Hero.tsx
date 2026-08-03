@@ -647,19 +647,6 @@ export function Hero() {
         // per-scroll — are IDENTICAL to the pre-works build ON DESKTOP.
         const OLD_UNITS = 5.75;
         const OLD_END_VH = 2.35;
-        // ── Short-viewport floor (the OTHER half of "it's fast on a Mac") ────
-        // The pin's length is a multiple of innerHeight, so the shorter the
-        // viewport the FEWER scroll pixels the same beats get. A 13" MacBook
-        // browser is ~750-800 CSS px once the menu bar, notch inset and browser
-        // chrome are gone; a maximised 1080p Windows window is ~940-950. That
-        // alone compresses the whole hero journey by ~20% on the Mac — and it
-        // compounds with the wheel-delta difference handled in
-        // SmoothScrollProvider. Floor the height the pin maths uses so a short
-        // screen still gets a full-length ride.
-        // FLOOR ONLY: taller viewports are untouched, so Windows/large-display
-        // pacing is byte-identical to before.
-        const PIN_VH_FLOOR = 900;
-        const pinVh = () => Math.max(window.innerHeight, PIN_VH_FLOOR);
         // On touch, only a GENTLE trim of the scroll length. An earlier ~half
         // reduction (1.25) made the whole journey feel hair-trigger sensitive —
         // a small thumb flick jumped several beats. Back to ~10% off the desktop
@@ -670,6 +657,25 @@ export function Hero() {
           typeof window !== "undefined" &&
           window.matchMedia("(pointer: coarse)").matches;
         const endVh = isCoarse ? 2.12 : OLD_END_VH;
+        // ── Short-viewport floor (the OTHER half of "it's fast on a Mac") ────
+        // The pin's length is a multiple of innerHeight, so the shorter the
+        // viewport the FEWER scroll pixels the same beats get. A 13" MacBook
+        // browser is ~750-800 CSS px once the menu bar, notch inset and browser
+        // chrome are gone; a maximised 1080p Windows window is ~940-950. That
+        // alone compresses the whole hero journey by ~20% on the Mac — and it
+        // compounds with the wheel-delta difference handled in
+        // SmoothScrollProvider. Floor the height the pin maths uses so a short
+        // screen still gets a full-length ride.
+        // TWO deliberate limits:
+        //  • FLOOR ONLY — taller viewports are untouched, so Windows and
+        //    large-display pacing is byte-identical to before.
+        //  • FINE POINTERS ONLY — phone viewports are short by nature, and the
+        //    touch travel above was tuned by hand on a real device (2.35→2.12
+        //    after a harder trim went hair-trigger). Applying a desktop-sized
+        //    floor there would silently undo that tuning.
+        const PIN_VH_FLOOR = 900;
+        const pinVh = () =>
+          isCoarse ? window.innerHeight : Math.max(window.innerHeight, PIN_VH_FLOOR);
         const unitPx = () => (pinVh() * endVh) / OLD_UNITS;
 
         // ── Escalator snap: every "full reveal" the pinned timeline holds on —

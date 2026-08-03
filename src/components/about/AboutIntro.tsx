@@ -194,14 +194,22 @@ export function AboutIntro() {
           },
         });
 
-        // Short-viewport floor — same reasoning as the hero's PIN_VH_FLOOR: the
-        // pin length was `+=1050%` (10.5 viewport heights), so a short Mac
-        // laptop viewport gave the whole story ~20% fewer scroll pixels than a
-        // 1080p Windows window and the scenes flew past. Floor the height the
-        // pin maths uses. FLOOR ONLY — taller viewports are unchanged, so this
-        // is a no-op on the displays where the pacing already felt right.
+        // Short-viewport floor — same reasoning (and the same two limits) as the
+        // hero's PIN_VH_FLOOR: the pin length was `+=1050%` (10.5 viewport
+        // heights), so a short Mac laptop viewport gave the whole story ~20%
+        // fewer scroll pixels than a 1080p Windows window and the scenes flew
+        // past. FLOOR ONLY, and FINE POINTERS ONLY — a phone viewport is short
+        // by nature, so flooring it there would stretch the story on mobile for
+        // no reason.
         const PIN_VH_FLOOR = 900;
-        const pinPx = () => Math.round(10.5 * Math.max(window.innerHeight, PIN_VH_FLOOR));
+        const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+        const pinPx = () =>
+          Math.round(
+            10.5 *
+              (isCoarse
+                ? window.innerHeight
+                : Math.max(window.innerHeight, PIN_VH_FLOOR)),
+          );
 
         const tl = gsap.timeline({
           defaults: { ease: "none" },
