@@ -576,7 +576,18 @@ export function Hero() {
             "p2in-=0.55", // together with phrase 2 rising in (same start as slide)
           )
           .addLabel("p2hold") // phrase 2 fully risen — escalator rest point
-          .to({}, { duration: 0.5 }) // hold — curves stay out through phrase 3
+          // ⚠️ NO DWELL SPACER HERE. There used to be a `.to({}, {duration: 0.5})`
+          // between the rest and the transition that leaves it. A spacer is
+          // scroll distance in which NOTHING animates, and since the rest sits at
+          // its START, every flick off phrase 2 burned ~203px (~470ms at
+          // 430px/s) before the reader saw anything move — "the gap between the
+          // flick register and next beat is still too much". Each phrase had a
+          // different spacer (0.5 / 0.35 / 0.3 units), which is also why the
+          // delay felt random per beat.
+          // The escalator makes dwell time free: the reader PARKS on the rest for
+          // as long as they like, so buying dwell with scroll distance only ever
+          // costs responsiveness. Keep every rest flush against the transition
+          // that leaves it.
           // phrase 2 → 3 — same yPercent + opacity crossfade as p1→2
           .fromTo(
             linesOf(1),
@@ -600,7 +611,8 @@ export function Hero() {
             "<0.35",
           )
           .addLabel("p3hold") // phrase 3 fully risen — escalator rest point
-          .to({}, { duration: 0.35 }) // brief hold on phrase 3
+          // (no dwell spacer — see the note at p2hold. `outro` is therefore the
+          // same instant as p3hold, so leaving phrase 3 moves immediately.)
           .addLabel("outro")
           // phrase 3 recedes into the tunnel — the dark scene STAYS (no white
           // wipe anymore); the works chapter takes the stage next
@@ -735,13 +747,14 @@ export function Hero() {
           pinType: isCoarse ? "fixed" : undefined,
           anticipatePin: isCoarse ? 0 : 1,
           // ⚠️ Scrub is SMOOTHING LAG — the timeline trails the scroll by up to
-          // this many seconds. On desktop the drive already eases the scroll
-          // itself, so 0.8 was pure latency stacked on top: the reader flicked,
-          // the scroll moved, and the TEXT lagged most of a second behind it
-          // ("reduce the gap between the flick detection and action"). 0.25
-          // still de-jitters without being felt. Touch keeps 0.8 — there the
-          // scroll is raw native momentum and the smoothing is doing real work.
-          scrub: smooth ? 0.25 : 0.8,
+          // this many seconds. On desktop the drive ALREADY eases the scroll
+          // itself, so any scrub value is pure latency stacked on top: at 0.8
+          // the scroll moved and the text trailed most of a second behind it.
+          // `true` links the timeline directly to the scroll — zero added lag,
+          // and no jitter to smooth away because Lenis' output is already
+          // smooth. Touch keeps 0.8: there the scroll is raw native momentum
+          // and the smoothing is doing real work.
+          scrub: smooth ? true : 0.8,
           invalidateOnRefresh: true,
           // ESCALATOR — the reader can never settle in a blank mid-transition.
           // Wherever a drag stops, glide to a full reveal (phrase risen, or a

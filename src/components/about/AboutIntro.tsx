@@ -225,9 +225,9 @@ export function AboutIntro() {
             end: () => "+=" + pinPx(),
             pin: true,
             // Same reasoning as the hero: on desktop the drive already eases
-            // the scroll, so scrub smoothing on top is just lag between the
+            // the scroll, so scrub smoothing on top is pure lag between the
             // gesture and the scene reacting. Touch keeps the original 0.5.
-            scrub: isCoarse ? 0.5 : 0.25,
+            scrub: isCoarse ? 0.5 : true,
             anticipatePin: 1,
             invalidateOnRefresh: true,
             // Glide to the composed scene in the direction the reader ASKED

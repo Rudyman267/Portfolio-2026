@@ -318,20 +318,39 @@ works heading sits between the two LONGEST gaps in the journey, so it was the on
 into AND out of far above everything else's pace. Cap is now **3.0s**; nothing clamps.
 
 **THE MEASURED HERO — the real rest table** (read out of a live production build; pin spacer
-**7745px**, timeline **19.1 units**, **12 rests**, **4 beats** not 5). Keep this: deriving it from
+**7249px**, timeline **17.75 units**, **8 rests**, 4 project beats). Keep this: deriving it from
 the tween durations by hand was attempted twice and was wrong both times.
-| # | unit | px | gap | ride @430 | what it is |
+| # | unit | px | gap | ride | what it is |
 |---|---|---|---|---|---|
 | 0 | 0 | 0 | — | — | p1hold — "I AM A PRODUCT—DESIGN BUILDER" |
-| 1 | 1.77 | 718 | 718 | 1.67s | p2hold — "I TURN IDEAS—INTO CODE" |
-| 2 | 4.04 | 1638 | 920 | 2.14s | p3hold — "DESIGNING THE AGE OF INTELLIGENCE" |
-| 3 | 6.65 | 2697 | 1059 | 2.46s | **"HERE'S SOME OF MY WORK"** (`worksStart + 1.1`) |
-| 4 | 9.73 | 3945 | 1248 | 2.90s | project 1 window ← **the longest gap in the site** |
-| 5 | 10.4 | 4217 | 272 | 0.9s | clean tunnel (beat exit; hits the MIN floor, 302 px/s) |
-| 6–11 | … | … | 904 / 272 | 2.10s / 0.9s | projects 2–4, each preceded by a tunnel rest |
-`worksStart` = 5.55 units, so p3hold → worksStart is 1.51 units of phrase-3 exit before the
-heading even begins to rise. The heading and phrase 3 are NOT overlapped — the fused feeling was
-purely the capped ride speed.
+| 1 | 1.77 | 723 | 723 | 1.68s | p2hold — "I TURN IDEAS—INTO CODE" |
+| 2 | 3.54 | 1446 | 723 | 1.68s | p3hold — "DESIGNING THE AGE OF INTELLIGENCE" |
+| 3 | 5.60 | 2287 | 841 | 1.96s | **"HERE'S SOME OF MY WORK"** (`worksStart + 0.9`) |
+| 4 | 8.38 | 3422 | 1135 | 2.64s | project 1 window |
+| 5–7 | 11.28 / 14.18 / 17.08 | … | 1184 | 2.75s | projects 2–4 |
+
+**Every gap runs at 429–431 px/s** and the longest ride (2.75s) clears the 3.0s cap. There is no
+rest after project 4, so the reader free-scrolls the last ~274px out of the pin into the footer.
+
+⚠️ **NO REST ON THE BLANK TUNNEL.** There used to be a second snapSpan per beat at `E + EXIT` —
+the clean tunnel after a card exits. It is a legitimate stopping point that shows NOTHING (the bare
+shader, no card), so a flick off a case study parked the reader on an empty screen: *"a flick back
+up sometimes just shows the empty shaders in the background and stays in that limbo"* — on desktop
+too. Gone; the neighbouring project window is now the next rest either way, so one flick carries the
+current study out AND the next one in. The heading had already had its blank-tunnel rest removed for
+exactly this reason; the two were inconsistent and the beat one was wrong.
+
+⚠️⚠️ **NEVER PUT A DWELL SPACER BETWEEN A REST AND THE TRANSITION THAT LEAVES IT.** Empty
+`.to({}, {duration})` tweens sat right after `p2hold` (0.5u), `p3hold` (0.35u) and the works heading
+(0.5u). A spacer is scroll distance in which NOTHING animates, and because the rest sat at its
+START, every flick burned it before anything moved — 203px/~470ms, 142px/~330ms, 122px/~280ms
+respectively, while the project beats (rest at `E-0.07`) were already seamless at ~66ms. That is
+both *"the gap between the flick register and next beat is still too much"* AND the earlier *"the
+delays are random too for each beat"* — the delay differed per beat because the spacers did.
+**The escalator makes dwell FREE: the reader parks on a rest indefinitely.** Buying dwell with
+scroll distance only ever costs responsiveness. All three are deleted; every rest is now flush
+against its outgoing transition. (This is also why the pin shrank 7745→7249 and the timeline
+19.1→17.75 units.)
 
 #### ⚠️⚠️ LAZY vs FREE — the PUSH model (`escalatorDrive`'s single most important idea)
 The brief: *"I want the escalator to help only when I am lazy scrolling — that's what's happening
@@ -396,9 +415,12 @@ places, and BOTH had to go:
   here — "don't make it bounce" is an explicit part of the brief.)
 - **`scrub` is SMOOTHING LAG** — the timeline trails the scroll by up to that many seconds. The
   hero ran **0.8**, which on desktop is pure latency stacked on a scroll the drive is already
-  easing: the scroll moved and the TEXT lagged most of a second behind it. Desktop is now **0.25**
-  (hero and /about). **Touch keeps its original values** (0.8 / 0.5) — there the scroll is raw
-  native momentum and the smoothing is doing real work.
+  easing: the scroll moved and the TEXT lagged most of a second behind it. Desktop is now
+  **`scrub: true`** (direct link, zero added lag) on both the hero and /about — there is no jitter
+  to smooth away, because Lenis' output is already smooth. **Touch keeps its original values**
+  (0.8 / 0.5) — there the scroll is raw native momentum and the smoothing is doing real work.
+- ⚠️ The biggest contributor was NEITHER of these — it was the dwell spacers. See the rest table
+  above.
 
 **Handback** is `lenis.stop(); lenis.start();` — both public API, both running Lenis' internal
 `reset()`, which clears the lock, halts the ride tween and re-seats Lenis on the real scroll

@@ -490,7 +490,10 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
         { yPercent: 0, duration: 0.9, ease: "power2.out", immediateRender: false },
         "<",
       )
-      .to({}, { duration: 0.5 }) // hold
+      // ⚠️ NO DWELL SPACER — same reason as the hero's phrase rests (see the
+      // note at `p2hold` in Hero.tsx). The rest below sits where the line
+      // finishes rising, so a flick off "HERE'S SOME OF MY WORK" starts moving
+      // it out immediately instead of burning ~120px of dead scroll first.
       .fromTo(
         introLine,
         { yPercent: 0 },
@@ -505,17 +508,23 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
     introGuards.push(() => {
       const t = tl.time();
       // visible only for the intro's own span; hidden everywhere else
-      const inSpan = t >= worksStart && t <= worksStart + 2.1;
+      // 0.9 rise + 0.7 exit = 1.6 (was 2.1, which included a dwell spacer that
+      // has since been removed). Keep this flush with the intro's real end —
+      // any slack is a window where a dropped end-state could leave this
+      // full-viewport layer sitting over the first project beat.
+      const inSpan = t >= worksStart && t <= worksStart + 1.6;
       const cs = getComputedStyle(intro);
       if (!inSpan && (cs.visibility !== "hidden" || +cs.opacity > 0.01)) {
         gsap.set(intro, { autoAlpha: 0 });
       }
     });
-    // resting mid-intro settles on the fully-risen line (hold runs 0.9→1.4).
+    // Rest exactly where the line finishes rising (0.9) — which is also where
+    // its exit begins, so the reader parks on the fully-risen headline and a
+    // flick moves it out on the first frame.
     snapSpans.push({
       from: worksStart + 0.15,
-      to: worksStart + 1.35,
-      rest: worksStart + 1.1,
+      to: worksStart + 0.9,
+      rest: worksStart + 0.9,
     });
     // NO blank-tunnel rest after the heading exits. There used to be a rest at
     // worksStart + 2.1 (heading gone, first node not yet in flight) — so leaving
@@ -581,12 +590,24 @@ export function addWorksBeats(tl: gsap.core.Timeline, root: HTMLElement) {
     const M = T + SPAWN - morphLead; // morph begins during the arrival glide
     const E = M + morphDur + HOLD; // exit
 
-    // Handhold spans: settle anywhere in the flight/morph → auto-glide to the
-    // fully-dressed window (just before the exit tween); settle mid-exit →
-    // carry the departure through to the clean tunnel. A beat can never be
-    // left half-morphed on screen (the mobile half-scroll complaint).
+    // ONE rest per beat: the fully-dressed window, just before the exit tween.
+    // Settle anywhere in the flight/morph and the escalator glides here, so a
+    // beat can never be left half-morphed on screen (the mobile half-scroll
+    // complaint).
     snapSpans.push({ from: T + 0.05, to: E, rest: E - 0.07 });
-    snapSpans.push({ from: E, to: E + EXIT, rest: E + EXIT });
+    // ⚠️ NO REST ON THE CLEAN TUNNEL AFTER THE EXIT (there used to be one at
+    // `E + EXIT`). It is a legitimate stopping point that shows NOTHING — the
+    // bare shader with no card — so a flick off a case study parked the reader
+    // on an empty screen: "a flick back up sometimes just shows the empty
+    // shaders in the background and stays in that limbo". It was a rest on
+    // desktop too; the same flick up from project 2 landed there.
+    // Without it, the next rest either way is the neighbouring project window,
+    // so one flick carries the current study out AND the next one in as a
+    // single content-to-content ride.
+    // This is exactly the call already made for "HERE'S SOME OF MY WORK" (see
+    // the note further up) — the two were inconsistent, and this is the one
+    // that was wrong. The half-exit guard below is what keeps a beat clean
+    // mid-flight; it never depended on this rest existing.
 
     tl
       // summon: beat becomes visible, node fades/deblurs in while the ticker
