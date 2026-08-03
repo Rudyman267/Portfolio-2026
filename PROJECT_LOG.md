@@ -229,11 +229,15 @@ npm run typegen     # sanity schema extract + typegen generate → src/types/san
 
 ## 6. Current State (as of Session 26)
 
-**Status (as of Session 26): LIVE ON `rudyman.com`. The scrolly-telling scroll model on the home
-hero and `/about` was rebuilt from the ground up after four failed threshold-based attempts — the
-reader's WHEEL EVENT now drives the escalator directly on desktop, ScrollTrigger's `snap` is off
-there entirely, and pacing is a single px/sec knob.** Five commits (`c4c7052`, `5b7f15c`,
-`f4b0710`, `a385d0a`, `fcbf1ce`), all pushed and verified live.
+**Status (as of Session 26): LIVE ON `rudyman.com`. Two things shipped.**
+1. **The scrolly-telling scroll model on the home hero and `/about` was rebuilt from the ground
+   up**, after four failed threshold-based attempts. On desktop the reader's WHEEL EVENT drives the
+   escalator directly, ScrollTrigger's `snap` is off there entirely, **one gesture is worth exactly
+   one beat**, sustained scrolling hands the whole scroll back, and pacing is a single px/sec knob.
+2. **New brand marks** — a bare Tanker "R" favicon and a link-preview card that restages the hero.
+
+**12 commits** (`c4c7052` → `9724df3`), all pushed and each verified live by grepping the served
+bundle for the exact minified expression from the local build.
 **THE LINK TO SHARE IS `https://rudyman.com`.**
 
 ### 🥇 THE SCROLL ESCALATOR — REBUILT — Session 26
@@ -1988,8 +1992,10 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 000000. **🥇 FEEL THE SCROLL ESCALATOR ON REAL HARDWARE — nothing about it has been felt yet.**
     The Session 26 rebuild is simulation-verified only (see §6 "VERIFICATION — WHAT WAS AND WAS NOT
     PROVEN"). The decision logic is proven; the animation under real input is not.
-    a. **MacBook + Windows desktop:** one wheel notch / one trackpad flick should advance exactly
-       ONE reveal on both, at the same pace, with no bounce and no waiting gap. If a Mac still runs
+    a. **MacBook + Windows desktop:** one flick — however many wheel notches it contains — should
+       advance exactly ONE beat on both, at the same pace, starting on the first event with no
+       bounce and no waiting gap. Then: keep scrolling and it should hand the scroll back (free
+       scroll), and stopping should re-seat you forward onto the next beat. If a Mac still runs
        away, **check macOS Accessibility → "Reduce motion" first** — it disables Lenis entirely and
        makes `wheelMultiplier` a no-op.
     b. **Pace:** `RIDE_PX_PER_S` (430 px/s) is the ONE knob. Lower = slower. ⚠️ If you lower it,
@@ -2180,8 +2186,9 @@ The home hero is a dark, cinematic, single-section experience built from Figma (
 ## 8. Session History
 
 ### Session 26 — 2026-08-03
-**Rebuilt the scrolly-telling scroll model on the home hero + /about. Five commits, all pushed and
-confirmed live on `rudyman.com`. Full technical account in §6 "THE SCROLL ESCALATOR — REBUILT".**
+**Rebuilt the scrolly-telling scroll model on the home hero + /about, then replaced the favicon and
+link-preview card. 12 commits, all pushed and confirmed live on `rudyman.com`. Full technical
+account in §6 "THE SCROLL ESCALATOR — REBUILT" and "BRAND MARKS + LINK PREVIEW".**
 
 The user reported two things: the escalator dragged them BACK onto the text they were leaving, and
 the hero scrolled far too fast on a MacBook (Windows felt fine). The first four commits all failed
@@ -2219,6 +2226,28 @@ the same way, and the honest summary is that **three of them were the same mista
 `reset()` clears the lock before `onComplete`, so it can't strand the page; `stopPropagation` not
 `stopImmediatePropagation`, so our listener does fire).
 
+**Then six more rounds, each a real defect the previous fix had introduced or exposed:**
+- `40e0abd` — scroll freedom: a second gesture mid-ride hands the scroll back. *(Broke on a mouse
+  wheel — see below.)*
+- `3ba2fcc` — **the PUSH model.** That handover rule fired on EVERY wheel notch (they are all
+  >100ms apart), so it handed over, re-armed and handed over again: *"a lot of hiccups and friction,
+  and the delays are random too for each beat."*
+- `4fbf60d` — flick = one reveal again; free scrolling re-keyed onto **momentum decay** instead of
+  counting events; ease `power2.inOut` → `power2.out` and desktop `scrub` cut, after *"reduce the
+  gap between the flick detection and action."*
+- `df41fa2` — **removed the blank-tunnel rest and the dwell spacers.** A flick up from a case study
+  parked the reader on the bare shader (*"stays in that limbo"*), and every rest sat at the START of
+  an empty spacer, so each flick burned 280–470ms before anything moved. Desktop `scrub: true`.
+- `d4bd1aa` — **one burst = one beat.** Letting each push extend the ride meant a 3-notch flick
+  advanced 3 beats (*"I am now skipping two beats in one flick"*). `PUSH_GAP_MS` deleted rather than
+  retuned — counting events at ANY threshold was the bug.
+- `9724df3` — favicon + OG card (see §6).
+
+⚠️ **The through-line of the whole session: every rule that COUNTED or THRESHOLDED something about
+the input was wrong, three times over.** What worked was asking a different question each time —
+what DIRECTION did the wheel event carry, is this ONE gesture or a new one, and is the input
+DECAYING or sustained.
+
 **Method notes worth keeping:**
 - Each attempt was checked by **simulating the model in node** with stubbed input (802 position/
   intent pairs; fake 120Hz macOS momentum streams). This is what caught that a Mac flick would
@@ -2232,6 +2261,17 @@ the same way, and the honest summary is that **three of them were the same mista
   the local build (e.g. `window.scrollY)/430`). ⚠️ Two earlier markers false-positived — `Spacebar`
   collides with React's key map, and a bare `430` matches anything. Pick a marker, then verify it
   appears in the local build output first.
+- ⚠️ **MEASURE, DON'T DERIVE.** The hero's rest table was hand-derived from tween durations twice
+  and was wrong both times. Temporarily exposing `rests` on `window`, reading it out of a real
+  production build and reverting took two minutes, settled it, and immediately explained a bug (the
+  ride cap) that theory had not.
+- ⚠️ **RUN EVERY NEW REPRO AGAINST THE OLD BUILD FIRST.** One "confirmed" diagnosis this session (a
+  momentum-tail double-step) had a repro that PASSED on the already-shipped code — the only reason
+  it was caught as wrong before shipping a fix for a bug that did not exist.
+- **Link previews cache the WHOLE unfurl**, not just the image: after the new card shipped, chat
+  apps still showed the old title, description AND image, while a crawler-UA fetch of the live site
+  returned all three new. Purge via LinkedIn Post Inspector / Meta Sharing Debugger; Google Chat,
+  Gmail and iMessage have no tool — share `rudyman.com/?v=2` to force a fresh fetch.
 - User also asked how to re-add expired GitHub/Vercel tokens; **the GitHub token turned out to
   still be valid** (classic PAT, `repo` scope, write confirmed via `gh api .../git/refs`), and no
   Vercel token is needed at all — the GitHub App integration is what deploys on push.
