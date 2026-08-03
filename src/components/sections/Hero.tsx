@@ -734,7 +734,14 @@ export function Hero() {
           // flash. Desktop keeps the default (transform) pin + anticipatePin.
           pinType: isCoarse ? "fixed" : undefined,
           anticipatePin: isCoarse ? 0 : 1,
-          scrub: 0.8,
+          // ⚠️ Scrub is SMOOTHING LAG — the timeline trails the scroll by up to
+          // this many seconds. On desktop the drive already eases the scroll
+          // itself, so 0.8 was pure latency stacked on top: the reader flicked,
+          // the scroll moved, and the TEXT lagged most of a second behind it
+          // ("reduce the gap between the flick detection and action"). 0.25
+          // still de-jitters without being felt. Touch keeps 0.8 — there the
+          // scroll is raw native momentum and the smoothing is doing real work.
+          scrub: smooth ? 0.25 : 0.8,
           invalidateOnRefresh: true,
           // ESCALATOR — the reader can never settle in a blank mid-transition.
           // Wherever a drag stops, glide to a full reveal (phrase risen, or a

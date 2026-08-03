@@ -338,30 +338,39 @@ The brief: *"I want the escalator to help only when I am lazy scrolling — that
 currently, it's perfect. Just when I scroll freely let me do that without getting me stuck at
 beats."*
 
-A **push** is one deliberate shove of the input device — an event separated from the last by more
-than `PUSH_GAP_MS` (45ms). Counting pushes is the ONLY discriminator that works on both devices,
-because their event streams are nothing alike:
-| device | one physical gesture emits | so a push is |
-|---|---|---|
-| mouse wheel | ONE event per notch, ~80–200ms apart | every notch |
-| trackpad | HUNDREDS of events ~8ms apart (fingers, then a momentum tail running 1s+ after they lift) | the first event only |
+The devices' event streams are nothing alike, and everything in `escalatorDrive` exists to paper
+over that:
+| device | one physical gesture emits |
+|---|---|
+| mouse wheel | ONE event per notch. A **flick** is a fast spin, ~20–80ms apart; deliberate single notches are 120ms+ |
+| trackpad | HUNDREDS of events ~8ms apart — the fingers, then a momentum tail running 1s+ after they lift |
 
-- **push 1** → ride to the next reveal (the escalator — lazy scrolling)
-- **push 2+ in the same burst** → hand the scroll back, stay out of the way (free scrolling)
-- a burst ends after `BURST_END_MS` (500ms) of silence, which re-arms the escalator
+**Two ideas, and they do different jobs:**
+1. **PUSH** — an event more than `PUSH_GAP_MS` (**90ms**) after the last = one request for one more
+   reveal. Sized so **a flick is a SINGLE push on either device**, because *"when I flick just take
+   me to the next one."* Momentum at ~8ms can never manufacture one.
+2. **SUSTAIN** — when to stop helping. **NOT a push count.** The one thing that truly separates a
+   flick from real scrolling is that **momentum DECAYS and a reader still scrolling does not**:
+   `t - burstStart > FREE_AFTER_MS (400) && |delta| >= burstPeak * SUSTAIN_RATIO (0.5)`.
+   At 400ms a flick's tail is ~25% of its peak; a wheel spin is still at 100%. The time gate also
+   covers a flick's own ramp-up, where delta is by definition at the running peak.
 
-⚠️ **A FAILED VERSION IS WHY THIS IS WRITTEN DOWN.** The first attempt used "a second *gesture*
-(>100ms gap) hands over". On a trackpad that is fine; **on a MOUSE WHEEL every notch is >100ms
-apart**, so it handed over, re-armed, and handed over again on literally every notch — reported as
-*"a lot of hiccups and friction... and the delays are random too for each beat."* Momentum at ~8ms
-can never fake a push, which is exactly what makes the 45ms threshold work for both.
+```
+push                → ride to the next reveal (the escalator)
+push again mid-ride → carry one reveal further, uninterrupted
+sustained input     → hand the scroll back (free scrolling)
+```
+A burst ends after `BURST_END_MS` (500ms) of silence, re-arming the escalator.
 
-⚠️ **A trackpad cannot make a second push by gap alone** (its momentum leaves no holes), so a
-**delta spike** counts as a push too — momentum decays monotonically, so a big delta right after
-small ones is a fresh shove. Two guards stop it misfiring and BOTH are needed: a flick **ramps up**
-over its first ~150ms (2→8→25…) which looks exactly like a spike, so spikes are ignored for the
-first `RAMP_MS` (220ms) of a **burst**; and the spike must follow genuinely small deltas
-(`lastAbs < 12`), not a mid-ramp step up.
+⚠️ **TWO COUNT-BASED VERSIONS FAILED FIRST — that is why this is spelled out.**
+- *"a second **gesture** (>100ms gap) hands over"* — fine on a trackpad, broken on a mouse wheel
+  where **every notch is >100ms apart**: it handed over, re-armed and handed over again on each
+  notch → *"a lot of hiccups and friction, and the delays are random too for each beat."*
+- *"**3 pushes** hands over"* (with `PUSH_GAP_MS` 45) — a fast 3-notch flick counted as 3 pushes,
+  tripped free mode, **cancelled its own ride** and stalled waiting to re-seat → *"when I flick the
+  gap is too long between the transition."*
+The sustain test also subsumed a bolt-on "delta spike + ramp guard" heuristic that existed only to
+catch a second trackpad flick arriving mid-momentum; that whole mechanism is gone.
 
 ⚠️ **A push while a ride is in flight EXTENDS the journey — it must not be swallowed.** `step()`
 counts from `target`, not the live position, so a nudge mid-ride rides one reveal further. Dropping
@@ -369,22 +378,38 @@ this was the *"waits for the scene to set before going next"* complaint: rides r
 reader who nudged again during one got nothing at all. (Repeated pushes inside one burst never
 reach this path — they hand the scroll back instead.)
 
-**Re-seating.** After free scrolling stops, the reader is glided onto the next reveal in the
-direction they were already travelling, so they are never parked mid-transition. This is the ONE
-place the file waits for the scroll to settle, and it is safe where ScrollTrigger's snap was not,
-because the direction is the reader's own last input — it can only carry them ONWARD. It polls
-`lenis.isScrolling` first; firing while Lenis is still easing makes the two fight.
+**Re-seating.** After free scrolling stops (`RESEAT_DELAY_MS`, 260ms), the reader is glided onto
+the next reveal in the direction they were already travelling, so they are never parked
+mid-transition. Safe where ScrollTrigger's snap was not, because the direction is the reader's own
+last input — it can only carry them ONWARD. ⚠️ It used to ALSO poll until `lenis.isScrolling` went
+false, i.e. wait out Lenis' ~1.1s ease on top — up to ~1.5s of nothing, and a wait whose length
+varied with how hard the reader had scrolled. Gone: `scrollTo` with `force` simply replaces Lenis'
+in-flight animation, so there is nothing to wait for.
+
+#### ⚠️ LATENCY: "reduce the gap between the flick detection and action"
+The ride starts on the very first wheel event — the felt delay was entirely downstream, in two
+places, and BOTH had to go:
+- **the ride's ease was `power2.inOut`**, which is nearly stationary for its first ~15%: on a
+  1.7–3s ride that is ~300ms of the reader seeing nothing after their flick. Now **`power2.out`** —
+  moves at once, eases into the reveal. It also matches Lenis' own easeOutExpo, so a ride reads
+  like the page's normal scrolling rather than a separate animation. (Never a back/elastic ease
+  here — "don't make it bounce" is an explicit part of the brief.)
+- **`scrub` is SMOOTHING LAG** — the timeline trails the scroll by up to that many seconds. The
+  hero ran **0.8**, which on desktop is pure latency stacked on a scroll the drive is already
+  easing: the scroll moved and the TEXT lagged most of a second behind it. Desktop is now **0.25**
+  (hero and /about). **Touch keeps its original values** (0.8 / 0.5) — there the scroll is raw
+  native momentum and the smoothing is doing real work.
 
 **Handback** is `lenis.stop(); lenis.start();` — both public API, both running Lenis' internal
 `reset()`, which clears the lock, halts the ride tween and re-seats Lenis on the real scroll
 position so it picks up that very event. ⚠️ `reset()` kills the tween, so `onComplete` NEVER fires
 — `land()` must be called by hand or `riding` sticks and the pin goes dead.
 
-**Verified by simulation** (both device profiles, real measured rest table): one trackpad flick and
-one mouse notch each give exactly 1 ride and 0 handbacks; notch-wait-notch stays lazy; 8 continuous
-notches give 1 ride then ONE handback then free events, then a forward re-seat onto a real reveal;
-a second flick during a momentum tail frees via the spike; a lazy notch during a long ride extends
-onward; all 11 hero gaps still run at 430 px/s; direction never violated.
+**Verified by simulation** (both device profiles, real measured rest table): a trackpad flick, a
+3-notch @35ms wheel flick, a 5-notch @60ms spin and a single notch each give exactly **1 reveal, 0
+handbacks, 0 free events**; two separate flicks give 2 reveals; 12 notches over 1.6s go FREE with
+ONE handback then re-seat forward onto a real reveal; 4 back-to-back trackpad flicks go FREE; all
+11 hero gaps still one-flick-one-reveal; direction never violated.
 
 #### Also shipped in this run
 - **macOS wheel normalisation** — `SmoothScrollProvider` now passes `wheelMultiplier` (0.55 → then

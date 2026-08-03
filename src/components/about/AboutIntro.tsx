@@ -224,7 +224,10 @@ export function AboutIntro() {
             // computed in px so the short-viewport floor above can apply.)
             end: () => "+=" + pinPx(),
             pin: true,
-            scrub: 0.5,
+            // Same reasoning as the hero: on desktop the drive already eases
+            // the scroll, so scrub smoothing on top is just lag between the
+            // gesture and the scene reacting. Touch keeps the original 0.5.
+            scrub: isCoarse ? 0.5 : 0.25,
             anticipatePin: 1,
             invalidateOnRefresh: true,
             // Glide to the composed scene in the direction the reader ASKED

@@ -23,46 +23,44 @@
  * branch scrolls the reader backwards against their own gesture. Direction here
  * comes from the wheel event's own `deltaY` and nothing else.
  *
- * ── PUSHES: the one idea this file turns on ─────────────────────────────────
- * A "push" is one deliberate shove of the input device. Counting them is what
- * separates lazy from active, and it is the ONLY thing that works across both
- * devices, because their event streams are nothing alike:
+ * ── The two ideas this file turns on ────────────────────────────────────────
+ * The devices' event streams are nothing alike, and everything here exists to
+ * paper over that:
+ *   • MOUSE WHEEL — one event per notch. A flick is a fast spin, ~20-80ms
+ *     apart; deliberate single notches are 120ms+.
+ *   • TRACKPAD — ONE flick emits hundreds of events ~8ms apart: the fingers,
+ *     then a momentum tail running over a second after they lift.
  *
- *   • MOUSE WHEEL — every notch is its own physical push, arriving ~80-200ms
- *     apart. One notch is a lazy scroll. Several in a row means the reader is
- *     actually scrolling.
- *   • TRACKPAD — ONE flick emits hundreds of events ~8ms apart (the fingers,
- *     then a momentum tail that runs on for over a second after they lift).
- *     All of that is a SINGLE push.
+ * 1. A **PUSH** — an event more than `PUSH_GAP_MS` after the last — is one
+ *    request for one more reveal. The threshold is sized so a FLICK IS A SINGLE
+ *    PUSH on either device, because *"when I flick just take me to the next
+ *    one"*. Momentum at ~8ms can never manufacture one.
+ * 2. **SUSTAIN** decides when to stop helping — see FREE_AFTER_MS /
+ *    SUSTAIN_RATIO. Not a count of pushes: the one thing that truly separates a
+ *    flick from real scrolling is that **momentum decays and a reader still
+ *    scrolling does not.**
  *
- * So a push is an event separated from the last by more than `PUSH_GAP_MS`.
- * Momentum, at ~8ms spacing, can never manufacture one — which is why the
- * previous "a second gesture hands over" version fell apart on a mouse wheel:
- * it treated the ~120ms between notches as a fresh gesture and so handed over,
- * re-armed, and handed over again on every single notch. That is exactly the
- * reported *"hiccups and friction, and the delays are random for each beat."*
- *
- *   push 1  → ride to the next reveal (the escalator; lazy scrolling)
- *   push 2+ → hand the scroll back and stay out of the way (free scrolling)
+ *   push                → ride to the next reveal (the escalator)
+ *   push again mid-ride → carry one reveal further, uninterrupted
+ *   sustained input     → hand the scroll back (free scrolling)
  *
  * A burst ends after `BURST_END_MS` of silence, which re-arms the escalator. So
- * one notch and stop = carried. Keep spinning the wheel = free. Wait, then one
- * notch = carried again.
+ * one flick and stop = carried. Keep scrolling = free. Wait, then flick again =
+ * carried again.
  *
- * ⚠️ A trackpad can't make a second push by gap alone (its momentum is still
- * streaming), so a DELTA SPIKE counts as a push too: momentum decays
- * monotonically, so a big delta right after small ones is a fresh shove. Two
- * guards stop that misfiring and BOTH are needed — a flick RAMPS UP over its
- * first ~150ms (2→8→25…), which looks exactly like a spike, so spikes are
- * ignored for the first `RAMP_MS` of a burst; and the spike must follow
- * genuinely small deltas, not a mid-ramp step up.
+ * ⚠️ A COUNT-BASED RULE IS WHY THIS IS SPELLED OUT. "A second gesture (>100ms
+ * gap) hands over" is fine on a trackpad and broken on a mouse wheel, where
+ * every notch is >100ms apart: it handed over, re-armed and handed over again
+ * on each notch — *"a lot of hiccups and friction, and the delays are random
+ * too for each beat."* Then "3 pushes hands over" made a fast 3-notch flick
+ * cancel its own ride and stall — *"when I flick the gap is too long between
+ * the transition."*
  *
  * ── Re-seating ──────────────────────────────────────────────────────────────
  * After free scrolling stops, the reader is glided to the next reveal in the
  * direction they were already travelling, so they are never left parked
- * mid-transition. This is the ONE place this file waits for the scroll to
- * settle — and it is safe where ST's snap was not, because the direction is the
- * reader's own last input, so it can only ever carry them ONWARD.
+ * mid-transition. Safe where ScrollTrigger's snap was not, because the
+ * direction is the reader's own last input — it can only carry them ONWARD.
  *
  * ── How it stays out of Lenis' way ──────────────────────────────────────────
  * A ride is `lenis.scrollTo(..., { lock: true })`. `Animate.fromTo` calls
@@ -119,31 +117,71 @@ const RIDE_MIN_S = 0.9;
 const RIDE_MAX_S = 3.0;
 
 /**
- * Minimum spacing for an event to count as its own PUSH. Above a trackpad's
- * ~8ms event stream (so momentum can never fake one), well below the ~80-200ms
- * between mouse-wheel notches (so every notch counts as one).
+ * Minimum spacing for an event to count as its own PUSH — i.e. as a request for
+ * one more reveal.
+ *
+ * ⚠️ Sized so a FLICK IS ONE PUSH. A mouse-wheel flick is a fast spin whose
+ * notches land ~20-80ms apart; at the old 45ms those counted as 2-3 separate
+ * pushes and a flick travelled 2-3 reveals. The brief is *"when I flick just
+ * take me to the next one"* — the same single-reveal ride the reader already
+ * called perfect. Deliberate individual notches (120ms+) are still pushes, and
+ * a trackpad's ~8ms momentum stream still can't fake one.
  */
-const PUSH_GAP_MS = 45;
+const PUSH_GAP_MS = 90;
 
 /** Silence that ends a burst and re-arms the escalator. */
 const BURST_END_MS = 500;
 
-/** Pushes in one burst before the reader is given the scroll back. */
-const FREE_AFTER_PUSHES = 2;
+/**
+ * ── WHAT SEPARATES A FLICK FROM ACTUALLY SCROLLING ──────────────────────────
+ * Not the number of events, and not their spacing — **momentum DECAYS, and a
+ * reader who is still scrolling does not.**
+ *
+ * A trackpad flick peaks the instant the fingers leave and then falls away for
+ * a second or more. Sustained input — spinning a wheel, or swiping again and
+ * again — keeps returning to full strength. So free scrolling is handed over
+ * when a burst is still delivering near-peak deltas after FREE_AFTER_MS:
+ *
+ *     t - burstStart > FREE_AFTER_MS  &&  |delta| >= burstPeak * SUSTAIN_RATIO
+ *
+ * At 400ms a flick's tail is ~25% of its peak (well under the ratio) while a
+ * wheel spin is still at 100%. The time gate also covers a flick's own RAMP-UP,
+ * where delta is by definition at the running peak.
+ *
+ * This replaced a push-count rule plus a bolt-on "delta spike" heuristic with
+ * its own ramp guard — the sustain test subsumes both, including a second
+ * trackpad flick arriving while the first one's momentum is still streaming
+ * (delta jumps back to peak, so it frees).
+ */
+const FREE_AFTER_MS = 400;
+const SUSTAIN_RATIO = 0.5;
 
-/** Spike detection — see the header. RAMP_MS skips a flick's own ramp-up. */
-const SPIKE_MIN_DELTA = 24;
-const SPIKE_RATIO = 3;
-const RAMP_MS = 220;
+/**
+ * After free scrolling stops, how long before re-seating on a reveal. Must stay
+ * above the spacing between notches during sustained scrolling, or it fires
+ * mid-scroll and yanks the reader.
+ *
+ * ⚠️ It used to ALSO poll until `lenis.isScrolling` went false, which meant
+ * waiting out Lenis' own ~1.1s ease on top — up to ~1.5s of nothing, and a wait
+ * whose length varied with how hard the reader had scrolled ("the delays are
+ * random too for each beat"). That poll is gone: `scrollTo` with `force` simply
+ * replaces Lenis' in-flight animation, so there is nothing to wait for.
+ */
+const RESEAT_DELAY_MS = 260;
 
-/** After free scrolling, how long to wait before re-seating on a reveal. */
-const RESEAT_DELAY_MS = 420;
-/** …and how often to re-check while Lenis is still settling. */
-const RESEAT_POLL_MS = 120;
-
-/** power2.inOut — matches the site's motion tokens. No overshoot, ever. */
-const easeInOut = (t: number) =>
-  t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+/**
+ * power2.out — moves at once, then eases into the reveal. No overshoot, ever;
+ * never use a back/elastic ease here.
+ *
+ * ⚠️ NOT `power2.inOut`, which is what shipped first. An in-out ease is nearly
+ * stationary for its first ~15%, so on a 1.7-3s ride the reader flicks and sees
+ * nothing move for ~300ms — read as *"reduce the gap between the flick
+ * detection and action."* The ride already starts on the very first wheel
+ * event; the latency was entirely in the ease. Starting at full speed also
+ * matches Lenis' own easeOutExpo, so a ride reads like the page's normal
+ * scrolling rather than a separate animation.
+ */
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 2);
 
 const KEYS: Record<string, 1 | -1> = {
   ArrowDown: 1,
@@ -170,12 +208,11 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   // ── burst state ───────────────────────────────────────────────────────────
   let lastInputAt = 0;
   let burstStartedAt = 0;
-  let pushes = 0;
+  /** Strongest |deltaY| seen in this burst — the decay yardstick. */
+  let burstPeakAbs = 0;
   /** Reader is scrolling freely; we claim nothing until the burst ends. */
   let free = false;
   let lastDir: 1 | -1 = 1;
-  /** |deltaY| of the previous event, for the spike test. */
-  let lastAbs = 0;
   let reseat = 0;
 
   const now = () =>
@@ -233,7 +270,7 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
 
     lenis.scrollTo(toPx, {
       duration: seconds,
-      easing: easeInOut,
+      easing: easeOut,
       // Lenis ignores user input while locked, so the ride can't be fought
       // half-way and left stranded. Self-clears on completion.
       lock: true,
@@ -259,20 +296,14 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
   };
 
   /** After free scrolling stops, carry the reader onto the next reveal in the
-   *  direction they were already going. Waits for Lenis to finish its own
-   *  settle first, otherwise the two animations fight over the same scroll. */
+   *  direction they were already going. */
   const scheduleReseat = () => {
     window.clearTimeout(reseat);
-    reseat = window.setTimeout(function check() {
+    reseat = window.setTimeout(() => {
       const st = opts.getTrigger();
       const lenis = lenisRef.current;
       if (!st || !lenis || !st.isActive) return;
-      if (lenis.isScrolling) {
-        reseat = window.setTimeout(check, RESEAT_POLL_MS);
-        return;
-      }
       free = false;
-      pushes = 0;
       if (riding) return;
       if (onARest(progressOf(st))) return;
       step(lastDir);
@@ -298,23 +329,14 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
 
     // A new burst re-arms the escalator.
     if (gap > BURST_END_MS) {
-      pushes = 0;
       free = false;
       burstStartedAt = t;
-      lastAbs = 0;
+      burstPeakAbs = 0;
     }
+    burstPeakAbs = Math.max(burstPeakAbs, absDelta);
 
-    // A fresh shove: separated in time, or — for a trackpad, whose momentum
-    // leaves no gaps — a delta spike after the tail has decayed.
-    const spike =
-      absDelta >= SPIKE_MIN_DELTA &&
-      lastAbs < SPIKE_MIN_DELTA / 2 &&
-      absDelta >= lastAbs * SPIKE_RATIO;
-    const isPush =
-      gap > PUSH_GAP_MS || (spike && t - burstStartedAt > RAMP_MS);
-
+    const isPush = gap > PUSH_GAP_MS;
     lastInputAt = t;
-    lastAbs = absDelta;
     lastDir = d;
 
     if (!claim(d)) {
@@ -324,17 +346,18 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
       return;
     }
 
-    if (isPush) pushes++;
-
     // Reader has the scroll. Don't claim, don't preventDefault.
     if (free) {
       scheduleReseat();
       return;
     }
 
-    // Second deliberate push in this burst → they're actively scrolling, not
-    // lazily nudging. Get out of the way for the rest of the burst.
-    if (isPush && pushes >= FREE_AFTER_PUSHES) {
+    // Still delivering near-peak deltas well into the burst → this is real
+    // scrolling, not a flick coasting on momentum. Get out of the way.
+    if (
+      t - burstStartedAt > FREE_AFTER_MS &&
+      absDelta >= burstPeakAbs * SUSTAIN_RATIO
+    ) {
       handBack();
       scheduleReseat();
       return; // NOT preventDefault'd — this event begins their free scroll
@@ -362,8 +385,9 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
 
   const onKey = (e: KeyboardEvent) => {
     const d = e.key === " " && e.shiftKey ? -1 : KEYS[e.key];
-    // Keys carry no delta; auto-repeat is caught by the gap test alone.
-    if (d) drive(e, d, SPIKE_MIN_DELTA);
+    // Keys carry no delta. Feeding a constant keeps it at the burst peak, so
+    // held auto-repeat correctly reads as sustained scrolling and frees.
+    if (d) drive(e, d, 100);
   };
 
   // passive:false — preventDefault is the whole point: while the escalator is
