@@ -9,6 +9,7 @@ import { HeroCanvas } from "@/components/hero3d/HeroCanvas";
 import { heroScroll } from "@/components/hero3d/heroScroll";
 import { gsap, useGSAP, ScrollTrigger, ease } from "@/lib/gsap";
 import { createEscalatorSnap } from "@/lib/escalatorSnap";
+import { createEscalatorDrive } from "@/lib/escalatorDrive";
 import { LOADER_DONE_EVENT, loaderAlreadyDone } from "@/components/motion/Loader";
 import {
   WorksOverlay,
@@ -647,16 +648,21 @@ export function Hero() {
         // per-scroll — are IDENTICAL to the pre-works build ON DESKTOP.
         const OLD_UNITS = 5.75;
         const OLD_END_VH = 2.35;
-        // On touch, only a GENTLE trim of the scroll length. An earlier ~half
-        // reduction (1.25) made the whole journey feel hair-trigger sensitive —
-        // a small thumb flick jumped several beats. Back to ~10% off the desktop
-        // travel (2.35 → 2.12): a touch shorter than desktop, but the tunnel and
-        // node beats keep almost the same world-units-per-swipe, so scrubbing
-        // feels controlled again. Desktop (fine pointer) is unchanged.
+        // Touch scroll length. This number is scroll-px-per-timeline-unit, so
+        // BIGGER = SLOWER: each beat takes more thumb travel.
+        // History, because it has moved in both directions:
+        //   1.25 — a hard trim, reported as hair-trigger (a small flick jumped
+        //          several beats);
+        //   2.12 — ~10% under the desktop 2.35, still reported as too fast on
+        //          Android;
+        //   2.90 — now. ~23% MORE travel per beat than desktop, because a thumb
+        //          swipe covers far more screen than a wheel notch and phones
+        //          have short viewports, so a viewport-multiple is less scroll
+        //          than it sounds. Desktop (fine pointer) is untouched.
         const isCoarse =
           typeof window !== "undefined" &&
           window.matchMedia("(pointer: coarse)").matches;
-        const endVh = isCoarse ? 2.12 : OLD_END_VH;
+        const endVh = isCoarse ? 2.9 : OLD_END_VH;
         // ── Short-viewport floor (the OTHER half of "it's fast on a Mac") ────
         // The pin's length is a multiple of innerHeight, so the shorter the
         // viewport the FEWER scroll pixels the same beats get. A 13" MacBook
@@ -705,7 +711,16 @@ export function Hero() {
         // reader backwards against their own gesture.
         const escalator = createEscalatorSnap({ getRests: () => rests });
 
-        ScrollTrigger.create({
+        // Desktop (Lenis running) gets the DRIVE — the wheel event itself
+        // starts the ride, on the same frame, with no waiting and no drift to
+        // correct afterwards. Touch keeps ScrollTrigger's snap: there is no
+        // Lenis instance there to drive, and native momentum owns the scroll.
+        // This whole block is already inside the no-preference matchMedia, so
+        // "not coarse" is the same as "smooth scroll is running".
+        const smooth = !isCoarse;
+        let pinST: ScrollTrigger | null = null;
+
+        pinST = ScrollTrigger.create({
           animation: scrub,
           trigger: root,
           start: "top top",
@@ -724,9 +739,9 @@ export function Hero() {
           // ESCALATOR — the reader can never settle in a blank mid-transition.
           // Wherever a drag stops, glide to a full reveal (phrase risen, or a
           // works beat formed / clean tunnel — every rest in `rests`), in the
-          // direction they ASKED for. See lib/escalatorSnap.ts for the model
-          // and for why every position-based version of it was wrong.
-          snap: escalator,
+          // direction they ASKED for. TOUCH ONLY — on desktop the drive below
+          // owns this, and two systems moving the scroll would fight.
+          snap: smooth ? undefined : escalator,
           // hero is first on the page → refresh before any later pins so
           // pin-spacing stacks in document order (higher number = first)
           refreshPriority: 1,
@@ -751,6 +766,13 @@ export function Hero() {
           },
         });
 
+        const stopDrive = smooth
+          ? createEscalatorDrive({
+              getRests: () => rests,
+              getTrigger: () => pinST,
+            })
+          : null;
+
         // deep-link /#work: the browser can't hash-jump to a pinned beat, so
         // glide there once the page is interactive (post-loader on cold loads).
         const goWorks = () => requestAnimationFrame(() => scrollToWorks());
@@ -763,6 +785,7 @@ export function Hero() {
         }
 
         return () => {
+          stopDrive?.();
           window.removeEventListener(LOADER_DONE_EVENT, revealOnce);
           window.removeEventListener(LOADER_DONE_EVENT, goWorks);
           window.clearInterval(revealPoll);

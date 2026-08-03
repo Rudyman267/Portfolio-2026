@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { gsap, ScrollTrigger, useGSAP } from "@/lib/gsap";
 import { createEscalatorSnap } from "@/lib/escalatorSnap";
+import { createEscalatorDrive } from "@/lib/escalatorDrive";
 import { GameThumb } from "@/components/about/GameThumb";
 
 /**
@@ -186,14 +187,13 @@ export function AboutIntro() {
         const REST_UNITS = [
           0, 2.65, 5.35, 7.3, 11.75, 13.6, 15.5, 20.8, 26.0, 28.95, 31.0,
         ];
-        const escalator = createEscalatorSnap({
-          // tl.duration() isn't known until the timeline below is built, so the
-          // unit→progress conversion is deferred to call time.
-          getRests: () => {
-            const dur = tl.duration() || 1;
-            return REST_UNITS.map((u) => u / dur).sort((a, b) => a - b);
-          },
-        });
+        // tl.duration() isn't known until the timeline below is built, so the
+        // unit→progress conversion is deferred to call time.
+        const getRests = () => {
+          const dur = tl.duration() || 1;
+          return REST_UNITS.map((u) => u / dur).sort((a, b) => a - b);
+        };
+        const escalator = createEscalatorSnap({ getRests });
 
         // Short-viewport floor — same reasoning (and the same two limits) as the
         // hero's PIN_VH_FLOOR: the pin length was `+=1050%` (10.5 viewport
@@ -229,9 +229,22 @@ export function AboutIntro() {
             invalidateOnRefresh: true,
             // Glide to the composed scene in the direction the reader ASKED
             // for (read off the wheel/key/touch event — see lib/scrollIntent).
-            snap: escalator,
+            // TOUCH ONLY — on desktop the drive below owns this, and two
+            // systems moving the scroll would fight. See lib/escalatorDrive.ts.
+            snap: isCoarse ? escalator : undefined,
           },
         });
+
+        // Desktop drive: the wheel event itself starts the ride, same frame, no
+        // waiting for the scroll to settle and no drift to correct afterwards.
+        // (This whole block is inside the no-preference matchMedia, so "not
+        // coarse" is the same as "Lenis smooth scroll is running".)
+        const stopDrive = isCoarse
+          ? null
+          : createEscalatorDrive({
+              getRests,
+              getTrigger: () => tl.scrollTrigger,
+            });
 
         // ── AUTONOMOUS INTRO (plays on load, NOT scroll-mapped) ──────────────
         // The old scene-1 entrance (frame grow 0→4.25 + phrases sliding in to
@@ -724,6 +737,7 @@ export function AboutIntro() {
         // matchMedia cleanup — stop the autoplay shuffle, tear down the
         // load-intro and drop its listener (in case it never fired)
         return () => {
+          stopDrive?.();
           window.clearInterval(shuffle);
           window.removeEventListener("loader:done", startIntro);
           intro.kill();
