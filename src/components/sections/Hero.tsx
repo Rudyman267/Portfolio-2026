@@ -696,12 +696,13 @@ export function Hero() {
               .map((t) => t / dur),
           ),
         ).sort((a, b) => a - b);
-        // The commit model lives in lib/escalatorSnap.ts — shared with /about's
-        // pin so both scrolly-telling rides feel identical. Summary: travel more
-        // than a small ABSOLUTE pixel distance off the reveal you're parked on
-        // and you ride to the next reveal in THAT direction, always. It never
-        // pulls you back onto the text you were leaving (which the old
-        // fraction-of-segment threshold did on the longer segments).
+        // The model lives in lib/escalatorSnap.ts — shared with /about's pin so
+        // both scrolly-telling rides feel identical. Summary: direction comes
+        // from the WHEEL/KEY/TOUCH EVENT, not from how far the scroll position
+        // travelled, and there is no threshold anywhere in the decision. Read
+        // that file's header before changing this — position-based direction
+        // was tried three times and always had a branch that scrolled the
+        // reader backwards against their own gesture.
         const escalator = createEscalatorSnap({ getRests: () => rests });
 
         ScrollTrigger.create({
@@ -723,9 +724,9 @@ export function Hero() {
           // ESCALATOR — the reader can never settle in a blank mid-transition.
           // Wherever a drag stops, glide to a full reveal (phrase risen, or a
           // works beat formed / clean tunnel — every rest in `rests`), in the
-          // direction they nudged. See lib/escalatorSnap.ts for the model and
-          // for why the previous fraction-of-segment threshold was wrong.
-          snap: escalator.config,
+          // direction they ASKED for. See lib/escalatorSnap.ts for the model
+          // and for why every position-based version of it was wrong.
+          snap: escalator,
           // hero is first on the page → refresh before any later pins so
           // pin-spacing stacks in document order (higher number = first)
           refreshPriority: 1,
@@ -739,13 +740,6 @@ export function Hero() {
             heroScroll.progress = self.progress * (scrub.duration() / OLD_UNITS);
             const t = self.progress * scrub.duration();
             armCurves(t >= ARM_T && t < DISARM_T);
-            // Keep the escalator's anchor on the reveal the playhead most
-            // recently passed. Without this the direction test inside snapTo
-            // works off a stale anchor whenever the reader crosses a reveal
-            // without stopping on it (or re-enters the pin from below), and
-            // reports the wrong way. Also feeds it the live pin length so its
-            // commit threshold stays in real scroll pixels.
-            escalator.observe(self.progress, self.end - self.start);
           },
           // /#work glides INTO the pin (no #work element exists on this path) —
           // publish where the chapter intro finishes rising, refreshed with the

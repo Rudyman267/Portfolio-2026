@@ -61,7 +61,15 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
     // This is the ONE knob for it — raise toward 1 if a Mac starts to feel
     // sluggish, lower if it still runs away. Trackpad AND wheel go through the
     // same multiplier because macOS accelerates both.
-    const MAC_WHEEL_MULTIPLIER = 0.55;
+    // Tuning history: 1 (none) → far too fast on a MacBook. 0.55 → still
+    // reported as "very fast". Now 0.35, which puts a comfortable two-finger
+    // swipe (~400-1000px of raw macOS delta, momentum included) at roughly the
+    // 150-350px a Windows trackpad gesture produces.
+    // ⚠️ This only applies when Lenis is running. macOS Accessibility →
+    // "Reduce motion" takes the prefers-reduced-motion early-return above, so
+    // the page falls back to NATIVE scroll and this knob does nothing — if a
+    // Mac still feels fast after this, check that setting first.
+    const MAC_WHEEL_MULTIPLIER = 0.35;
     const platform =
       (navigator as Navigator & { userAgentData?: { platform?: string } })
         .userAgentData?.platform ??

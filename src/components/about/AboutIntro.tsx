@@ -178,10 +178,11 @@ export function AboutIntro() {
         // headline, the paragraph, the process row, and the two quotes) — the
         // moments the reader should settle on. They're converted to progress at
         // runtime via tl.duration() (the timeline isn't built yet here). A drag
-        // that stops mid-transition glides to the neighbouring scene in the
-        // direction nudged; short of a small threshold it eases back. Thresholds
-        // and glide timing are IDENTICAL to the hero so both pins feel the same
-        // (both use lib/escalatorSnap.ts — read the header there for the model).
+        // that stops mid-transition glides to the next scene in the direction
+        // the reader ASKED for — read off the wheel/key/touch event, with no
+        // threshold anywhere in the decision. Model and glide timing are shared
+        // with the hero via lib/escalatorSnap.ts, so both pins feel the same;
+        // read that file's header before changing any of it.
         const REST_UNITS = [
           0, 2.65, 5.35, 7.3, 11.75, 13.6, 15.5, 20.8, 26.0, 28.95, 31.0,
         ];
@@ -226,14 +227,9 @@ export function AboutIntro() {
             scrub: 0.5,
             anticipatePin: 1,
             invalidateOnRefresh: true,
-            // Glide to the composed scene in the direction the reader nudged.
-            snap: escalator.config,
-            // Keeps the escalator's anchor on the scene the playhead last
-            // passed, and feeds it the live pin length so its commit threshold
-            // is measured in real scroll pixels. Without it the direction test
-            // works off a stale anchor and can ride the wrong way.
-            onUpdate: (self) =>
-              escalator.observe(self.progress, self.end - self.start),
+            // Glide to the composed scene in the direction the reader ASKED
+            // for (read off the wheel/key/touch event — see lib/scrollIntent).
+            snap: escalator,
           },
         });
 
