@@ -47,10 +47,34 @@ import { lenisRef } from "@/components/motion/lenisBridge";
 const EPS = 0.0004;
 
 /**
- * How long one reveal-to-reveal ride takes. Long enough to read as a scroll
- * rather than a jump, short enough that it never feels like being held.
+ * ── THE SPEED KNOB ──────────────────────────────────────────────────────────
+ * How fast a ride travels, in scroll pixels per second. This is the ONLY thing
+ * that sets how fast the scrolly-telling sections read, so tune here and
+ * nowhere else: lower = slower.
+ *
+ * It is a SPEED, not a duration, on purpose. A flat duration (it was 0.85s)
+ * makes the perceived pace depend on how much timeline a step happens to
+ * cover — the gap between two phrase holds and the gap between two works beats
+ * are very different distances, so the same 0.85s made the long ones fly and
+ * the short ones crawl. Deriving duration from distance keeps the pace even
+ * across the whole journey, and makes it independent of pin length, so
+ * retuning a section's scroll length can no longer change how fast it feels.
+ *
+ * 430 px/s sits a little under a comfortable sustained wheel scroll, which is
+ * the point: a step should read as unhurried. With power2.inOut the peak is
+ * about twice this.
  */
-const RIDE_S = 0.85;
+const RIDE_PX_PER_S = 430;
+
+/** Floor and ceiling for a ride, so neither a tiny nor a huge gap misbehaves. */
+const RIDE_MIN_S = 0.9;
+const RIDE_MAX_S = 1.8;
+
+const rideSeconds = (distancePx: number) =>
+  Math.min(
+    RIDE_MAX_S,
+    Math.max(RIDE_MIN_S, Math.abs(distancePx) / RIDE_PX_PER_S),
+  );
 
 /**
  * A gap this long with no wheel events means a NEW gesture. One gesture moves
@@ -132,16 +156,20 @@ export function createEscalatorDrive(opts: EscalatorDriveOptions): () => void {
     const to = nextRest(base, d);
     if (to === null) return;
 
+    const toPx = Math.round(st.start + to * (st.end - st.start));
+    // Pace the ride by how far it actually travels — see RIDE_PX_PER_S.
+    const seconds = rideSeconds(toPx - window.scrollY);
+
     target = to;
     riding = true;
     // Failsafe: if onComplete somehow never arrives, release anyway. A stuck
     // `riding` flag would swallow every wheel event inside the pin, and a page
     // you cannot scroll is far worse than a missed step.
     window.clearTimeout(failsafe);
-    failsafe = window.setTimeout(land, RIDE_S * 1000 + 600);
+    failsafe = window.setTimeout(land, seconds * 1000 + 600);
 
-    lenis.scrollTo(Math.round(st.start + to * (st.end - st.start)), {
-      duration: RIDE_S,
+    lenis.scrollTo(toPx, {
+      duration: seconds,
       easing: easeInOut,
       // Lenis ignores user input while locked, so the ride cannot be fought
       // half-way and left stranded mid-transition. Self-clears on completion.
