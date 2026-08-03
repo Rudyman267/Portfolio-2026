@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Rudyman">
+  <style>
+    /* The tab strip is light by default and dark when the OS/browser is —
+       so the glyph follows it. Without this a background-less favicon is
+       invisible for half of all users. */
+    path { fill: rgb(11, 13, 18); }
+    @media (prefers-color-scheme: dark) { path { fill: rgb(255, 255, 255); } }
+  </style>
+  <path transform="translate(112.57 482.00) scale(0.60267 -0.60267)" d="M293 37V154Q293 196 276 227L252 270Q244 283 237.5 287.0Q231 291 217 291H199Q188 291 184.5 287.5Q181 284 181 273V37Q181 15 173.5 7.5Q166 0 144 0H80Q58 0 50.5 7.5Q43 15 43 37V713Q43 735 50.5 742.5Q58 750 80 750H212Q327 750 380.0 707.5Q433 665 433 570V498Q433 441 421.5 405.5Q410 370 381 346Q375 342 375 337Q375 333 379 326L407 275Q423 246 427.0 226.5Q431 207 431 167V37Q431 15 423.5 7.5Q416 0 394 0H330Q308 0 300.5 7.5Q293 15 293 37ZM181 597V446Q181 436 184.5 432.0Q188 428 199 428H220Q291 428 291 497V549Q291 584 274.0 599.5Q257 615 220 615H199Q188 615 184.5 611.5Q181 608 181 597Z"/>
+</svg>

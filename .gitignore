@@ -75,3 +75,6 @@ next-env.d.ts
 
 # raw background-music source — the compressed encode will ship from /public.
 /Background music/
+
+# python bytecode from scripts/
+__pycache__/
