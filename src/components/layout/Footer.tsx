@@ -13,6 +13,7 @@ import { DEFAULT_NAV, isExternalHref, type NavItem } from "@/components/layout/N
 import { hardNavigate } from "@/components/motion/routeTransitionBridge";
 import { scrollToWorks } from "@/components/sections/worksAnchor";
 import { NowPlaying } from "@/components/audio/NowPlaying";
+import { TRACK } from "@/components/audio/AudioProvider";
 
 // Ambient particle/energy-blob glow behind the footer — a whisper of the hero
 // ecosystem (same palette/shapes/motion). Client-only; skips itself on
@@ -281,6 +282,23 @@ export function Footer({
             <div className="-ml-1.5">
               <NowPlaying />
             </div>
+            {/* ⚠️ LICENCE CREDIT — REQUIRED, don't remove.
+                Uppbeat's free tier permits the track only while this credit is
+                displayed. Deliberately the quietest text on the page (11px,
+                fg/30) so it discharges the obligation without competing with
+                anything: it sits under the control it refers to, indented to
+                the same optical line as the label above. */}
+            <p className="mt-3 text-[11px] leading-relaxed text-fg/30">
+              {TRACK.credit.text}{" "}
+              <a
+                href={TRACK.credit.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline decoration-fg/20 underline-offset-2 transition-colors hover:text-fg/60 hover:decoration-fg/40"
+              >
+                {TRACK.credit.label}
+              </a>
+            </p>
           </div>
         </div>
       </div>

@@ -42,6 +42,18 @@ export const TRACK = {
     { src: "/audio/friendship-wooll.webm", type: "audio/webm" },
     { src: "/audio/friendship-wooll.mp3", type: "audio/mpeg" },
   ],
+  /**
+   * ⚠️ REQUIRED ATTRIBUTION — do not drop this.
+   * The track is licensed under Uppbeat's free tier, which grants use only if
+   * the credit line is shown wherever the music plays. Rendered under the
+   * footer's Now-playing control. `text` is Uppbeat's own wording, kept
+   * verbatim; only the URL is turned into a link.
+   */
+  credit: {
+    text: "Music from #Uppbeat (free for Creators!):",
+    href: "https://uppbeat.io/t/wooll/friendship",
+    label: "uppbeat.io/t/wooll/friendship",
+  },
 } as const;
 
 /** Default level. Ambient bed under a portfolio — it should never dominate. */
